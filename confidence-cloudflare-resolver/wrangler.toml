@@ -1,0 +1,23 @@
+name = "confidence-cloudflare-resolver"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-01-28"
+
+[observability]
+enabled = true
+
+[build]
+command = "cargo install -q worker-build && RUSTFLAGS='--cfg getrandom_backend=\"wasm_js\"' worker-build --release"
+
+[[queues.producers]]
+queue = "flag-logs-queue"
+binding = "flag_logs_queue"
+
+[[queues.consumers]]
+queue = "flag-logs-queue"
+binding = "flag_logs_queue"
+max_batch_size = 100 # max number of messages in a batch
+max_batch_timeout = 10 # seconds
+
+[vars]
+CONFIDENCE_CLIENT_ID = "ID"
+CONFIDENCE_CLIENT_SECRET = "SECRET"

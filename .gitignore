@@ -1,0 +1,15 @@
+/target
+**/*.rs.bk
+**/bin
+**/pkg
+.DS_Store
+Cargo.lock
+
+.dev.vars
+__pycache__/
+**/__pycache__/
+*.pyc
+ 
+# Python host generated files
+wasm/python-host/.venv/
+wasm/python-host/proto/

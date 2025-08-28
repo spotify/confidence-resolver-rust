@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bump-minor-pre-major": true,
+  "plugins": ["cargo-workspace"],
+  "packages": {
+    "confidence-resolver": {
+      "path": "confidence-resolver",
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "confidence-cloudflare-resolver": {
+      "path": "confidence-cloudflare-resolver",
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "wasm-msg": {
+      "path": "wasm-msg",
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}
+

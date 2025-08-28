@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package confidence.flags.resolver.v1;
+
+option java_package = "com.spotify.confidence.flags.resolver.v1";
+option java_multiple_files = true;
+option java_outer_classname = "ApiProto";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+message ResolveSimpleRequest {
+    string client_secret = 1;
+    google.protobuf.Struct evaluation_context = 2;
+    string name = 3;
+}
+
+message ResolveFlagsRequest {
+  // If non-empty, the specific flags are resolved, otherwise all flags
+  // available to the client will be resolved.
+  repeated string flags = 1;
+
+  // An object that contains data used in the flag resolve. For example,
+  // the targeting key e.g. the id of the randomization unit, other attributes
+  // like country or version that are used for targeting.
+  google.protobuf.Struct evaluation_context = 2;
+
+  // Credentials for the client. It is used to identify the client and find
+  // the flags that are available to it.
+  string client_secret = 3;
+
+  // Determines whether the flags should be applied directly as part of the
+  // resolve, or delayed until `ApplyFlag` is called. A flag is typically
+  // applied when it is used, if this occurs much later than the resolve, then
+  // `apply` should likely be set to false.
+  bool apply = 4;
+
+  // Information about the SDK used to initiate the request.
+  // Sdk sdk = 5;
+}
+
+message ResolveFlagsResponse {
+  // The list of all flags that could be resolved. Note: if any flag was
+  // archived it will not be included in this list.
+  repeated ResolvedFlag resolved_flags = 1;
+
+  // An opaque token that is used when `apply` is set to false in `ResolveFlags`.
+  // When `apply` is set to false, the token must be passed to `ApplyFlags`.
+  bytes resolve_token = 2;
+
+  // Unique identifier for this particular resolve request.
+  string resolve_id = 3;
+}
+
+
+message ResolvedFlag {
+  // The id of the flag that as resolved.
+  string flag = 1;
+
+  // The id of the resolved variant has the format `flags/abc/variants/xyz`.
+  string variant = 2;
+
+  // The value corresponding to the variant. It will always be a json object,
+  // for example `{ "color": "red", "size": 12 }`.
+  google.protobuf.Struct value = 3;
+
+  // The schema of the value that was returned. For example:
+  // ```
+  // {
+  //    "schema": {
+  //      "color": { "stringSchema": {} },
+  //      "size": { "intSchema": {} }
+  //    }
+  // }
+  // ```
+  // types.v1.FlagSchema.StructFlagSchema flag_schema = 4;
+
+  // The reason to why the flag could be resolved or not.
+  ResolveReason reason = 5;
+}
+
+
+enum ResolveReason {
+  // Unspecified enum.
+  RESOLVE_REASON_UNSPECIFIED = 0;
+  // The flag was successfully resolved because one rule matched.
+  RESOLVE_REASON_MATCH = 1;
+  // The flag could not be resolved because no rule matched.
+  RESOLVE_REASON_NO_SEGMENT_MATCH = 2;
+  // The flag could not be resolved because the matching rule had no variant
+  // that could be assigned.
+  RESOLVE_REASON_NO_TREATMENT_MATCH = 3 [deprecated = true];
+  // The flag could not be resolved because it was archived.
+  RESOLVE_REASON_FLAG_ARCHIVED = 4;
+  // The flag could not be resolved because the targeting key field was invalid
+  RESOLVE_REASON_TARGETING_KEY_ERROR = 5;
+  // Unknown error occurred during the resolve
+  RESOLVE_REASON_ERROR = 6;
+}

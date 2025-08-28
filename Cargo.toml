@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"  # Use the new resolver for edition 2021
+
+members = [
+    "wasm-msg",
+    "wasm/rust-guest",
+    "confidence-resolver",
+    "confidence-cloudflare-resolver"
+]

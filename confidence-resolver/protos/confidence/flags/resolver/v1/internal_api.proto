@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package confidence.flags.resolver.v1;
+
+import "google/api/resource.proto";
+import "google/protobuf/struct.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/api/visibility.proto";
+
+import "confidence/flags/resolver/v1/types.proto";
+import "confidence/flags/resolver/v1/events/events.proto";
+import "confidence/auth/v1/auth.proto";
+import "confidence/api/annotations.proto";
+
+option java_package = "com.spotify.confidence.flags.resolver.v1";
+option java_multiple_files = true;
+option java_outer_classname = "InternalApiProto";
+
+// The service that allows to report flag assigned and other client-side flag
+// operations, useful when the resolve engine runs on the customer's premises
+// (e.g. side-car)
+service InternalFlagLoggerService {
+  option (google.api.api_visibility).restriction = "INTERNAL";
+
+  option (confidence.api.service_name) = "InternalFlagLogger";
+  option (confidence.api.hosts) = "resolver.eu.confidence.dev";
+  option (confidence.api.hosts) = "resolver.us.confidence.dev";
+
+  // Writes flag assignment events. Mostly called from the sidecar resolver.
+  // (-- api-linter: core::0136::http-uri-suffix=disabled
+  //     aip.dev/not-precedent: Disabled because the additional binding. --)
+  rpc WriteFlagAssigned(WriteFlagAssignedRequest) returns (WriteFlagAssignedResponse){
+    option (google.api.http) = {
+      post: "/v1/flagAssigned:write"
+      body: "*"
+      additional_bindings {
+        post: "/v1/flagAssigned:writeArray"
+        body: "flag_assigned"
+      }
+    };
+    option (confidence.auth.v1.auth) = {
+      required_permission: CREATE_FLAG_ASSIGNED
+      allow_basic_auth: true
+      required_relation: "can_write_flag_assigned"
+      object_field: "account"
+    };
+  }
+}
+
+// A request to write flag assignments
+message WriteFlagAssignedRequest {
+  // List of flag assigned events to write
+  repeated confidence.flags.resolver.v1.events.FlagAssigned flag_assigned = 1 [
+    (google.api.field_behavior) = REQUIRED
+  ];
+
+  TelemetryData telemetry_data = 2 [
+    (google.api.field_behavior) = OPTIONAL
+  ];
+}
+
+// Response to writing flag assignments
+message WriteFlagAssignedResponse {
+  // The total number of assigned flags, should equal the sum of the flag counts in each flag
+  // assigned event.
+  int64 assigned_flags = 1;
+}
+
+// Collection of telemetry metrics, usually included in request messages to
+// monitor sender-side issues or performance
+message TelemetryData {
+  // "events" dropped from the sender to due to issues or inefficiencies.
+  // This is implemented as a delta counter between TelemetryData messages
+  int64 dropped_events = 1 [
+    (google.api.field_behavior) = REQUIRED
+  ];
+}
+
+
+message ResolveToken {
+  oneof resolve_token {
+    ResolveTokenV1 token_v1 = 1;
+  }
+}
+
+message ResolveTokenV1 {
+  google.protobuf.Struct evaluation_context = 1;
+
+  map<string, AssignedFlag> assignments = 2;
+
+  string resolve_id = 3;
+
+  // The account that the resolve was made for
+  string account = 4;
+
+  message AssignedFlag {
+    string flag = 1 [
+      (google.api.resource_reference).type = "flags.confidence.dev/Flag"
+    ];
+
+    string targeting_key = 2;
+    string targeting_key_selector = 10;
+
+    string segment = 3 [
+      (google.api.resource_reference).type = "flags.confidence.dev/Segment"
+    ];
+
+    string variant = 4 [
+      (google.api.resource_reference).type = "flags.confidence.dev/Variant"
+    ];
+
+    string rule = 5 [
+      (google.api.resource_reference).type = "flags.confidence.dev/Rule"
+    ];
+
+    ResolveReason reason = 6;
+
+    repeated events.FallthroughAssignment fallthrough_assignments = 9;
+
+    string assignment_id = 8;
+  }
+}

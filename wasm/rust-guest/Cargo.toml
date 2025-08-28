@@ -1,0 +1,41 @@
+[package]
+name = "rust-guest"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]  # This is required for WASM
+
+[dependencies]
+wasm-msg = { path = "../../wasm-msg" }
+confidence_resolver = { path = "../../confidence-resolver", default-features = false }
+rand = { version = "0.9.1", default-features = false, features = ["alloc", "small_rng" ]}
+prost = { version = "0.12", default-features = false }
+prost-types = { version = "0.12", default-features = false }
+# TODO re-export Bytes
+bytes = { version = "1.4.0", default-features = false }
+wee_alloc = "0.4"
+arc-swap = "1.7.1"
+futures = { version = "0.3", default-features = false, features = ["executor"] }
+
+[build-dependencies]
+prost-build = "0.12"
+
+
+[profile.release]
+# Optimize for size
+opt-level = 'z'  # Optimize for size instead of speed
+lto = true       # Enable link-time optimization
+codegen-units = 1  # Reduce number of codegen units to increase optimization
+panic = 'abort'  # Remove panic unwinding code
+strip = true     # Strip symbols from binary
+# Disable incremental compilation
+incremental = false
+# Disable debug assertions
+debug = false
+# Disable debug info
+debug-assertions = false
+# Disable overflow checks
+overflow-checks = false
+# Disable rpath
+rpath = false 

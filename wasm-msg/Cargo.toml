@@ -1,0 +1,15 @@
+[package]
+name = "wasm-msg"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib"]  # Just use rlib for now, we can add cdylib when needed
+
+[dependencies]
+prost = { version = "0.12", default-features = false, features = ["derive"] }
+paste = "1.0"
+
+[build-dependencies]
+tonic-build = "0.13.1"
+

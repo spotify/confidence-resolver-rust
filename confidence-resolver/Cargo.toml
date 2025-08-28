@@ -1,0 +1,45 @@
+[package]
+name = "confidence_resolver"
+version = "0.1.0"
+edition = "2021"
+# Remove this line if you want to be able to publish this crate as open source on crates.io.
+# Otherwise, `publish = false` prevents an accidental `cargo publish` from revealing private source.
+publish = false
+
+[lib]
+crate-type = ['rlib']
+
+[features]
+default = ["std"]
+std = ["chrono/clock", "rand/thread_rng", "rust-crypto-wasm", "serde", "serde_json", "pbjson", "pbjson-types"]
+
+[dependencies]
+trait-variant = "0.1.2"
+fastmurmur3 = "0.2.0"
+bitvec = { version = "1.0.1", default-features = false, features = ["alloc"] }
+miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+semver = { version = "1.0.20", default-features = false }
+hashbrown = { version = "0.15.4" }
+crc32fast = { version = "1.4.2", default-features = false }
+
+prost = { version = "0.12", default-features = false, features = ["derive" ] }
+prost-types = { version = "0.12", default-features = false }
+bytes = { version = "1.4.0", default-features = false }
+
+# Optional dependency for std
+rust-crypto-wasm = { version = "0.3.1", optional = true }
+rand = { version = "0.9.1", optional = true }
+pbjson = { version = "0.6.0", optional = true }
+pbjson-types = { version = "0.6.0", optional = true }
+serde = { version = "1.0.189", optional = true }
+serde_json = { version = "1.0.107", optional = true }
+futures = "0.3.31"
+tokio-test = "0.4.4"
+
+[dev-dependencies]
+regex = "1.10.2"
+
+[build-dependencies]
+prost-build = "0.12"
+pbjson-build = { version = "0.6.0" }

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package rust_guest;
+
+option go_package = "github.com/spotify/confidence/wasm-resolve-poc/go-host/proto/messages";
+
+import "google/protobuf/struct.proto";
+
+message Void {}
+
+message ResolveSimpleRequest {
+    string client_secret = 1;
+    google.protobuf.Struct evaluation_context = 2;
+    string name = 3;
+}
+
+
+message Request {
+    bytes data = 1;
+}
+
+message Response {
+    oneof result {
+        bytes data = 1;
+        string error = 2;
+    }
+}
