@@ -10,6 +10,9 @@ crate-type = ["rlib"]  # Just use rlib for now, we can add cdylib when needed
 prost = { version = "0.12", default-features = false, features = ["derive"] }
 paste = "1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["tonic-build"]
+
 [build-dependencies]
 tonic-build = "0.13.1"
 
