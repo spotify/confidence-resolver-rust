@@ -78,7 +78,7 @@ fn set_client_creds(env: &Env) {
 }
 
 #[event(fetch)]
-pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     match env.queue("flag_logs_queue") {
         Ok(queue) => {
             let _ = FLAGS_LOGS_QUEUE.set(queue);
