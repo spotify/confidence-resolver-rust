@@ -1241,8 +1241,6 @@ mod tests {
             );
         }
     }
-
-    use tokio_test;
     #[test]
     fn test_resolve_flags() {
         let state =
@@ -1265,8 +1263,7 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse =
-                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
+            let response: ResolveFlagsResponse = resolver.resolve_flags(&resolve_flag_req).unwrap();
             assert_eq!(response.resolved_flags.len(), 1);
             let flag = response.resolved_flags.get(0).unwrap();
 
@@ -1328,8 +1325,7 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse =
-                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
+            let response: ResolveFlagsResponse = resolver.resolve_flags(&resolve_flag_req).unwrap();
             assert_eq!(response.resolved_flags.len(), 1);
             let flag = response.resolved_flags.get(0).unwrap();
 
@@ -1385,8 +1381,7 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse =
-                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
+            let response: ResolveFlagsResponse = resolver.resolve_flags(&resolve_flag_req).unwrap();
             assert_eq!(response.resolved_flags.len(), 1);
             let flag = response.resolved_flags.get(0).unwrap();
 
@@ -1453,8 +1448,7 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse =
-                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
+            let response: ResolveFlagsResponse = resolver.resolve_flags(&resolve_flag_req).unwrap();
             assert_eq!(response.resolved_flags.len(), 1);
             assert!(resolver.state.flags.contains_key("flags/tutorial-feature"));
 
@@ -1545,8 +1539,7 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse =
-                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
+            let response: ResolveFlagsResponse = resolver.resolve_flags(&resolve_flag_req).unwrap();
             let flag = response.resolved_flags.get(0).unwrap();
             assert_eq!(false, flag.should_apply);
             assert_eq!(ResolveReason::NoSegmentMatch as i32, flag.reason);
@@ -1579,8 +1572,7 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse =
-                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
+            let response: ResolveFlagsResponse = resolver.resolve_flags(&resolve_flag_req).unwrap();
             let flag = response.resolved_flags.get(0).unwrap();
             assert_eq!(true, flag.should_apply);
             assert_eq!(ResolveReason::Match as i32, flag.reason);

@@ -234,7 +234,7 @@ pub async fn consume_flag_logs_queue(
             .map(|m| m.body().clone())
             .map(|s| serde_json::from_str::<FlagLogQueueRequest>(s.as_str()).unwrap())
             .collect();
-        let req = FLAG_LOGGER.aggregate_batch(logs);
+        let req = Logger::aggregate_batch(logs);
         send_flags_logs(
             CONFIDENCE_CLIENT_ID.get().unwrap().as_str(),
             CONFIDENCE_CLIENT_SECRET.get().unwrap().as_str(),

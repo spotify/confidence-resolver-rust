@@ -80,9 +80,9 @@ impl FlagLogger for Logger {
 
     fn pop_flag_log_batch(&self) -> FlagLogQueueRequest {
         let mut vec = self.flag_log_requests.lock();
-        self.aggregate_batch(vec.split_off(0))
+        Self::aggregate_batch(vec.split_off(0))
     }
-    fn aggregate_batch(&self, message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest {
+    fn aggregate_batch(message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest {
         // map of client credential to derived schema
         let mut schema_map: BTreeMap<String, SchemaItem> = BTreeMap::new();
         // map of flag to flag resolve info
@@ -198,7 +198,7 @@ pub trait FlagLogger {
     );
 
     fn pop_flag_log_batch(&self) -> FlagLogQueueRequest;
-    fn aggregate_batch(&self, message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest;
+    fn aggregate_batch(message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest;
 }
 
 #[cfg(feature = "std")]
