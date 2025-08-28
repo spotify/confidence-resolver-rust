@@ -8,6 +8,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+
 use core::marker::PhantomData;
 use hashbrown::{HashMap, HashSet};
 
@@ -120,7 +121,9 @@ pub mod confidence {
     }
 }
 
+pub mod flag_logger;
 mod gzip;
+mod schema_util;
 mod value;
 
 use confidence::flags::admin::v1 as flags_admin;
@@ -292,7 +295,6 @@ pub struct FlagToApply {
     pub skew_adjusted_applied_time: Timestamp,
 }
 
-#[trait_variant::make]
 pub trait Host {
     #[cfg(not(feature = "std"))]
     fn random_alphanumeric(len: usize) -> String;
@@ -313,7 +315,7 @@ pub trait Host {
         }
     }
 
-    async fn log_resolve(
+    fn log_resolve(
         resolve_id: &str,
         evaluation_context: &Struct,
         values: &[ResolvedValue<'_>],
@@ -321,7 +323,7 @@ pub trait Host {
         sdk: &Option<flags_resolver::Sdk>,
     );
 
-    async fn log_assign(
+    fn log_assign(
         resolve_id: &str,
         evaluation_context: &Struct,
         assigned_flags: &[FlagToApply],
@@ -483,7 +485,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         }
     }
 
-    pub async fn resolve_flags(
+    pub fn resolve_flags(
         &self,
         request: &flags_resolver::ResolveFlagsRequest,
     ) -> Result<flags_resolver::ResolveFlagsResponse, String> {
@@ -540,8 +542,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 flags_to_apply.as_slice(),
                 self.client,
                 &request.sdk,
-            )
-            .await;
+            );
         } else {
             // create resolve token
             let mut resolve_token_v1 = flags_resolver::ResolveTokenV1::default();
@@ -573,16 +574,12 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             resolved_values.as_slice(),
             self.client,
             &request.sdk,
-        )
-        .await;
+        );
 
         Ok(response)
     }
 
-    pub async fn apply_flags(
-        &self,
-        request: &flags_resolver::ApplyFlagsRequest,
-    ) -> Result<(), String> {
+    pub fn apply_flags(&self, request: &flags_resolver::ApplyFlagsRequest) -> Result<(), String> {
         let Some(send_time_ts) = &request.send_time else {
             return Err("send_time is required".to_string());
         };
@@ -633,8 +630,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             assigned_flags.as_slice(),
             self.client,
             &request.sdk,
-        )
-        .await;
+        );
 
         Ok(())
     }
@@ -1120,7 +1116,7 @@ mod tests {
     struct L;
 
     impl Host for L {
-        async fn log_resolve(
+        fn log_resolve(
             _resolve_id: &str,
             _evaluation_context: &Struct,
             _values: &[ResolvedValue<'_>],
@@ -1130,7 +1126,7 @@ mod tests {
             // In tests, we don't need to print anything
         }
 
-        async fn log_assign(
+        fn log_assign(
             _resolve_id: &str,
             _evaluation_context: &Struct,
             _assigned_flag: &[FlagToApply],
@@ -1269,9 +1265,8 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse = tokio_test::block_on(async {
-                resolver.resolve_flags(&resolve_flag_req).await.unwrap()
-            });
+            let response: ResolveFlagsResponse =
+                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
             assert_eq!(response.resolved_flags.len(), 1);
             let flag = response.resolved_flags.get(0).unwrap();
 
@@ -1333,9 +1328,8 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse = tokio_test::block_on(async {
-                resolver.resolve_flags(&resolve_flag_req).await.unwrap()
-            });
+            let response: ResolveFlagsResponse =
+                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
             assert_eq!(response.resolved_flags.len(), 1);
             let flag = response.resolved_flags.get(0).unwrap();
 
@@ -1391,9 +1385,8 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse = tokio_test::block_on(async {
-                resolver.resolve_flags(&resolve_flag_req).await.unwrap()
-            });
+            let response: ResolveFlagsResponse =
+                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
             assert_eq!(response.resolved_flags.len(), 1);
             let flag = response.resolved_flags.get(0).unwrap();
 
@@ -1460,9 +1453,8 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse = tokio_test::block_on(async {
-                resolver.resolve_flags(&resolve_flag_req).await.unwrap()
-            });
+            let response: ResolveFlagsResponse =
+                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
             assert_eq!(response.resolved_flags.len(), 1);
             assert!(resolver.state.flags.contains_key("flags/tutorial-feature"));
 
@@ -1483,7 +1475,7 @@ mod tests {
         }
 
         impl Host for TestLogger {
-            async fn log_resolve(
+            fn log_resolve(
                 _resolve_id: &str,
                 _evaluation_context: &Struct,
                 _values: &[ResolvedValue<'_>],
@@ -1493,7 +1485,7 @@ mod tests {
                 // Do nothing for resolve logs
             }
 
-            async fn log_assign(
+            fn log_assign(
                 resolve_id: &str,
                 _evaluation_context: &Struct,
                 assigned_flag: &[FlagToApply],
@@ -1553,9 +1545,8 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse = tokio_test::block_on(async {
-                resolver.resolve_flags(&resolve_flag_req).await.unwrap()
-            });
+            let response: ResolveFlagsResponse =
+                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
             let flag = response.resolved_flags.get(0).unwrap();
             assert_eq!(false, flag.should_apply);
             assert_eq!(ResolveReason::NoSegmentMatch as i32, flag.reason);
@@ -1588,9 +1579,8 @@ mod tests {
                 }),
             };
 
-            let response: ResolveFlagsResponse = tokio_test::block_on(async {
-                resolver.resolve_flags(&resolve_flag_req).await.unwrap()
-            });
+            let response: ResolveFlagsResponse =
+                tokio_test::block_on(async { resolver.resolve_flags(&resolve_flag_req).unwrap() });
             let flag = response.resolved_flags.get(0).unwrap();
             assert_eq!(true, flag.should_apply);
             assert_eq!(ResolveReason::Match as i32, flag.reason);

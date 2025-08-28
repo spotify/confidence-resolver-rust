@@ -16,7 +16,6 @@ prost-types = { version = "0.12", default-features = false }
 bytes = { version = "1.4.0", default-features = false }
 wee_alloc = "0.4"
 arc-swap = "1.7.1"
-futures = { version = "0.3", default-features = false, features = ["executor"] }
 
 [build-dependencies]
 prost-build = "0.12"
@@ -38,4 +37,7 @@ debug-assertions = false
 # Disable overflow checks
 overflow-checks = false
 # Disable rpath
-rpath = false 
+rpath = false
+
+[package.metadata.cargo-machete]
+ignored = ["prost", "prost-types", "prost-build"]

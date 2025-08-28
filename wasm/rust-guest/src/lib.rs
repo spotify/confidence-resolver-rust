@@ -121,7 +121,7 @@ impl Host for WasmHost {
         current_time(Void {}).unwrap()
     }
 
-    async fn log_resolve(
+    fn log_resolve(
         resolve_id: &str,
         evaluation_context: &Struct,
         values: &[ResolvedValue<'_>],
@@ -142,7 +142,7 @@ impl Host for WasmHost {
         log_resolve(request).unwrap();
     }
 
-    async fn log_assign(
+    fn log_assign(
         resolve_id: &str,
         evaluation_context: &Struct,
         assigned_flags: &[FlagToApply],
@@ -228,8 +228,7 @@ wasm_msg_guest! {
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY);
         match resolver {
             Some(resolver) => {
-                // Block on the async function since WASM guest functions can't be async
-                futures::executor::block_on(resolver.resolve_flags(&request))
+                resolver.resolve_flags(&request)
             }
             None => Err("Resolver state not set or client secret could not be found".to_string()),
         }
