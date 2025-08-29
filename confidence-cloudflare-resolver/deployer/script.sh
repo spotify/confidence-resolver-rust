@@ -33,8 +33,6 @@ if test -z "$CONFIDENCE_ACCOUNT_ID"; then
 fi
 
 if test -z "$CONFIDENCE_RESOLVER_STATE_URL"; then
-    echo "CONFIDENCE_RESOLVER_STATE_URL not provided; attempting to fetch via API"
-
     # Ensure jq is available for JSON parsing
     if ! command -v jq >/dev/null 2>&1; then
         echo "jq is required but not installed. Please install jq (e.g., brew install jq) or provide CONFIDENCE_RESOLVER_STATE_URL"
@@ -101,10 +99,6 @@ if test -z "$CONFIDENCE_RESOLVER_STATE_URL"; then
     fi
 fi
 
-echo "Starting CloudFlare deployment for $CONFIDENCE_ACCOUNT_ID"
-echo "CloudFlare API token: ${CLOUDFLARE_API_TOKEN:0:5}.."
-echo "CloudFlare account ID: $CLOUDFLARE_ACCOUNT_ID"
-
 mkdir -p data
 RESPONSE_FILE="data/resolver_state_current.pb"
 ETAG_TOML=""
@@ -115,11 +109,11 @@ CLIENT_SECRET_TOML=""
 
 EXTRA_HEADER=()
 
-# Try to fetch previous ETag from deployed resolver endpoint if provided
+# Try to fetch previous etag from deployed resolver endpoint if provided
 PREV_ETAG=""
 PREV_DEPLOYER_VERSION=""
 if [ -n "$CONFIDENCE_RESOLVER_STATE_ETAG_URL" ]; then
-    echo "🌐 Fetching previous ETag from $CONFIDENCE_RESOLVER_STATE_ETAG_URL"
+    echo "🌐 Fetching etag and git version from $CONFIDENCE_RESOLVER_STATE_ETAG_URL"
     ETAG_BODY_TMP=$(mktemp)
     ETAG_STATUS=$(curl -sS -w "%{http_code}" -o "$ETAG_BODY_TMP" "$CONFIDENCE_RESOLVER_STATE_ETAG_URL") || ETAG_STATUS="000"
     if [ "$ETAG_STATUS" = "200" ]; then
@@ -127,9 +121,9 @@ if [ -n "$CONFIDENCE_RESOLVER_STATE_ETAG_URL" ]; then
             PREV_ETAG=$(jq -r '.etag // empty' "$ETAG_BODY_TMP") || PREV_ETAG=""
             PREV_DEPLOYER_VERSION=$(jq -r '.version // empty' "$ETAG_BODY_TMP") || PREV_DEPLOYER_VERSION=""
             if [ -n "$PREV_ETAG" ]; then
-                echo "⤵️ Previous ETag from resolver: $PREV_ETAG"
+                echo "⤵️ Previous etag from resolver: $PREV_ETAG"
             else
-                echo "⚠️Resolver returned empty ETag"
+                echo "⚠️ Resolver returned empty ETag"
             fi
             if [ -n "$PREV_DEPLOYER_VERSION" ]; then
                 echo "⤵️ Previous Resolver Version from resolver: $PREV_DEPLOYER_VERSION"
@@ -140,13 +134,13 @@ if [ -n "$CONFIDENCE_RESOLVER_STATE_ETAG_URL" ]; then
             PREV_ETAG=$(tr -d '\r' < "$ETAG_BODY_TMP")
             PREV_ETAG=$(echo -n "$PREV_ETAG" | tr -d '\n')
             if [ -n "$PREV_ETAG" ]; then
-                echo "⤵️ Previous ETag from resolver: $PREV_ETAG"
+                echo "⤵️ Previous etag from resolver: $PREV_ETAG"
             else
                 echo "⚠️ Resolver returned empty ETag"
             fi
         fi
     else
-        echo "❌ Could not fetch ETag from resolver (HTTP $ETAG_STATUS)"
+        echo "❌ Could not fetch etag from resolver (HTTP $ETAG_STATUS)"
     fi
     rm -f "$ETAG_BODY_TMP"
 fi
@@ -167,7 +161,7 @@ else
 fi
 
 
-# If version changed, force download to bypass ETag and ensure fresh deploy
+# If version changed, force download to bypass etag and ensure fresh deploy
 if [ -n "$PREV_DEPLOYER_VERSION" ] && [ -n "$DEPLOYER_VERSION" ] && [ "$PREV_DEPLOYER_VERSION" != "$DEPLOYER_VERSION" ]; then
     echo "☑️ Deployer version changed ($PREV_DEPLOYER_VERSION -> $DEPLOYER_VERSION); forcing state download and redeploy"
     FORCE_DEPLOY=1
@@ -192,7 +186,7 @@ if [ "$HTTP_STATUS" = "304" ]; then
     exit 0
 elif [ "$HTTP_STATUS" = "200" ]; then
     echo "✅ Download of resolver state successful"
-    # Extract ETag and normalize
+    # Extract etag and normalize
     ETAG_RAW=$(awk -F': ' 'tolower($1)=="etag"{print $2}' "$TMP_HEADER" | tr -d '\r')
     rm -f "$TMP_HEADER"
     # Normalize ETag: drop weak prefix and surrounding quotes, then escape for TOML
@@ -235,6 +229,11 @@ echo "🚀 All files successfully created and verified"
 
 cd confidence-cloudflare-resolver
 
+echo "🏁 Starting CloudFlare deployment for $CONFIDENCE_ACCOUNT_ID"
+echo "☁️ CloudFlare API token: ${CLOUDFLARE_API_TOKEN:0:5}.."
+echo "☁️ CloudFlare account ID: $CLOUDFLARE_ACCOUNT_ID"
+
+
 if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
     # Remove existing account_id line if present
     sed -i.tmp '/^account_id *= *.*$/d' wrangler.toml
@@ -242,7 +241,6 @@ if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
     echo "account_id = \"$CLOUDFLARE_ACCOUNT_ID\"" > "$tmpfile"
     cat wrangler.toml >> "$tmpfile"
     mv "$tmpfile" wrangler.toml
-    echo "✅ account_id set to \"$CLOUDFLARE_ACCOUNT_ID\" in wrangler.toml"
 else
     echo "⚠️ CLOUDFLARE_ACCOUNT_ID environment variable is not set. This is required if the CloudFlare API token is of type Account, while User tokens with the correct permissions don't need this env variable set"
 fi

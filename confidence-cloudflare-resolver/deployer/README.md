@@ -30,3 +30,8 @@ This key is used internally in the resolver, and shouldn't be changed once deplo
 The CONFIDENCE_RESOLVER_STATE_ETAG_URL needs to point to the resolver you deployed / are about to deploy. 
 The `.../v1/state:etag` is the path used to retrieve the etag if available, ignored otherwise.
 The etag value is used to avoid re-deploy the worker if the state hasn't changed since the last deploy.
+
+Additional optional variables:
+- CONFIDENCE_RESOLVER_STATE_URL: Point to a custom resolver state protobuf file;
+- CONFIDENCE_RESOLVER_ALLOWED_ORIGIN: Configure allowed origins in the wrangler used to deploy the resolver;
+- FORCE_DEPLOY: Re-deploy the resolver worker, regardless if the state is detected as changed or not. 
