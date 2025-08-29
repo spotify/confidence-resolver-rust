@@ -20,8 +20,6 @@ docker run -it \
 	-e CLOUDFLARE_ACCOUNT_ID='<>’ \
 	-e CONFIDENCE_CLIENT_ID='<>’ \
 	-e CONFIDENCE_CLIENT_SECRET='<>’ \
-	-e CONFIDENCE_API_HOST='flags.eu.confidence.dev' \
-	-e CONFIDENCE_IAM_HOST='iam.eu.confidence.dev' \
 	-e CONFIDENCE_RESOLVER_STATE_ETAG_URL=‘<>/v1/state:etag' \
 	image-name
 ```

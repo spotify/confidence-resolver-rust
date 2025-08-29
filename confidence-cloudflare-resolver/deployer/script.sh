@@ -14,8 +14,6 @@ CONFIDENCE_RESOLVER_STATE_URL=${CONFIDENCE_RESOLVER_STATE_URL:=}
 CONFIDENCE_RESOLVER_STATE_ETAG_URL=${CONFIDENCE_RESOLVER_STATE_ETAG_URL:=}
 CONFIDENCE_CLIENT_ID=${CONFIDENCE_CLIENT_ID:=}
 CONFIDENCE_CLIENT_SECRET=${CONFIDENCE_CLIENT_SECRET:=}
-CONFIDENCE_API_HOST=${CONFIDENCE_API_HOST:=}
-CONFIDENCE_IAM_HOST=${CONFIDENCE_IAM_HOST:=}
 NO_DEPLOY=${NO_DEPLOY:=}
 FORCE_DEPLOY=${FORCE_DEPLOY:=}
 
@@ -39,7 +37,7 @@ if test -z "$CONFIDENCE_RESOLVER_STATE_URL"; then
 
     # Ensure jq is available for JSON parsing
     if ! command -v jq >/dev/null 2>&1; then
-        echo "jq is required but not installed. Please install jq (e.g., brew install jq) or provide CONFIDENCE_RESOLVER_STATE_URL."
+        echo "jq is required but not installed. Please install jq (e.g., brew install jq) or provide CONFIDENCE_RESOLVER_STATE_URL"
         exit 1
     fi
 
@@ -50,41 +48,26 @@ if test -z "$CONFIDENCE_RESOLVER_STATE_URL"; then
     fi
 
     fetch_access_token() {
-        local hosts=()
-        if [ -n "$CONFIDENCE_IAM_HOST" ]; then
-            hosts=("$CONFIDENCE_IAM_HOST")
-        else
-            hosts=("iam.eu.confidence.dev" "iam.us.confidence.dev" "iam.confidence.dev")
-        fi
-
-        for host in "${hosts[@]}"; do
-            local url="https://${host}/v1/oauth/token"
-            local resp http_status body token
-            resp=$(curl -s -w "%{http_code}" -H "Content-Type: application/json" \
-                -d "{\"clientId\":\"$CONFIDENCE_CLIENT_ID\",\"clientSecret\":\"$CONFIDENCE_CLIENT_SECRET\",\"grantType\":\"client_credentials\"}" \
-                "${url}")
-            http_status="${resp: -3}"
-            body="${resp%???}"
-            if [ "$http_status" -eq 200 ] && [ -n "$body" ]; then
-                token=$(printf "%s" "$body" | jq -r '.accessToken // .access_token // empty')
-                if [ -n "$token" ]; then
-                    printf "%s" "$token"
-                    return 0
-                fi
-            else
-                echo "⚠️ Failed to request access token from ${host}: HTTP ${http_status}" >&2
+        local url="https://iam.confidence.dev/v1/oauth/token"
+        local resp http_status body token
+        resp=$(curl -s -w "%{http_code}" -H "Content-Type: application/json" \
+            -d "{\"clientId\":\"$CONFIDENCE_CLIENT_ID\",\"clientSecret\":\"$CONFIDENCE_CLIENT_SECRET\",\"grantType\":\"client_credentials\"}" \
+            "${url}")
+        http_status="${resp: -3}"
+        body="${resp%???}"
+        if [ "$http_status" -eq 200 ] && [ -n "$body" ]; then
+            token=$(printf "%s" "$body" | jq -r '.accessToken // .access_token // empty')
+            if [ -n "$token" ]; then
+                printf "%s" "$token"
+                return 0
             fi
-        done
+        else
+            echo "⚠️ Failed to request access token from iam.confidence.dev: HTTP ${http_status}" >&2
+        fi
         return 1
     }
 
     fetch_resolver_state_url() {
-        local hosts=()
-        if [ -n "$CONFIDENCE_API_HOST" ]; then
-            hosts=("$CONFIDENCE_API_HOST")
-        else
-            hosts=("flags.eu.confidence.dev" "flags.us.confidence.dev")
-        fi
         local token
         if ! token=$(fetch_access_token); then
             echo "❌ Unable to obtain access token from IAM API"
@@ -92,37 +75,34 @@ if test -z "$CONFIDENCE_RESOLVER_STATE_URL"; then
         fi
 
         # HTTP using REST transcoding
-        for host in "${hosts[@]}"; do
-            local url="https://${host}/v1/resolverState:resolverStateUri"
-            local resp
-            resp=$(curl -s -w "%{http_code}" -H "Authorization: Bearer ${token}" "${url}")
-            local http_status="${resp: -3}"
-            local body="${resp%???}"
+        local url="https://flags.confidence.dev/v1/resolverState:resolverStateUri"
+        local resp
+        resp=$(curl -s -w "%{http_code}" -H "Authorization: Bearer ${token}" "${url}")
+        local http_status="${resp: -3}"
+        local body="${resp%???}"
 
-            if [ "$http_status" -eq 200 ] && [ -n "$body" ]; then
-                local signed_uri
-                signed_uri=$(printf "%s" "$body" | jq -r '.signedUri // .signed_uri // empty')
-                if [ -n "$signed_uri" ]; then
-                    CONFIDENCE_RESOLVER_STATE_URL="$signed_uri"
-                    echo "⤵️ Retrieved resolver state URL from ${host}"
-                    return 0
-                fi
-            else
-                echo "⚠️ Failed to fetch resolver state URL from ${host}: HTTP ${http_status}" >&2
+        if [ "$http_status" -eq 200 ] && [ -n "$body" ]; then
+            local signed_uri
+            signed_uri=$(printf "%s" "$body" | jq -r '.signedUri // .signed_uri // empty')
+            if [ -n "$signed_uri" ]; then
+                CONFIDENCE_RESOLVER_STATE_URL="$signed_uri"
+                echo "⤵️ Retrieved resolver state URL from flags.confidence.dev"
+                return 0
             fi
-        done
-
+        else
+            echo "⚠️ Failed to fetch resolver state URL from flags.confidence.dev: HTTP ${http_status}" >&2
+        fi
         return 1
     }
 
     if ! fetch_resolver_state_url; then
-        echo "❌ Unable to obtain resolver state URL from API. Please set CONFIDENCE_RESOLVER_STATE_URL explicitly."
+        echo "❌ Unable to obtain resolver state URL from API. Please set CONFIDENCE_RESOLVER_STATE_URL explicitly"
         exit 1
     fi
 fi
 
 echo "Starting CloudFlare deployment for $CONFIDENCE_ACCOUNT_ID"
-echo "CloudFlare API token: ${CLOUDFLARE_API_TOKEN:0:5}..."
+echo "CloudFlare API token: ${CLOUDFLARE_API_TOKEN:0:5}.."
 echo "CloudFlare account ID: $CLOUDFLARE_ACCOUNT_ID"
 
 mkdir -p data
@@ -149,12 +129,12 @@ if [ -n "$CONFIDENCE_RESOLVER_STATE_ETAG_URL" ]; then
             if [ -n "$PREV_ETAG" ]; then
                 echo "⤵️ Previous ETag from resolver: $PREV_ETAG"
             else
-                echo "⚠️Resolver returned empty ETag."
+                echo "⚠️Resolver returned empty ETag"
             fi
             if [ -n "$PREV_DEPLOYER_VERSION" ]; then
                 echo "⤵️ Previous Resolver Version from resolver: $PREV_DEPLOYER_VERSION"
             else
-                echo "⚠️ Previous Resolver Version empty from resolver."
+                echo "⚠️ Previous Resolver Version empty from resolver"
             fi
         else
             PREV_ETAG=$(tr -d '\r' < "$ETAG_BODY_TMP")
@@ -162,11 +142,11 @@ if [ -n "$CONFIDENCE_RESOLVER_STATE_ETAG_URL" ]; then
             if [ -n "$PREV_ETAG" ]; then
                 echo "⤵️ Previous ETag from resolver: $PREV_ETAG"
             else
-                echo "⚠️ Resolver returned empty ETag."
+                echo "⚠️ Resolver returned empty ETag"
             fi
         fi
     else
-        echo "❌ Could not fetch ETag from resolver (HTTP $ETAG_STATUS)."
+        echo "❌ Could not fetch ETag from resolver (HTTP $ETAG_STATUS)"
     fi
     rm -f "$ETAG_BODY_TMP"
 fi
@@ -177,10 +157,10 @@ if [ -n "${COMMIT_SHA:-}" ]; then
     DEPLOYER_VERSION="$(printf '%s' "$COMMIT_SHA" | tr -d '\n' | cut -c1-12)"
     echo "🔖 Deployer version (env): ${DEPLOYER_VERSION}"
 elif command -v git >/dev/null 2>&1; then
-    if DEPLOYER_VERSION=$(git -C .. rev-parse --short=12 HEAD 2>/dev/null); then
+    if DEPLOYER_VERSION=$(git rev-parse --short=12 HEAD 2>/dev/null); then
         echo "🐙 Deployer version (commit): ${DEPLOYER_VERSION}"
     else
-        echo "❌ git rev-parse failed."
+        echo "❌ git rev-parse failed"
     fi
 else
     echo "❌ git not found in PATH and COMMIT_SHA not set"
@@ -189,7 +169,7 @@ fi
 
 # If version changed, force download to bypass ETag and ensure fresh deploy
 if [ -n "$PREV_DEPLOYER_VERSION" ] && [ -n "$DEPLOYER_VERSION" ] && [ "$PREV_DEPLOYER_VERSION" != "$DEPLOYER_VERSION" ]; then
-    echo "☑️ Deployer version changed ($PREV_DEPLOYER_VERSION -> $DEPLOYER_VERSION); forcing state download and redeploy."
+    echo "☑️ Deployer version changed ($PREV_DEPLOYER_VERSION -> $DEPLOYER_VERSION); forcing state download and redeploy"
     FORCE_DEPLOY=1
 fi
 
@@ -198,7 +178,7 @@ if [ -n "$PREV_ETAG" ]; then
         EXTRA_HEADER+=("-H" "If-None-Match: $PREV_ETAG")
         echo "Using If-None-Match: $PREV_ETAG"
     else
-        echo "⚠️ FORCE_DEPLOY is set; ignoring existing ETag."
+        echo "⚠️ FORCE_DEPLOY is set; ignoring existing ETag"
     fi
 fi
 
@@ -206,12 +186,12 @@ TMP_HEADER=$(mktemp)
 HTTP_STATUS=$(curl -sS -w "%{http_code}" -D "$TMP_HEADER" -o "$RESPONSE_FILE" ${EXTRA_HEADER[@]+"${EXTRA_HEADER[@]}"} "$CONFIDENCE_RESOLVER_STATE_URL")
 
 if [ "$HTTP_STATUS" = "304" ]; then
-    echo "✅ Resolver state not modified (HTTP 304). Skipping the deployment."
+    echo "✅ Resolver state not modified (HTTP 304). Skipping the deployment"
     # No changes; keep previous ETag
     rm -f "$TMP_HEADER"
     exit 0
 elif [ "$HTTP_STATUS" = "200" ]; then
-    echo "✅ Download of resolver state successful."
+    echo "✅ Download of resolver state successful"
     # Extract ETag and normalize
     ETAG_RAW=$(awk -F': ' 'tolower($1)=="etag"{print $2}' "$TMP_HEADER" | tr -d '\r')
     rm -f "$TMP_HEADER"
@@ -221,13 +201,13 @@ elif [ "$HTTP_STATUS" = "200" ]; then
         ETAG_TOML=$(printf '%s' "$ETAG_STRIPPED" | sed 's/\\/\\\\/g; s/\"/\\\"/g')
     fi
 else
-    echo "❌ Error downloading resolver state: HTTP status code $HTTP_STATUS."
+    echo "❌ Error downloading resolver state: HTTP status code $HTTP_STATUS"
     # Print response body if the file is not empty
     if [ -s "$RESPONSE_FILE" ]; then
         echo "Server response:"
         cat "$RESPONSE_FILE"
     else
-        echo "No response body received."
+        echo "No response body received"
     fi
     rm -f "$TMP_HEADER"
     exit 1
@@ -242,7 +222,7 @@ check_file() {
         echo "❌ Error: $1 was not created or is empty!" >&2
         exit 1
     else
-        echo "✅ $1 exists and is not empty."
+        echo "✅ $1 exists and is not empty"
     fi
 }
 
@@ -251,7 +231,7 @@ check_file "data/resolver_state_current.pb"
 check_file "data/account_id"
 check_file "data/encryption_key"
 
-echo "All files successfully created and verified. 🚀"
+echo "🚀 All files successfully created and verified"
 
 cd confidence-cloudflare-resolver
 
@@ -264,7 +244,7 @@ if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
     mv "$tmpfile" wrangler.toml
     echo "✅ account_id set to \"$CLOUDFLARE_ACCOUNT_ID\" in wrangler.toml"
 else
-    echo "⚠️ CLOUDFLARE_ACCOUNT_ID environment variable is not set. This is required if the CloudFlare API token is of type Account, while User tokens with the correct permissions don't need this env variable set."
+    echo "⚠️ CLOUDFLARE_ACCOUNT_ID environment variable is not set. This is required if the CloudFlare API token is of type Account, while User tokens with the correct permissions don't need this env variable set"
 fi
 
 # Prepare ALLOWED_ORIGIN for TOML (escape quotes and backslashes)
