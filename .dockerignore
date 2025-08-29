@@ -1,0 +1,13 @@
+# Keep .git included (do NOT list it here) so commit SHA is available if needed
+
+# Build outputs
+**/target
+**/node_modules
+
+# OS/editor files
+**/.DS_Store
+**/.idea
+**/.vscode
+
+# Unneeded runtime data; fetched/generated during build/run
+data/*

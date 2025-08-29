@@ -39,14 +39,15 @@ ENV PATH=/usr/local/bin:$PATH
 ARG COMMIT_SHA=""
 ENV COMMIT_SHA=${COMMIT_SHA}
 
-# Copy all required files; .dockerignore restricts the context. This will include .git if present.
+# Copy entire repository (build context is repo root) into a subdir
+# to match script paths (it cds into confidence-resolver-rust)
 COPY . .
 
-# Just in case the script doesn't have the executable bit set
-RUN chmod +x ./script.sh
+# Ensure deploy script is executable
+RUN chmod +x confidence-cloudflare-resolver/deployer/script.sh
 
-# Run the script when starting the container
-CMD ["./script.sh"]
+# Default command runs the deployer script
+CMD ["./confidence-cloudflare-resolver/deployer/script.sh"]
 
-# Remove sample data to make sure it's not part of production
-RUN rm -rf confidence-resolver-rust/data/*
+# Remove sample/runtime data from the copied repo
+RUN rm -rf data/*

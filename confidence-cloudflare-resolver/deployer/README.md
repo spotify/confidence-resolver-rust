@@ -2,9 +2,16 @@
 
 Docker container used to deploy the Confidence Rust resolver to CloudFlare.
 
+# Build the image
+
+From the **root of the repository**, run:
+
+```
+docker build -f confidence-cloudflare-resolver/deployer/Dockerfile -t <YOUR_IMAGE_NAME> .
+```
+
 # Usage
 
-Make the resolver state pb file available to some URL, then run:
 ```
 docker run -it \
 	-e CLOUDFLARE_API_TOKEN='<>’ \

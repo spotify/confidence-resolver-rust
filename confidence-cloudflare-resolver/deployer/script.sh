@@ -125,8 +125,6 @@ echo "Starting CloudFlare deployment for $CONFIDENCE_ACCOUNT_ID"
 echo "CloudFlare API token: ${CLOUDFLARE_API_TOKEN:0:5}..."
 echo "CloudFlare account ID: $CLOUDFLARE_ACCOUNT_ID"
 
-cd confidence-resolver-rust
-
 mkdir -p data
 RESPONSE_FILE="data/resolver_state_current.pb"
 ETAG_TOML=""
