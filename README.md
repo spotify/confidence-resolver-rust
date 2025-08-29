@@ -1,4 +1,4 @@
-## confidence-resolver-rs
+# Confidence Rust Flags Resolver
 
 The Confidence Flag Resolver implemented in Rust, plus example hosts and a Cloudflare Worker build. This workspace compiles the core resolver to native and WebAssembly and demonstrates how to call it from Go, Node.js, Python, and Java.
 
