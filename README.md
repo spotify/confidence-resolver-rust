@@ -7,7 +7,7 @@ The Confidence Flag Resolver implemented in Rust, plus example hosts and a Cloud
 - `confidence-resolver`: Core resolver crate
 - `confidence-cloudflare-resolver`: Cloudflare Worker-compatible WASM target
 - `wasm-msg`: Minimal WASM messaging layer shared by hosts
-- `wasm/*-host`: Small host apps (Go, Node.js, Python, Java) calling the resolver
+- `wasm/*-host`: Small host apps (Go, Node.js, Python, Java) calling the resolver. These are only intended to be examples, as well as being used for integration tests.
 - `data/`: Sample local development data (e.g., resolver state)
 
 ## Prerequisites
