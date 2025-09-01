@@ -19,8 +19,3 @@ arc-swap = "1.7.1"
 
 [build-dependencies]
 prost-build = "0.12"
-
-
-
-[package.metadata.cargo-machete]
-ignored = ["prost", "prost-types", "prost-build"]

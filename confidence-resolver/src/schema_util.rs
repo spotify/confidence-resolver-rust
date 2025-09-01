@@ -6,10 +6,6 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-#[cfg(feature = "std")]
-type MapType<KEY, VALUE> = std::collections::HashMap<KEY, VALUE>;
-#[cfg(not(feature = "std"))]
-type MapType<KEY, VALUE> = BTreeMap<KEY, VALUE>;
 
 #[cfg(feature = "std")]
 use pbjson_types::{value::Kind, Struct, Value};
@@ -266,6 +262,9 @@ fn get_iso_country_codes() -> BTreeSet<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Use BTreeMap in tests to match Struct.fields type and avoid warnings in non-test builds
+    type MapType<K, V> = BTreeMap<K, V>;
 
     // Helper function to create a Value with a string
     fn string_value(s: &str) -> Value {
