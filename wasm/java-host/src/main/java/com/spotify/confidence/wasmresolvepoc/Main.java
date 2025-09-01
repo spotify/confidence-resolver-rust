@@ -18,7 +18,7 @@ public class Main {
     private final ResolverApi resolverApi;
 
     public Main() {
-        Path wasmModulePath = Path.of("../../target/wasm32-unknown-unknown/release/rust_guest.wasm");
+        Path wasmModulePath = Path.of("../rust_guest.wasm");
         WasmModule module = Parser.parse(wasmModulePath);
         resolverApi = new ResolverApi(module);
 

@@ -21,9 +21,6 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build WASM guest
-        run: make rust-guest
-
       # Node.js host
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -35,9 +32,7 @@ jobs:
         run: |
           set -euxo pipefail
           corepack enable
-          yarn install --immutable
-          yarn proto:gen
-          yarn start | tee ../node-host.out
+          make run-node-host | tee ../node-host.out
 
       - name: Verify node-host output
         run: |
@@ -58,16 +53,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build WASM guest
-        run: make rust-guest
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
 
       - name: Install protoc-gen-go
-        if: matrix.host == 'go'
         run: |
           set -euxo pipefail
           echo "GOPATH=$(go env GOPATH)" && export PATH=$PATH:$(go env GOPATH)/bin
@@ -77,9 +68,7 @@ jobs:
         working-directory: wasm/go-host
         run: |
           set -euxo pipefail
-          export PATH=$PATH:$(go env GOPATH)/bin
-          bash generate_proto.sh
-          go run . | tee ../go-host.out
+          make run-go-host | tee ../go-host.out
 
       - name: Verify go-host output
         run: |
@@ -102,9 +91,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-
-      - name: Build WASM guest
-        run: make rust-guest
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -137,9 +123,6 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build WASM guest
-        run: make rust-guest
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -151,13 +134,7 @@ jobs:
           PYTHONUNBUFFERED: '1'
         run: |
           set -euxo pipefail
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install --upgrade pip
-          pip install wasmtime "protobuf<4"
-          python generate_proto.py --out .venv/proto
-          export PYTHONPATH="$(pwd)/.venv:$(pwd)/.venv/proto:${PYTHONPATH:-}"
-          python main.py | tee ../python-host.out
+          make run-python-host | tee ../python-host.out
 
       - name: Verify python-host output
         run: |

@@ -1,14 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Void } from './messages.ts';
-import { ResolveFlagsRequest, ResolveFlagsResponse, ResolveReason } from './resolver/api.ts';
-import { Timestamp } from './google/protobuf/timestamp.ts';
+import { Void } from './proto/messages.ts';
+import { ResolveFlagsRequest, ResolveFlagsResponse, ResolveReason } from './proto/resolver/api.ts';
+import { Timestamp } from './proto/google/protobuf/timestamp.ts';
 import { ApiBuilder } from './wasm-msg.ts';
 
 const dirname = path.dirname(new URL(import.meta.url).pathname);
 
-// Load the WASM module
-const wasmPath = path.join(dirname, '../../../target/wasm32-unknown-unknown/release/rust_guest.wasm');
+// Load the WASM module from shared artifact
+const wasmPath = path.join(dirname, '../../rust_guest.wasm');
 const wasmBuffer = fs.readFileSync(wasmPath);
 const resolverState = fs.readFileSync(path.join(dirname, '../../resolver_state.pb'));
 

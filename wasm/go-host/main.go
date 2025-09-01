@@ -15,7 +15,7 @@ import (
 
 func main() {
 	// Load the WASM module
-	wasmPath := filepath.Join("..", "..", "target", "wasm32-unknown-unknown", "release", "rust_guest.wasm")
+	wasmPath := filepath.Join("..", "rust_guest.wasm")
 	wasmBytes, err := os.ReadFile(wasmPath)
 	if err != nil {
 		log.Fatalf("Failed to read WASM file: %v", err)
