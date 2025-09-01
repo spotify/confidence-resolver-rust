@@ -6,17 +6,26 @@
     "confidence-resolver": {
       "path": "confidence-resolver",
       "release-type": "rust",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "initial-version": "0.1.0"
     },
     "confidence-cloudflare-resolver": {
       "path": "confidence-cloudflare-resolver",
       "release-type": "rust",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "initial-version": "0.1.0"
     },
     "wasm-msg": {
       "path": "wasm-msg",
       "release-type": "rust",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "initial-version": "0.1.0"
+    },
+    "rust-guest": {
+      "path": "wasm/rust-guest",
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md",
+      "initial-version": "0.1.0"
     }
   }
 }
