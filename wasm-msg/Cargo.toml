@@ -2,6 +2,7 @@
 name = "wasm-msg"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [lib]
 crate-type = ["rlib"]  # Just use rlib for now, we can add cdylib when needed
