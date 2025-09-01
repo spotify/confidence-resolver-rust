@@ -25,7 +25,8 @@ resolver-lint:
 
 rust-guest:
 	@echo "Building rust-guest (wasm32-unknown-unknown)..."
-	cargo build -p rust-guest --target wasm32-unknown-unknown --release
+	cargo build -p rust-guest --target wasm32-unknown-unknown --profile wasm
+	@echo "Final WASM size: $$(/bin/ls -lh target/wasm32-unknown-unknown/release/rust_guest.wasm | awk '{print $$5}')"
 
 rust-guest-lint:
 	@echo "Linting rust-guest (wasm32-unknown-unknown)..."
@@ -62,5 +63,6 @@ run-java-host: rust-guest
 test: resolver-test
 
 lint: resolver-lint cloudflare-lint rust-guest-lint
+	cargo fmt --all --check
 
 build: resolver cloudflare rust-guest

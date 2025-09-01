@@ -21,23 +21,6 @@ arc-swap = "1.7.1"
 prost-build = "0.12"
 
 
-[profile.release]
-# Optimize for size
-opt-level = 'z'  # Optimize for size instead of speed
-lto = true       # Enable link-time optimization
-codegen-units = 1  # Reduce number of codegen units to increase optimization
-panic = 'abort'  # Remove panic unwinding code
-strip = true     # Strip symbols from binary
-# Disable incremental compilation
-incremental = false
-# Disable debug assertions
-debug = false
-# Disable debug info
-debug-assertions = false
-# Disable overflow checks
-overflow-checks = false
-# Disable rpath
-rpath = false
 
 [package.metadata.cargo-machete]
 ignored = ["prost", "prost-types", "prost-build"]
