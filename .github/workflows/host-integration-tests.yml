@@ -28,11 +28,10 @@ jobs:
           node-version: '22'
 
       - name: Run node-host
-        working-directory: wasm/node-host
         run: |
           set -euxo pipefail
           corepack enable
-          make run-node-host | tee ../node-host.out
+          make run-node-host | tee wasm/node-host.out
 
       - name: Verify node-host output
         run: |
@@ -65,10 +64,9 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
       - name: Run go-host
-        working-directory: wasm/go-host
         run: |
           set -euxo pipefail
-          make run-go-host | tee ../go-host.out
+          make run-go-host | tee wasm/go-host.out
 
       - name: Verify go-host output
         run: |
@@ -99,7 +97,6 @@ jobs:
           java-version: '21'
 
       - name: Run java-host
-        working-directory: .
         run: |
           set -euxo pipefail
           make run-java-host | tee wasm/java-host.out
@@ -129,12 +126,11 @@ jobs:
           python-version: '3.11'
 
       - name: Run python-host
-        working-directory: wasm/python-host
         env:
           PYTHONUNBUFFERED: '1'
         run: |
           set -euxo pipefail
-          make run-python-host | tee ../python-host.out
+          make run-python-host | tee wasm/python-host.out
 
       - name: Verify python-host output
         run: |
