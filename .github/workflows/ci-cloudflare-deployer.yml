@@ -1,4 +1,4 @@
-name: Build Deployer Image
+name: CloudFlare Deployer Image CI
 
 on:
   push:

@@ -1,4 +1,4 @@
-name: CI
+name: WASM CI
 
 on:
   pull_request:
