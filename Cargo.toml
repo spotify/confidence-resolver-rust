@@ -7,8 +7,6 @@ members = [
     "confidence-resolver",
     "confidence-cloudflare-resolver"
 ]
-
-
 [profile.wasm]
 inherits = "release"
 opt-level = "z"
