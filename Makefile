@@ -38,18 +38,19 @@ cloudflare-lint:
 	RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo clippy -p confidence-cloudflare-resolver --lib --target wasm32-unknown-unknown --release
 
 # Produce a stable artifact location for CI hosts
-wasm/rust_guest.wasm: | rust-guest
-	@echo "Copying rust_guest.wasm to wasm/rust_guest.wasm..."
-	cp target/wasm32-unknown-unknown/wasm/rust_guest.wasm wasm/rust_guest.wasm
+wasm/confidence_resolver.wasm: | rust-guest
+	@echo "Copying rust_guest.wasm to wasm/confidence_resolver.wasm..."
+	cp target/wasm32-unknown-unknown/wasm/rust_guest.wasm wasm/confidence_resolver.wasm
+
 
 # Run examples (depend on stable wasm artifact)
-run-go-host: wasm/rust_guest.wasm
+run-go-host: wasm/confidence_resolver.wasm
 	cd wasm/go-host && bash generate_proto.sh && go run .
 
-run-node-host: wasm/rust_guest.wasm
+run-node-host: wasm/confidence_resolver.wasm
 	cd wasm/node-host && yarn install --frozen-lockfile && yarn proto:gen && yarn start
 
-run-python-host: wasm/rust_guest.wasm
+run-python-host: wasm/confidence_resolver.wasm
 	cd wasm/python-host \
 		&& python3 -m venv .venv \
 		&& .venv/bin/python -m pip install --upgrade pip \
@@ -57,7 +58,7 @@ run-python-host: wasm/rust_guest.wasm
 		&& .venv/bin/python generate_proto.py --out .venv/proto \
 		&& PYTHONPATH=$$(pwd)/.venv:$$(pwd)/.venv/proto:$$PYTHONPATH .venv/bin/python main.py
 
-run-java-host: wasm/rust_guest.wasm
+run-java-host: wasm/confidence_resolver.wasm
 	cd wasm/java-host && mvn -q package exec:java
 
 # Aggregate test runs (only resolver has tests today)
