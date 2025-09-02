@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "confidence_resolver"
+name = "rust_guest"
 crate-type = ["cdylib"]  # This is required for WASM
 
 [dependencies]
