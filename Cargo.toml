@@ -7,3 +7,11 @@ members = [
     "confidence-resolver",
     "confidence-cloudflare-resolver"
 ]
+
+
+[profile.wasm]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"

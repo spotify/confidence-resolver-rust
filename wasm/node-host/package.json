@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "proto:gen": "protoc --plugin=node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt useOptionals=messages --ts_proto_opt esModuleInterop=true --ts_proto_out src -I ../proto messages.proto resolver/api.proto"
+    "proto:gen": "mkdir -p src/proto && protoc --plugin=node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt useOptionals=messages --ts_proto_opt esModuleInterop=true --ts_proto_out src/proto -I ../proto messages.proto resolver/api.proto"
   },
   "packageManager": "yarn@4.9.1+sha512.f95ce356460e05be48d66401c1ae64ef84d163dd689964962c6888a9810865e39097a5e9de748876c2e0bf89b232d583c33982773e9903ae7a76257270986538",
   "devDependencies": {

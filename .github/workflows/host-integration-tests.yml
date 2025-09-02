@@ -21,9 +21,6 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build WASM guest
-        run: make rust-guest
-
       # Node.js host
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -31,13 +28,10 @@ jobs:
           node-version: '22'
 
       - name: Run node-host
-        working-directory: wasm/node-host
         run: |
           set -euxo pipefail
           corepack enable
-          yarn install --immutable
-          yarn proto:gen
-          yarn start | tee ../node-host.out
+          make run-node-host | tee wasm/node-host.out
 
       - name: Verify node-host output
         run: |
@@ -58,28 +52,21 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build WASM guest
-        run: make rust-guest
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
 
       - name: Install protoc-gen-go
-        if: matrix.host == 'go'
         run: |
           set -euxo pipefail
           echo "GOPATH=$(go env GOPATH)" && export PATH=$PATH:$(go env GOPATH)/bin
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
       - name: Run go-host
-        working-directory: wasm/go-host
         run: |
           set -euxo pipefail
-          export PATH=$PATH:$(go env GOPATH)/bin
-          bash generate_proto.sh
-          go run . | tee ../go-host.out
+          make run-go-host | tee wasm/go-host.out
 
       - name: Verify go-host output
         run: |
@@ -103,9 +90,6 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build WASM guest
-        run: make rust-guest
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -113,7 +97,6 @@ jobs:
           java-version: '21'
 
       - name: Run java-host
-        working-directory: .
         run: |
           set -euxo pipefail
           make run-java-host | tee wasm/java-host.out
@@ -137,27 +120,17 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build WASM guest
-        run: make rust-guest
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Run python-host
-        working-directory: wasm/python-host
         env:
           PYTHONUNBUFFERED: '1'
         run: |
           set -euxo pipefail
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install --upgrade pip
-          pip install wasmtime "protobuf<4"
-          python generate_proto.py --out .venv/proto
-          export PYTHONPATH="$(pwd)/.venv:$(pwd)/.venv/proto:${PYTHONPATH:-}"
-          python main.py | tee ../python-host.out
+          make run-python-host | tee wasm/python-host.out
 
       - name: Verify python-host output
         run: |

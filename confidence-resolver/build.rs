@@ -21,55 +21,22 @@ fn main() -> Result<()> {
 
     let mut config = prost_build::Config::new();
 
-    config.type_attribute(
+    [
         "confidence.flags.admin.v1.ClientResolveInfo.EvaluationContextSchemaInstance",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType.type",
-        "#[derive(Eq, Ord, PartialOrd)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType.VersionSemanticType",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType.CountrySemanticType",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType.TimestampSemanticType",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType.DateSemanticType",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType.EntitySemanticType",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType.EnumSemanticType",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
-
-    config.type_attribute(
         "confidence.flags.admin.v1.ContextFieldSemanticType.EnumSemanticType.EnumValue",
-        "#[derive(Eq, PartialOrd, Ord)]",
-    );
+    ]
+    .iter()
+    .for_each(|&p| {
+        config.type_attribute(p, "#[derive(Eq, PartialOrd, Ord)]");
+    });
 
     config
         .file_descriptor_set_path(&descriptor_path)
