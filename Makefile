@@ -23,7 +23,7 @@ resolver-lint:
 rust-guest:
 	@echo "Building rust-guest (wasm32-unknown-unknown)..."
 	cargo build -p rust-guest --target wasm32-unknown-unknown --profile wasm
-	@echo "Final WASM size: $$(/bin/ls -lh target/wasm32-unknown-unknown/wasm/rust_guest.wasm | awk '{print $$5}')"
+	@echo "Final WASM size: $$(/bin/ls -lh target/wasm32-unknown-unknown/wasm/confidence_resolver.wasm | awk '{print $$5}')"
 
 rust-guest-lint:
 	@echo "Linting rust-guest (wasm32-unknown-unknown)..."
@@ -39,8 +39,8 @@ cloudflare-lint:
 
 # Produce a stable artifact location for CI hosts
 wasm/confidence_resolver.wasm: | rust-guest
-	@echo "Copying rust_guest.wasm to wasm/confidence_resolver.wasm..."
-	cp target/wasm32-unknown-unknown/wasm/rust_guest.wasm wasm/confidence_resolver.wasm
+	@echo "Copying confidence_resolver.wasm to wasm/confidence_resolver.wasm..."
+	cp target/wasm32-unknown-unknown/wasm/confidence_resolver.wasm wasm/confidence_resolver.wasm
 
 
 # Run examples (depend on stable wasm artifact)
