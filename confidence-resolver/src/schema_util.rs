@@ -263,7 +263,15 @@ fn get_iso_country_codes() -> BTreeSet<&'static str> {
 mod tests {
     use super::*;
 
-    // Use BTreeMap in tests to match Struct.fields type and avoid warnings in non-test builds
+    #[cfg(feature = "std")]
+    use std::collections::HashMap;
+
+    // Match Struct.fields backing map depending on feature:
+    // - With "std" feature, pbjson_types::Struct uses HashMap
+    // - Without "std", prost_types::Struct uses BTreeMap
+    #[cfg(feature = "std")]
+    type MapType<K, V> = HashMap<K, V>;
+    #[cfg(not(feature = "std"))]
     type MapType<K, V> = BTreeMap<K, V>;
 
     // Helper function to create a Value with a string
