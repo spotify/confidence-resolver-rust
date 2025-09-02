@@ -1,13 +1,21 @@
-# Keep .git included (do NOT list it here) so commit SHA is available if needed
+# VCS
+.git
+**/.git
 
-# Build outputs
+# GitHub metadata
+.github
+
+# macOS
+**/.DS_Store
+
+# Rust build artifacts
+/target
 **/target
+
+# Node modules
+/node_modules
 **/node_modules
 
-# OS/editor files
-**/.DS_Store
-**/.idea
-**/.vscode
-
-# Unneeded runtime data; fetched/generated during build/run
-data/*
+# Local runtime data
+/data/
+**/data/

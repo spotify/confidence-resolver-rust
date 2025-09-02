@@ -303,6 +303,10 @@ if [ -n "$ALLOWED_ORIGIN_TOML" ] || [ -n "$ETAG_TOML" ] || [ -n "$DEPLOYER_VERSI
     fi
 fi
 
+# Build the worker after state is downloaded
+export CARGO_TARGET_DIR=/workspace/target
+RUSTFLAGS='--cfg getrandom_backend="wasm_js"' worker-build --release
+
 # only deploy if NO_DEPLOY is not set
 if test -z "$NO_DEPLOY"; then
      wrangler deploy

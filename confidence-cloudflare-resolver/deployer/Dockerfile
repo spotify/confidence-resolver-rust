@@ -1,4 +1,4 @@
-FROM rust:1.82
+FROM rust:1.82 AS rust-base
 
 RUN rustup update stable && rustup target add wasm32-unknown-unknown
 
@@ -6,13 +6,28 @@ RUN rustup update stable && rustup target add wasm32-unknown-unknown
 WORKDIR /workspace
 
 RUN apt-get update && \
-    apt install -y protobuf-compiler jq && \
-    protoc --version && jq --version
+    apt install -y protobuf-compiler jq curl && \
+    protoc --version && jq --version && curl --version
 
-# Install curl and other necessary tools
-RUN apt-get update && apt-get install -y \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Install cargo-chef to leverage Docker layer caching of Rust deps
+RUN cargo install cargo-chef --locked
+
+# --- Planner stage: compute dependency recipe ---
+FROM rust-base AS planner
+WORKDIR /workspace
+# Copy the full repo to compute the recipe. This stage is not cached across
+# source changes, but downstream cook stage will be, based on the recipe only.
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# --- Cacher stage: build dependency layers only (cached unless Cargo.toml changes) ---
+FROM rust-base AS cacher
+WORKDIR /workspace
+COPY --from=planner /workspace/recipe.json recipe.json
+RUN RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo chef cook --release --recipe-path recipe.json --target wasm32-unknown-unknown
+
+# --- Final stage: add Node/Wrangler and runtime tooling, reuse cached deps ---
+FROM rust-base AS final
 
 ENV NVM_DIR=/root/.nvm
 ENV NODE_VERSION=22.12.0
@@ -33,21 +48,29 @@ RUN node -v && npm -v
 # Install Wrangler CLI using npm
 RUN npm install -g wrangler@latest
 
+# Pre-install the Rust worker build tool so wrangler doesn't run cargo install at deploy-time
+RUN cargo install worker-build --locked || true
+
 ENV PATH=/usr/local/bin:$PATH
+ENV PATH=/usr/local/cargo/bin:$PATH
 
 # Optionally pass the commit SHA at build time
 ARG COMMIT_SHA=""
 ENV COMMIT_SHA=${COMMIT_SHA}
 
-# Copy entire repository (build context is repo root) into a subdir
-# to match script paths (it cds into confidence-resolver-rust)
+# Copy the repository contents
 COPY . .
+
+# Reuse dependency cache produced by cargo-chef
+COPY --from=cacher /workspace/target /workspace/target
+# Bring over only cargo caches (not binaries) to preserve preinstalled tools
+COPY --from=cacher /usr/local/cargo/registry /usr/local/cargo/registry
+
+# Clean sample/runtime data from the copied repo to avoid leaking into image
+RUN rm -rf data/*
 
 # Ensure deploy script is executable
 RUN chmod +x confidence-cloudflare-resolver/deployer/script.sh
 
 # Default command runs the deployer script
 CMD ["./confidence-cloudflare-resolver/deployer/script.sh"]
-
-# Remove sample/runtime data from the copied repo
-RUN rm -rf data/*
