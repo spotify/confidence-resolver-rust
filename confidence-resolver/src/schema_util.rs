@@ -119,7 +119,9 @@ impl SchemaFromEvaluationContext {
 
                         if all_same_kind {
                             Self::add_field_schema(
-                                &list_val.values[0],
+                                unsafe {
+                                    list_val.values.get_unchecked(0)
+                                },
                                 field_path,
                                 flat_schema,
                                 semantic_types,
@@ -225,8 +227,7 @@ impl SchemaFromEvaluationContext {
         }
 
         // Try parsing with custom formats
-        if value.contains('T') {
-            let t_pos = value.find('T').unwrap();
+        if let Some(t_pos) = value.find('T') {
             let time_part = &value[t_pos..];
 
             if value.ends_with('Z') || time_part.contains('+') || time_part.contains('-') {
@@ -246,7 +247,9 @@ impl SchemaFromEvaluationContext {
         } else {
             // Try parsing as date only
             if let Ok(nd) = NaiveDate::parse_from_str(value, "%Y-%m-%d") {
-                let ndt = nd.and_hms_opt(0, 0, 0).unwrap();
+                let ndt = unsafe {
+                    nd.and_hms_opt(0, 0, 0).unwrap_unchecked() 
+                }; 
                 return Some(DateTime::from_naive_utc_and_offset(ndt, Utc));
             }
         }

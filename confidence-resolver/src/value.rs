@@ -19,8 +19,8 @@ use crate::confidence::flags::types::v1::targeting::criterion;
 pub fn convert_to_targeting_value(
     attribute_value: &Value,
     expected_type: Option<&targeting::value::Value>,
-) -> targeting::value::Value {
-    match &attribute_value.kind {
+) -> crate::Result<targeting::value::Value> {
+    Ok(match &attribute_value.kind {
         None => targeting::value::Value::StringValue("null".to_string()),
         Some(Kind::NullValue(_)) => targeting::value::Value::StringValue("null".to_string()),
         Some(Kind::NumberValue(num_value)) => match expected_type {
@@ -37,13 +37,13 @@ pub fn convert_to_targeting_value(
                 str_value.parse().unwrap_or_else(|_| str_value == "TRUE"),
             ),
             Some(targeting::value::Value::NumberValue(_)) => {
-                targeting::value::Value::NumberValue(str_value.parse().unwrap())
+                targeting::value::Value::NumberValue(str_value.parse().map_err(|_| "bad numeric targeting value")?)
             } // fixme:propagate error
             Some(targeting::value::Value::StringValue(_)) => {
                 targeting::value::Value::StringValue(str_value.clone())
             }
             Some(targeting::value::Value::TimestampValue(_)) => {
-                targeting::value::Value::TimestampValue(from_str(str_value).unwrap())
+                targeting::value::Value::TimestampValue(from_str(str_value).ok_or("bad datetime targeting value")?)
             } // fixme:propagate error
             Some(targeting::value::Value::VersionValue(_)) => {
                 targeting::value::Value::VersionValue(targeting::SemanticVersion {
@@ -59,19 +59,19 @@ pub fn convert_to_targeting_value(
             _ => targeting::value::Value::StringValue("null".to_string()),
         },
         Some(Kind::ListValue(list_value)) => {
-            let converted_values = list_value
-                .values
-                .iter()
-                .map(|value| targeting::Value {
-                    value: Some(convert_to_targeting_value(value, expected_type)),
-                })
-                .collect::<Vec<_>>();
+            let mut converted_values:Vec<targeting::Value> = Vec::with_capacity(list_value.values.len());
+            
+            for value in &list_value.values {
+                converted_values.push(targeting::Value {
+                    value: Some(convert_to_targeting_value(value, expected_type)?)
+                });
+            }
             targeting::value::Value::ListValue(targeting::ListValue {
                 values: converted_values,
             })
         }
         Some(Kind::StructValue(_)) => targeting::value::Value::StringValue("null".to_string()), // todo: fail
-    }
+    })
 }
 
 pub fn evaluate_criterion(
@@ -227,30 +227,32 @@ impl Ord for Timestamp {
     }
 }
 
+const ZERO_VERSION:semver::Version  = semver::Version::new(0, 0, 0);
+
 impl Ord for targeting::SemanticVersion {
     fn lt(&self, other: &Self) -> bool {
-        // todo: don't panic
-        let a = semver::Version::parse(&self.version).unwrap();
-        let b = semver::Version::parse(&other.version).unwrap();
+        // this use of ZERO_VERSION is questionable
+        let a = semver::Version::parse(&self.version).unwrap_or(ZERO_VERSION);
+        let b = semver::Version::parse(&other.version).unwrap_or(ZERO_VERSION);
         a < b
     }
 
     fn lte(&self, other: &Self) -> bool {
-        // todo: don't panic
-        let a = semver::Version::parse(&self.version).unwrap();
-        let b = semver::Version::parse(&other.version).unwrap();
+        // this use of ZERO_VERSION is questionable
+        let a = semver::Version::parse(&self.version).unwrap_or(ZERO_VERSION);
+        let b = semver::Version::parse(&other.version).unwrap_or(ZERO_VERSION);
         a <= b
     }
 }
 
-fn from_str(s: &str) -> Result<Timestamp, ()> {
+fn from_str(s: &str) -> Option<Timestamp> {
     // parse timestamp from s
     if s.contains(['T', ' ']) {
         // split at position of T or space
-        let time_part = s.split(['T', ' ']).nth(1).unwrap();
+        let time_part = s.split(['T', ' ']).nth(1)?;
         if time_part.contains(['Z', '+', '-']) {
             DateTime::parse_from_rfc3339(s)
-                .map_err(|_| ())
+                .ok()
                 .map(|dt| dt.with_timezone(&Utc))
                 .map(|dt| Timestamp {
                     seconds: dt.timestamp(),
@@ -261,10 +263,10 @@ fn from_str(s: &str) -> Result<Timestamp, ()> {
                 .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f"))
                 .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))
                 .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f"))
-                .map_err(|_| ())
+                .ok()
                 .and_then(|ndt| match Utc.from_local_datetime(&ndt) {
-                    LocalResult::Single(dt) => Ok(dt),
-                    _ => Err(()),
+                    LocalResult::Single(dt) => Some(dt),
+                    _ => None,
                 })
                 .map(|dt| Timestamp {
                     seconds: dt.timestamp(),
@@ -273,11 +275,11 @@ fn from_str(s: &str) -> Result<Timestamp, ()> {
         }
     } else {
         NaiveDate::parse_from_str(s, "%Y-%m-%d")
-            .map_err(|_| ())
-            .map(|nd| nd.and_time(NaiveTime::from_num_seconds_from_midnight_opt(0, 0).unwrap()))
+            .ok()
+            .map(|nd| unsafe {nd.and_hms_opt(0, 0, 0).unwrap_unchecked()})
             .and_then(|ndt| match Utc.from_local_datetime(&ndt) {
-                chrono::LocalResult::Single(dt) => Ok(dt),
-                _ => Err(()),
+                chrono::LocalResult::Single(dt) => Some(dt),
+                _ => None,
             })
             .map(|dt| Timestamp {
                 seconds: dt.timestamp(),
@@ -408,23 +410,23 @@ mod tests {
 
     #[test]
     fn convert_number_to_number() {
-        let number = convert_to_targeting_value(&123.4.into(), number_type!());
+        let number = convert_to_targeting_value(&123.4.into(), number_type!()).unwrap();
         assert_number(&number, 123.4);
     }
 
     #[test]
     fn convert_number_to_string() {
-        let number = convert_to_targeting_value(&123.4.into(), string_type!());
+        let number = convert_to_targeting_value(&123.4.into(), string_type!()).unwrap();
         assert_string(&number, "123.4");
     }
 
     #[test]
     fn convert_string_to_bool() {
-        let bool_tl = convert_to_targeting_value(&"true".into(), bool_type!());
-        let bool_tu = convert_to_targeting_value(&"TRUE".into(), bool_type!());
-        let bool_fl = convert_to_targeting_value(&"false".into(), bool_type!());
-        let bool_fu = convert_to_targeting_value(&"FALSE".into(), bool_type!());
-        let bool_rnd = convert_to_targeting_value(&"rnd".into(), bool_type!());
+        let bool_tl = convert_to_targeting_value(&"true".into(), bool_type!()).unwrap();
+        let bool_tu = convert_to_targeting_value(&"TRUE".into(), bool_type!()).unwrap();
+        let bool_fl = convert_to_targeting_value(&"false".into(), bool_type!()).unwrap();
+        let bool_fu = convert_to_targeting_value(&"FALSE".into(), bool_type!()).unwrap();
+        let bool_rnd = convert_to_targeting_value(&"rnd".into(), bool_type!()).unwrap();
 
         assert_bool(&bool_tl, true);
         assert_bool(&bool_tu, true);
@@ -435,8 +437,8 @@ mod tests {
 
     #[test]
     fn convert_string_to_number() {
-        let number1 = convert_to_targeting_value(&"123".into(), number_type!());
-        let number2 = convert_to_targeting_value(&"123.4".into(), number_type!());
+        let number1 = convert_to_targeting_value(&"123".into(), number_type!()).unwrap();
+        let number2 = convert_to_targeting_value(&"123.4".into(), number_type!()).unwrap();
 
         assert_number(&number1, 123.0);
         assert_number(&number2, 123.4);
@@ -444,7 +446,7 @@ mod tests {
 
     #[test]
     fn convert_string_to_string() {
-        let str = convert_to_targeting_value(&"foobar".into(), string_type!());
+        let str = convert_to_targeting_value(&"foobar".into(), string_type!()).unwrap();
 
         assert_string(&str, "foobar");
     }
@@ -452,7 +454,7 @@ mod tests {
     #[test]
     fn convert_string_to_timestamp() {
         let time = "2022-11-17T15:16:17.118Z";
-        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!());
+        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!()).unwrap();
 
         let expected = chrono::DateTime::parse_from_rfc3339(time).unwrap();
         assert_timestamp(&timestamp, &expected);
@@ -461,7 +463,7 @@ mod tests {
     #[test]
     fn convert_string_to_timestamp_no_t() {
         let time = "2022-11-17 15:16:17.118Z";
-        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!());
+        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!()).unwrap();
 
         let expected = chrono::DateTime::parse_from_rfc3339(time).unwrap();
         assert_timestamp(&timestamp, &expected);
@@ -470,13 +472,13 @@ mod tests {
     #[test]
     fn convert_string_to_timestamp_no_zone() {
         let timestamp1 =
-            convert_to_targeting_value(&"2022-11-17T15:16:17.118".into(), timestamp_type!());
+            convert_to_targeting_value(&"2022-11-17T15:16:17.118".into(), timestamp_type!()).unwrap();
         let timestamp2 =
-            convert_to_targeting_value(&"2022-11-17 15:16:17.118".into(), timestamp_type!());
+            convert_to_targeting_value(&"2022-11-17 15:16:17.118".into(), timestamp_type!()).unwrap();
         let timestamp3 =
-            convert_to_targeting_value(&"2022-11-17T15:16:17".into(), timestamp_type!());
+            convert_to_targeting_value(&"2022-11-17T15:16:17".into(), timestamp_type!()).unwrap();
         let timestamp4 =
-            convert_to_targeting_value(&"2022-11-17 15:16:17".into(), timestamp_type!());
+            convert_to_targeting_value(&"2022-11-17 15:16:17".into(), timestamp_type!()).unwrap();
 
         let expected_with_nanos =
             chrono::DateTime::parse_from_rfc3339("2022-11-17T15:16:17.118Z").unwrap();
@@ -491,7 +493,7 @@ mod tests {
     #[test]
     fn convert_string_to_timestamp_zoned() {
         let time = "2022-11-17T15:16:17+01:00";
-        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!());
+        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!()).unwrap();
 
         let expected = chrono::DateTime::parse_from_rfc3339("2022-11-17T14:16:17Z").unwrap();
         assert_timestamp(&timestamp, &expected);
@@ -500,7 +502,7 @@ mod tests {
     #[test]
     fn convert_string_to_timestamp_zoned_negative() {
         let time = "2022-11-17T15:16:17-01:00";
-        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!());
+        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!()).unwrap();
 
         let expected = chrono::DateTime::parse_from_rfc3339("2022-11-17T16:16:17Z").unwrap();
         assert_timestamp(&timestamp, &expected);
@@ -509,7 +511,7 @@ mod tests {
     #[test]
     fn convert_string_to_timestamp_date() {
         let time = "2022-11-17";
-        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!());
+        let timestamp = convert_to_targeting_value(&time.into(), timestamp_type!()).unwrap();
 
         let expected = chrono::DateTime::parse_from_rfc3339("2022-11-17T00:00:00Z").unwrap();
         assert_timestamp(&timestamp, &expected);
@@ -517,15 +519,15 @@ mod tests {
 
     #[test]
     fn convert_string_to_version() {
-        let version = convert_to_targeting_value(&"4.16.2".into(), version_type!());
+        let version = convert_to_targeting_value(&"4.16.2".into(), version_type!()).unwrap();
 
         assert_version(&version, "4.16.2");
     }
 
     #[test]
     fn convert_bool_to_bool() {
-        let bool_t = convert_to_targeting_value(&true.into(), bool_type!());
-        let bool_f = convert_to_targeting_value(&false.into(), bool_type!());
+        let bool_t = convert_to_targeting_value(&true.into(), bool_type!()).unwrap();
+        let bool_f = convert_to_targeting_value(&false.into(), bool_type!()).unwrap();
 
         assert_bool(&bool_t, true);
         assert_bool(&bool_f, false);
