@@ -11,7 +11,7 @@ from resolver_api import ResolverApi
 
 def main():
     # Load the WASM module
-    wasm_path = Path(__file__).parent / ".." / "rust_guest.wasm"
+    wasm_path = Path(__file__).parent / ".." / "confidence_resolver.wasm"
     if not wasm_path.exists():
         print(f"WASM file not found: {wasm_path}")
         sys.exit(1)

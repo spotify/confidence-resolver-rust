@@ -8,7 +8,7 @@ import { ApiBuilder } from './wasm-msg.ts';
 const dirname = path.dirname(new URL(import.meta.url).pathname);
 
 // Load the WASM module from shared artifact
-const wasmPath = path.join(dirname, '../../rust_guest.wasm');
+const wasmPath = path.join(dirname, '../../confidence_resolver.wasm');
 const wasmBuffer = fs.readFileSync(wasmPath);
 const resolverState = fs.readFileSync(path.join(dirname, '../../resolver_state.pb'));
 
