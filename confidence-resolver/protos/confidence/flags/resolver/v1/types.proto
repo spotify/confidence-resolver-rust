@@ -44,39 +44,24 @@ enum ResolveReason {
 }
 
 enum SdkId {
-  // Unspecified enum.
   SDK_ID_UNSPECIFIED = 0;
-  // Confidence OpenFeature Java Provider.
   SDK_ID_JAVA_PROVIDER = 1;
-  // Confidence OpenFeature Kotlin Provider.
   SDK_ID_KOTLIN_PROVIDER = 2;
-  // Confidence OpenFeature Swift Provider.
   SDK_ID_SWIFT_PROVIDER = 3;
-  // Confidence OpenFeature JavaScript Provider for Web (client).
   SDK_ID_JS_WEB_PROVIDER = 4;
-  // Confidence OpenFeature JavaScript Provider for server.
   SDK_ID_JS_SERVER_PROVIDER = 5;
-  // Confidence OpenFeature Python Provider.
   SDK_ID_PYTHON_PROVIDER = 6;
-  // Confidence OpenFeature GO Provider.
   SDK_ID_GO_PROVIDER = 7;
-  // Confidence OpenFeature Ruby Provider.
   SDK_ID_RUBY_PROVIDER = 8;
-  // Confidence OpenFeature Rust Provider.
   SDK_ID_RUST_PROVIDER = 9;
-  // Confidence Java SDK.
   SDK_ID_JAVA_CONFIDENCE = 10;
-  // Confidence Kotlin SDK.
   SDK_ID_KOTLIN_CONFIDENCE = 11;
-  // Confidence Swift SDK.
   SDK_ID_SWIFT_CONFIDENCE = 12;
-  // Confidence JavaScript SDK.
   SDK_ID_JS_CONFIDENCE = 13;
-  // Confidence Python SDK.
   SDK_ID_PYTHON_CONFIDENCE = 14;
-  // Confidence GO SDK.
   SDK_ID_GO_CONFIDENCE = 15;
   SDK_ID_RUST_CONFIDENCE = 16;
   SDK_ID_FLUTTER_IOS_CONFIDENCE = 17;
-  SDK_ID_FLUTTER_ANDROID_CONFIDENCE = 18; 
+  SDK_ID_FLUTTER_ANDROID_CONFIDENCE = 18;
+  SDK_ID_DOTNET_CONFIDENCE = 19;
 }
