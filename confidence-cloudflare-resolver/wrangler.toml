@@ -1,15 +1,10 @@
 name = "confidence-cloudflare-resolver"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-01-28"
+tail_consumers = [{service = "confidence-resolver-tail"}]
 
 [observability]
 enabled = true
-
-
-
-[[queues.producers]]
-queue = "flag-logs-queue"
-binding = "flag_logs_queue"
 
 [[queues.consumers]]
 queue = "flag-logs-queue"
