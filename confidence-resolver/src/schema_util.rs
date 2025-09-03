@@ -119,9 +119,7 @@ impl SchemaFromEvaluationContext {
 
                         if all_same_kind {
                             Self::add_field_schema(
-                                unsafe {
-                                    list_val.values.get_unchecked(0)
-                                },
+                                unsafe { list_val.values.get_unchecked(0) },
                                 field_path,
                                 flat_schema,
                                 semantic_types,
@@ -247,9 +245,7 @@ impl SchemaFromEvaluationContext {
         } else {
             // Try parsing as date only
             if let Ok(nd) = NaiveDate::parse_from_str(value, "%Y-%m-%d") {
-                let ndt = unsafe {
-                    nd.and_hms_opt(0, 0, 0).unwrap_unchecked() 
-                }; 
+                let ndt = unsafe { nd.and_hms_opt(0, 0, 0).unwrap_unchecked() };
                 return Some(DateTime::from_naive_utc_and_offset(ndt, Utc));
             }
         }

@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
 #![cfg_attr(not(test), deny(
     clippy::panic,
     clippy::unwrap_used,
@@ -40,8 +39,7 @@ const NULL: Value = Value { kind: None };
 
 const MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE: usize = 200;
 
-pub type Error = &'static str;
-pub type Result<T, E = Error> = core::result::Result<T, E>;
+use err::Fallible;
 
 pub mod google {
     pub mod r#type {
@@ -132,6 +130,7 @@ pub mod confidence {
     }
 }
 
+mod err;
 pub mod flag_logger;
 mod gzip;
 mod schema_util;
@@ -155,10 +154,12 @@ use flags_types::targeting::Criterion;
 use flags_types::Expression;
 use gzip::decompress_gz;
 
+use crate::err::{ErrorCode, OrFailExt};
+
 impl TryFrom<Vec<u8>> for ResolverStatePb {
-    type Error = Error;
-    fn try_from(s: Vec<u8>) -> Result<Self> {
-        ResolverStatePb::decode(&s[..]).map_err(|_| "error decoding state")
+    type Error = ErrorCode;
+    fn try_from(s: Vec<u8>) -> Fallible<Self> {
+        ResolverStatePb::decode(&s[..]).or_fail()
     }
 }
 
@@ -183,12 +184,12 @@ impl Account {
         }
     }
 
-    fn salt(&self) -> Result<String> {
-        let id = self.name.split("/").nth(1).ok_or("invalid name")?;
+    fn salt(&self) -> Fallible<String> {
+        let id = self.name.split("/").nth(1).or_fail()?;
         Ok(format!("MegaSalt-{}", id))
     }
 
-    fn salt_unit(&self, unit: &str) -> Result<String> {
+    fn salt_unit(&self, unit: &str) -> Fallible<String> {
         let salt = self.salt()?;
         Ok(format!("{}|{}", salt, unit))
     }
@@ -209,7 +210,7 @@ pub struct ResolverState {
     pub bitsets: HashMap<String, bv::BitVec<u8, bv::Lsb0>>,
 }
 impl ResolverState {
-    pub fn from_proto(state_pb: ResolverStatePb, account_id: &str) -> Result<Self> {
+    pub fn from_proto(state_pb: ResolverStatePb, account_id: &str) -> Fallible<Self> {
         let mut secrets = HashMap::new();
         let mut flags = HashMap::new();
         let mut segments = HashMap::new();
@@ -232,7 +233,7 @@ impl ResolverState {
                 }
                 // missing bitset treated as full
                 flags_admin::resolver_state::packed_bitset::Bitset::FullBitset(true) => (),
-                _ => return Err("Unexpected bitset case"),
+                _ => return Err(ErrorCode::from_location()),
             }
         }
         for client in state_pb.clients {
@@ -272,7 +273,7 @@ impl ResolverState {
         client_secret: &str,
         evaluation_context: &str,
         encryption_key: &Bytes,
-    ) -> Option<AccountResolver<'a, H>> {        
+    ) -> Option<AccountResolver<'a, H>> {
         self.get_resolver(
             client_secret,
             // allow this unwrap cause it only happens in std
@@ -420,7 +421,11 @@ pub trait Host {
             use crypto::{aes, blockmodes, buffer};
 
             let mut iv = [0u8; 16];
-            iv.copy_from_slice(encrypted_data.get(0..16).ok_or("Failed to decrypt resolve token")?);
+            iv.copy_from_slice(
+                encrypted_data
+                    .get(0..16)
+                    .ok_or("Failed to decrypt resolve token")?,
+            );
 
             let mut decryptor = aes::cbc_decryptor(
                 aes::KeySize::KeySize128,
@@ -429,8 +434,11 @@ pub trait Host {
                 blockmodes::PkcsPadding,
             );
 
-            let encrypted_token_read_buffer =
-                &mut buffer::RefReadBuffer::new(encrypted_data.get(16..).ok_or("Failed to decrypt resolve token")?);
+            let encrypted_token_read_buffer = &mut buffer::RefReadBuffer::new(
+                encrypted_data
+                    .get(16..)
+                    .ok_or("Failed to decrypt resolve token")?,
+            );
             let mut write_buffer = [0; ENCRYPTION_WRITE_BUFFER_SIZE];
             let encrypted_token_write_buffer = &mut buffer::RefWriteBuffer::new(&mut write_buffer);
 
@@ -530,7 +538,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
         let resolved_values = flags_to_resolve
             .iter()
-            .map(|flag| self.resolve_flag(flag).map_err(|e| format!("{}: {}", flag.name, e)))
+            .map(|flag| {
+                self.resolve_flag(flag)
+                    .map_err(|e| format!("{}: {}", flag.name, e))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let resolve_id = H::random_alphanumeric(32);
@@ -600,10 +611,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn apply_flags(&self, request: &flags_resolver::ApplyFlagsRequest) -> Result<(), String> {
         let send_time_ts = request.send_time.as_ref().ok_or("send_time is required")?;
         let send_time = to_date_time_utc(send_time_ts).ok_or("invalid send_time")?;
-        let receive_time: DateTime<Utc> = timestamp_to_datetime(&H::current_time()).ok_or("invalid current time")?;
+        let receive_time: DateTime<Utc> = timestamp_to_datetime(&H::current_time()).or_fail()?;
 
-        let resolve_token_outer = self
-            .decrypt_resolve_token(&request.resolve_token)?;
+        let resolve_token_outer = self.decrypt_resolve_token(&request.resolve_token)?;
         let Some(flags_resolver::resolve_token::ResolveToken::TokenV1(resolve_token)) =
             resolve_token_outer.resolve_token
         else {
@@ -611,23 +621,27 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         };
 
         let assignments = resolve_token.assignments;
-        let evaluation_context = resolve_token.evaluation_context.as_ref().ok_or("missing evaluation context")?;
+        let evaluation_context = resolve_token
+            .evaluation_context
+            .as_ref()
+            .ok_or("missing evaluation context")?;
 
         // ensure that all flags are present before we start sending events
         let mut assigned_flags: Vec<FlagToApply> = Vec::with_capacity(request.flags.len());
         for applied_flag in &request.flags {
-            let Some(assigned_flag) = assignments.get(&applied_flag.flag)
-            else {
+            let Some(assigned_flag) = assignments.get(&applied_flag.flag) else {
                 return Err("Flag in resolve token does not match flag in request".to_string());
             };
-            let Some(apply_time) = applied_flag.apply_time.as_ref()
-            else {
+            let Some(apply_time) = applied_flag.apply_time.as_ref() else {
                 return Err(format!("Missing apply time for flag {}", applied_flag.flag));
             };
-            let apply_time = to_date_time_utc(apply_time).ok_or("invalid apply_time")?;
+            let apply_time = to_date_time_utc(apply_time).or_fail()?;
             let skew = send_time.signed_duration_since(apply_time);
             let skew_adjusted_applied_time = datetime_to_timestamp(&(receive_time - skew));
-            assigned_flags.push(FlagToApply { assigned_flag: assigned_flag.clone(), skew_adjusted_applied_time });
+            assigned_flags.push(FlagToApply {
+                assigned_flag: assigned_flag.clone(),
+                skew_adjusted_applied_time,
+            });
         }
 
         H::log_assign(
@@ -657,14 +671,14 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             _ => Err("TargetingKeyError".to_string()),
         }
     }
-    pub fn resolve_flag_name(&'a self, flag_name: &str) -> Option<Result<ResolvedValue<'a>>> {
+    pub fn resolve_flag_name(&'a self, flag_name: &str) -> Option<Fallible<ResolvedValue<'a>>> {
         self.state
             .flags
             .get(flag_name)
             .map(|flag| self.resolve_flag(flag))
     }
 
-    pub fn resolve_flag(&'a self, flag: &'a Flag) -> Result<ResolvedValue<'a>> {
+    pub fn resolve_flag(&'a self, flag: &'a Flag) -> Fallible<ResolvedValue<'a>> {
         let mut resolved_value = ResolvedValue::new(flag);
 
         if flag.state == flags_admin::flag::State::Archived as i32 {
@@ -681,7 +695,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 // log something? ResolveReason::SEGMENT_NOT_FOUND
                 continue;
             }
-            let segment = self.state.segments.get(segment_name).ok_or("missing segment")?;
+            let segment = self.state.segments.get(segment_name).or_fail()?;
 
             let targeting_key = if !rule.targeting_key_selector.is_empty() {
                 rule.targeting_key_selector.as_str()
@@ -703,7 +717,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 continue;
             };
             let bucket_count = spec.bucket_count;
-            let variant_salt = segment_name.split("/").nth(1).ok_or("malformed segment name")?;
+            let variant_salt = segment_name.split("/").nth(1).or_fail()?;
             let key = format!("{}|{}", variant_salt, unit);
             let bucket = bucket(hash(&key), bucket_count as u64) as i32;
 
@@ -744,7 +758,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                             .variants
                             .iter()
                             .find(|variant| variant.name == *variant_name)
-                            .ok_or("unknown variant")?;
+                            .or_fail()?;
 
                         return Ok(resolved_value.with_variant_match(
                             rule,
@@ -798,7 +812,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         &NULL
     }
 
-    pub fn segment_match(&self, segment: &Segment, unit: &str) -> Result<bool>  {
+    pub fn segment_match(&self, segment: &Segment, unit: &str) -> Fallible<bool> {
         self.segment_match_internal(segment, unit, &mut HashSet::new())
     }
 
@@ -807,9 +821,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         segment: &Segment,
         unit: &str,
         visited: &mut HashSet<String>,
-    ) -> Result<bool> {
+    ) -> Fallible<bool> {
         if visited.contains(&segment.name) {
-            return Result::Err("Circular segment dependency found")
+            fail!("circular segment dependency found");
         }
         visited.insert(segment.name.clone());
 
@@ -831,7 +845,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         segment: &Segment,
         unit: &str,
         visited: &mut HashSet<String>,
-    ) -> Result<bool> {
+    ) -> Fallible<bool> {
         let Some(targeting) = &segment.targeting else {
             return Ok(true);
         };
@@ -875,7 +889,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         resolve_token: &flags_resolver::ResolveToken,
     ) -> Result<Vec<u8>, String> {
         let mut token_buf = Vec::with_capacity(resolve_token.encoded_len());
-        resolve_token.encode(&mut token_buf).map_err(|_| "encrypt resolve token failed")?;
+        resolve_token
+            .encode(&mut token_buf)
+            .map_err(|_| "encrypt resolve token failed")?;
 
         H::encrypt_resolve_token(&token_buf, &self.encryption_key)
     }
@@ -897,8 +913,8 @@ fn to_date_time_utc(timestamp: &Timestamp) -> Option<chrono::DateTime<chrono::Ut
 
 fn evaluate_expression(
     expression: &Expression,
-    criterion_evaluator: &mut dyn FnMut(&String) -> Result<bool>,
-) -> Result<bool> {
+    criterion_evaluator: &mut dyn FnMut(&String) -> Fallible<bool>,
+) -> Fallible<bool> {
     let Some(expression) = &expression.expression else {
         return Ok(false);
     };
@@ -910,19 +926,17 @@ fn evaluate_expression(
                 if !evaluate_expression(op, criterion_evaluator)? {
                     return Ok(false);
                 }
-                
             }
             Ok(true)
-        },
+        }
         expression::Expression::Or(or) => {
             for op in &or.operands {
                 if evaluate_expression(op, criterion_evaluator)? {
                     return Ok(true);
                 }
-                
             }
             Ok(false)
-        },
+        }
     }
 }
 
@@ -1058,19 +1072,19 @@ impl<'a> From<&ResolvedValue<'a>> for flags_resolver::resolve_token_v1::Assigned
             fallthrough_assignments: value
                 .fallthrough_rules
                 .iter()
-                .map(|fallthrough_rule| {
-                    flags_resolver::events::FallthroughAssignment {
+                .map(
+                    |fallthrough_rule| flags_resolver::events::FallthroughAssignment {
                         assignment_id: fallthrough_rule.assignment_id.clone(),
                         rule: fallthrough_rule.rule.name.clone(),
                         targeting_key: fallthrough_rule.targeting_key.clone(),
-                        targeting_key_selector:
-                            fallthrough_rule.rule.targeting_key_selector.clone(),
-    
-                    }
-                })
+                        targeting_key_selector: fallthrough_rule
+                            .rule
+                            .targeting_key_selector
+                            .clone(),
+                    },
+                )
                 .collect(),
-                ..Default::default()
-
+            ..Default::default()
         };
 
         if let Some(assignment_match) = &value.assignment_match {
@@ -1173,8 +1187,11 @@ mod tests {
 
     #[test]
     fn test_parse_state_bitsets() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         let bitvec = state.bitsets.get("segments/qnbpewfufewyn5rpsylm").unwrap();
         let bitvec2 = state.bitsets.get("segments/h2f3kemn2nqbnc7k5lk2").unwrap();
@@ -1193,8 +1210,11 @@ mod tests {
 
     #[test]
     fn test_parse_state_secrets() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         let account_client = state
             .secrets
@@ -1227,8 +1247,11 @@ mod tests {
 
     #[test]
     fn test_resolve_flag() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         {
             let context_json = r#"{"visitor_id": "tutorial_visitor"}"#;
@@ -1256,7 +1279,11 @@ mod tests {
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
-            let assignment_match = resolver.resolve_flag(flag).unwrap().assignment_match.unwrap();
+            let assignment_match = resolver
+                .resolve_flag(flag)
+                .unwrap()
+                .assignment_match
+                .unwrap();
 
             assert_eq!(
                 assignment_match.rule.name,
@@ -1270,8 +1297,11 @@ mod tests {
     }
     #[test]
     fn test_resolve_flags() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         {
             let context_json = r#"{"visitor_id": "tutorial_visitor"}"#;
@@ -1331,8 +1361,11 @@ mod tests {
 
     #[test]
     fn test_resolve_flags_fallthrough() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         // Single rule
         {
@@ -1455,8 +1488,11 @@ mod tests {
 
     #[test]
     fn test_resolve_flags_no_match() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         {
             let context_json = r#"{}"#; // NO CONTEXT
@@ -1487,8 +1523,11 @@ mod tests {
 
     #[test]
     fn test_resolve_flags_apply_logging() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         // Custom logger that tracks what gets logged
         struct TestLogger {

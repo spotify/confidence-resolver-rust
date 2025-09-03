@@ -4,13 +4,14 @@ use chrono::DateTime;
 use chrono::LocalResult;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
-use chrono::NaiveTime;
 use chrono::TimeZone;
 use chrono::Utc;
 
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
+use crate::err::Fallible;
+use crate::err::OrFailExt;
 use crate::{Kind, Timestamp, Value};
 
 use crate::confidence::flags::types::v1::targeting;
@@ -19,7 +20,7 @@ use crate::confidence::flags::types::v1::targeting::criterion;
 pub fn convert_to_targeting_value(
     attribute_value: &Value,
     expected_type: Option<&targeting::value::Value>,
-) -> crate::Result<targeting::value::Value> {
+) -> Fallible<targeting::value::Value> {
     Ok(match &attribute_value.kind {
         None => targeting::value::Value::StringValue("null".to_string()),
         Some(Kind::NullValue(_)) => targeting::value::Value::StringValue("null".to_string()),
@@ -37,13 +38,13 @@ pub fn convert_to_targeting_value(
                 str_value.parse().unwrap_or_else(|_| str_value == "TRUE"),
             ),
             Some(targeting::value::Value::NumberValue(_)) => {
-                targeting::value::Value::NumberValue(str_value.parse().map_err(|_| "bad numeric targeting value")?)
+                targeting::value::Value::NumberValue(str_value.parse().or_fail()?)
             } // fixme:propagate error
             Some(targeting::value::Value::StringValue(_)) => {
                 targeting::value::Value::StringValue(str_value.clone())
             }
             Some(targeting::value::Value::TimestampValue(_)) => {
-                targeting::value::Value::TimestampValue(from_str(str_value).ok_or("bad datetime targeting value")?)
+                targeting::value::Value::TimestampValue(from_str(str_value).or_fail()?)
             } // fixme:propagate error
             Some(targeting::value::Value::VersionValue(_)) => {
                 targeting::value::Value::VersionValue(targeting::SemanticVersion {
@@ -59,11 +60,12 @@ pub fn convert_to_targeting_value(
             _ => targeting::value::Value::StringValue("null".to_string()),
         },
         Some(Kind::ListValue(list_value)) => {
-            let mut converted_values:Vec<targeting::Value> = Vec::with_capacity(list_value.values.len());
-            
+            let mut converted_values: Vec<targeting::Value> =
+                Vec::with_capacity(list_value.values.len());
+
             for value in &list_value.values {
                 converted_values.push(targeting::Value {
-                    value: Some(convert_to_targeting_value(value, expected_type)?)
+                    value: Some(convert_to_targeting_value(value, expected_type)?),
                 });
             }
             targeting::value::Value::ListValue(targeting::ListValue {
@@ -227,7 +229,7 @@ impl Ord for Timestamp {
     }
 }
 
-const ZERO_VERSION:semver::Version  = semver::Version::new(0, 0, 0);
+const ZERO_VERSION: semver::Version = semver::Version::new(0, 0, 0);
 
 impl Ord for targeting::SemanticVersion {
     fn lt(&self, other: &Self) -> bool {
@@ -276,7 +278,7 @@ fn from_str(s: &str) -> Option<Timestamp> {
     } else {
         NaiveDate::parse_from_str(s, "%Y-%m-%d")
             .ok()
-            .map(|nd| unsafe {nd.and_hms_opt(0, 0, 0).unwrap_unchecked()})
+            .map(|nd| unsafe { nd.and_hms_opt(0, 0, 0).unwrap_unchecked() })
             .and_then(|ndt| match Utc.from_local_datetime(&ndt) {
                 chrono::LocalResult::Single(dt) => Some(dt),
                 _ => None,
@@ -472,9 +474,11 @@ mod tests {
     #[test]
     fn convert_string_to_timestamp_no_zone() {
         let timestamp1 =
-            convert_to_targeting_value(&"2022-11-17T15:16:17.118".into(), timestamp_type!()).unwrap();
+            convert_to_targeting_value(&"2022-11-17T15:16:17.118".into(), timestamp_type!())
+                .unwrap();
         let timestamp2 =
-            convert_to_targeting_value(&"2022-11-17 15:16:17.118".into(), timestamp_type!()).unwrap();
+            convert_to_targeting_value(&"2022-11-17 15:16:17.118".into(), timestamp_type!())
+                .unwrap();
         let timestamp3 =
             convert_to_targeting_value(&"2022-11-17T15:16:17".into(), timestamp_type!()).unwrap();
         let timestamp4 =
