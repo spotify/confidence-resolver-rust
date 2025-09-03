@@ -214,7 +214,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         && aggregated.client_resolve_info.is_empty())
     {
         let converted = serde_json::to_string(&aggregated)?;
-        FLAGS_LOGS_QUEUE.get().unwrap().send(converted).await?;
+        console_log!("FLAGS_LOGS_QUEUE:{}", converted);
     }
 
     response
@@ -249,7 +249,6 @@ pub async fn consume_flag_logs_queue(
 
     Ok(())
 }
-
 fn get_token(client_id: &str, client_secret: &str) -> String {
     let combined = format!("{}:{}", client_id, client_secret);
     let encoded = STANDARD.encode(combined.as_bytes());
@@ -268,7 +267,6 @@ async fn send_flags_logs(
     client_secret: &str,
     message: WriteFlagLogsRequest,
 ) -> Result<Response> {
-    console_log!("Sending logs {:?}", message);
     let resolve_url = "https://resolver.confidence.dev/v1/flagLogs:write";
     let mut init = RequestInit::new();
     let headers = Headers::new();

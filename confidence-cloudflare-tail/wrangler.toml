@@ -1,0 +1,12 @@
+name = "confidence-cloudflare-tail"
+type = "javascript"
+compatibility_date = "2025-01-28"
+workers_dev = true
+main = "src/index.js"
+
+[observability]
+enabled = true
+
+[[queues.producers]]
+queue = "flag-logs-queue"
+binding = "flag_logs_queue"

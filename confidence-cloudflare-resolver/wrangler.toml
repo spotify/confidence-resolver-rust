@@ -1,6 +1,7 @@
 name = "confidence-cloudflare-resolver"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-01-28"
+tail_consumers = [{service = "confidence-cloudflare-tail"}]
 
 [observability]
 enabled = true
