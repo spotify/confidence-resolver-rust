@@ -1,4 +1,4 @@
-name = "confidence-cloudflare-tail"
+name = "confidence-resolver-tail"
 type = "javascript"
 compatibility_date = "2025-01-28"
 workers_dev = true
