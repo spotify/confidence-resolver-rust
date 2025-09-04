@@ -31,8 +31,9 @@ static CONFIDENCE_CLIENT_SECRET: OnceLock<String> = OnceLock::new();
 
 static FLAG_LOGGER: Lazy<Logger> = Lazy::new(|| Logger::new());
 
-static RESOLVER_STATE: Lazy<ResolverState> =
-    Lazy::new(|| ResolverState::from_proto(STATE_JSON.to_owned().into(), ACCOUNT_ID));
+static RESOLVER_STATE: Lazy<ResolverState> = Lazy::new(|| {
+    ResolverState::from_proto(STATE_JSON.to_owned().try_into().unwrap(), ACCOUNT_ID).unwrap()
+});
 
 trait ResponseExt {
     fn with_cors_headers(self, allowed_origin: &str) -> Result<Self>
@@ -156,17 +157,16 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
                             evaluation_context,
                             &Bytes::from(STANDARD.decode(ENCRYPTION_KEY_BASE64).unwrap()),
                         ) {
-                            Some(resolver) => match resolver.resolve_flags(&resolver_request) {
+                            Ok(resolver) => match resolver.resolve_flags(&resolver_request) {
                                 Ok(response) => Response::from_json(&response)?
                                     .with_cors_headers(&allowed_origin),
-                                Err(err) => Response::error(
-                                    format!("Failed to resolve flags: {}", err),
-                                    500,
-                                )?
-                                .with_cors_headers(&allowed_origin),
+                                Err(msg) => {
+                                    Response::error(msg, 500)?.with_cors_headers(&allowed_origin)
+                                }
                             },
-                            None => Response::error("Error setting up the resolver", 500)?
-                                .with_cors_headers(&allowed_origin),
+                            Err(msg) => {
+                                Response::error(msg, 500)?.with_cors_headers(&allowed_origin)
+                            }
                         }
                     }
                     "flags:apply" => {
@@ -187,21 +187,20 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
                             Struct::default(),
                             &Bytes::from(STANDARD.decode(ENCRYPTION_KEY_BASE64).unwrap()),
                         ) {
-                            Some(resolver) => match resolver.apply_flags(&apply_flag_req) {
-                                Ok(_response) => {
+                            Ok(resolver) => match resolver.apply_flags(&apply_flag_req) {
+                                Ok(()) => {
                                     return Response::from_json(&ApplyFlagsResponse::default());
                                 }
-                                Err(err) => {
-                                    Response::error(format!("Failed to apply flags: {}", err), 500)?
-                                        .with_cors_headers(&allowed_origin)
+                                Err(msg) => {
+                                    Response::error(msg, 500)?.with_cors_headers(&allowed_origin)
                                 }
                             },
-                            None => Response::error("Error setting up the resolver", 500)?
-                                .with_cors_headers(&allowed_origin),
+                            Err(msg) => {
+                                Response::error(msg, 500)?.with_cors_headers(&allowed_origin)
+                            }
                         }
                     }
-                    _ => Response::error("The URL is invalid", 404)?
-                        .with_cors_headers(&allowed_origin),
+                    _ => Response::error("Not found", 404)?.with_cors_headers(&allowed_origin),
                 }
             }
         })

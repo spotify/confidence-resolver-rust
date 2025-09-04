@@ -10,6 +10,7 @@ use chrono::Utc;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
+use crate::err::ErrorCode;
 use crate::err::Fallible;
 use crate::err::OrFailExt;
 use crate::{Kind, Timestamp, Value};
@@ -247,14 +248,14 @@ impl Ord for targeting::SemanticVersion {
     }
 }
 
-fn from_str(s: &str) -> Option<Timestamp> {
+fn from_str(s: &str) -> Fallible<Timestamp> {
     // parse timestamp from s
     if s.contains(['T', ' ']) {
         // split at position of T or space
-        let time_part = s.split(['T', ' ']).nth(1)?;
+        let time_part = s.split(['T', ' ']).nth(1).or_fail()?;
         if time_part.contains(['Z', '+', '-']) {
             DateTime::parse_from_rfc3339(s)
-                .ok()
+                .or_fail()
                 .map(|dt| dt.with_timezone(&Utc))
                 .map(|dt| Timestamp {
                     seconds: dt.timestamp(),
@@ -265,10 +266,10 @@ fn from_str(s: &str) -> Option<Timestamp> {
                 .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f"))
                 .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))
                 .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f"))
-                .ok()
+                .or_fail()
                 .and_then(|ndt| match Utc.from_local_datetime(&ndt) {
-                    LocalResult::Single(dt) => Some(dt),
-                    _ => None,
+                    LocalResult::Single(dt) => Ok(dt),
+                    _ => Err(ErrorCode::from_location()),
                 })
                 .map(|dt| Timestamp {
                     seconds: dt.timestamp(),
@@ -277,11 +278,11 @@ fn from_str(s: &str) -> Option<Timestamp> {
         }
     } else {
         NaiveDate::parse_from_str(s, "%Y-%m-%d")
-            .ok()
+            .or_fail()
             .map(|nd| unsafe { nd.and_hms_opt(0, 0, 0).unwrap_unchecked() })
             .and_then(|ndt| match Utc.from_local_datetime(&ndt) {
-                chrono::LocalResult::Single(dt) => Some(dt),
-                _ => None,
+                chrono::LocalResult::Single(dt) => Ok(dt),
+                _ => Err(ErrorCode::from_location()),
             })
             .map(|dt| Timestamp {
                 seconds: dt.timestamp(),

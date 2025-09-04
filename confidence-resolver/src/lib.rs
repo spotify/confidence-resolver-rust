@@ -163,8 +163,8 @@ impl TryFrom<Vec<u8>> for ResolverStatePb {
     }
 }
 
-fn timestamp_to_datetime(ts: &Timestamp) -> Option<DateTime<Utc>> {
-    DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+fn timestamp_to_datetime(ts: &Timestamp) -> Fallible<DateTime<Utc>> {
+    DateTime::from_timestamp(ts.seconds, ts.nanos as u32).or_fail()
 }
 fn datetime_to_timestamp(dt: &DateTime<Utc>) -> Timestamp {
     Timestamp {
@@ -233,7 +233,7 @@ impl ResolverState {
                 }
                 // missing bitset treated as full
                 flags_admin::resolver_state::packed_bitset::Bitset::FullBitset(true) => (),
-                _ => return Err(ErrorCode::from_location()),
+                _ => fail!(),
             }
         }
         for client in state_pb.clients {
@@ -273,12 +273,13 @@ impl ResolverState {
         client_secret: &str,
         evaluation_context: &str,
         encryption_key: &Bytes,
-    ) -> Option<AccountResolver<'a, H>> {
+    ) -> Result<AccountResolver<'a, H>, String> {
         self.get_resolver(
             client_secret,
             // allow this unwrap cause it only happens in std
             #[allow(clippy::unwrap_used)]
-            serde_json::from_str(evaluation_context).unwrap(),
+            serde_json::from_str(evaluation_context)
+                .map_err(|_| "failed to parse evaluation context".to_string())?,
             encryption_key,
         )
     }
@@ -288,17 +289,20 @@ impl ResolverState {
         client_secret: &str,
         evaluation_context: Struct,
         encryption_key: &Bytes,
-    ) -> Option<AccountResolver<'a, H>> {
-        self.secrets.get(client_secret).map(|client| {
-            AccountResolver::new(
-                client,
-                self,
-                EvaluationContext {
-                    context: evaluation_context,
-                },
-                encryption_key,
-            )
-        })
+    ) -> Result<AccountResolver<'a, H>, String> {
+        self.secrets
+            .get(client_secret)
+            .ok_or("client secret not found".to_string())
+            .map(|client| {
+                AccountResolver::new(
+                    client,
+                    self,
+                    EvaluationContext {
+                        context: evaluation_context,
+                    },
+                    encryption_key,
+                )
+            })
     }
 }
 
@@ -416,59 +420,56 @@ pub trait Host {
     ) -> Result<Vec<u8>, String> {
         #[cfg(feature = "std")]
         {
-            const ENCRYPTION_WRITE_BUFFER_SIZE: usize = 4096;
+            {
+                const ENCRYPTION_WRITE_BUFFER_SIZE: usize = 4096;
 
-            use crypto::{aes, blockmodes, buffer};
+                use crypto::{aes, blockmodes, buffer};
 
-            let mut iv = [0u8; 16];
-            iv.copy_from_slice(
-                encrypted_data
-                    .get(0..16)
-                    .ok_or("Failed to decrypt resolve token")?,
-            );
+                let mut iv = [0u8; 16];
+                iv.copy_from_slice(encrypted_data.get(0..16).or_fail()?);
 
-            let mut decryptor = aes::cbc_decryptor(
-                aes::KeySize::KeySize128,
-                &iv,
-                encryption_key,
-                blockmodes::PkcsPadding,
-            );
-
-            let encrypted_token_read_buffer = &mut buffer::RefReadBuffer::new(
-                encrypted_data
-                    .get(16..)
-                    .ok_or("Failed to decrypt resolve token")?,
-            );
-            let mut write_buffer = [0; ENCRYPTION_WRITE_BUFFER_SIZE];
-            let encrypted_token_write_buffer = &mut buffer::RefWriteBuffer::new(&mut write_buffer);
-
-            let mut final_decrypted_token = Vec::<u8>::new();
-            loop {
-                use crypto::buffer::{BufferResult, ReadBuffer, WriteBuffer};
-
-                let result = decryptor
-                    .decrypt(
-                        encrypted_token_read_buffer,
-                        encrypted_token_write_buffer,
-                        true,
-                    )
-                    .map_err(|_| "Failed to decrypt resolve token")?;
-
-                final_decrypted_token.extend(
-                    encrypted_token_write_buffer
-                        .take_read_buffer()
-                        .take_remaining()
-                        .iter()
-                        .copied(),
+                let mut decryptor = aes::cbc_decryptor(
+                    aes::KeySize::KeySize128,
+                    &iv,
+                    encryption_key,
+                    blockmodes::PkcsPadding,
                 );
 
-                match result {
-                    BufferResult::BufferUnderflow => break,
-                    BufferResult::BufferOverflow => {}
-                }
-            }
+                let encrypted_token_read_buffer =
+                    &mut buffer::RefReadBuffer::new(encrypted_data.get(16..).or_fail()?);
+                let mut write_buffer = [0; ENCRYPTION_WRITE_BUFFER_SIZE];
+                let encrypted_token_write_buffer =
+                    &mut buffer::RefWriteBuffer::new(&mut write_buffer);
 
-            Ok(final_decrypted_token)
+                let mut final_decrypted_token = Vec::<u8>::new();
+                loop {
+                    use crypto::buffer::{BufferResult, ReadBuffer, WriteBuffer};
+
+                    let result = decryptor
+                        .decrypt(
+                            encrypted_token_read_buffer,
+                            encrypted_token_write_buffer,
+                            true,
+                        )
+                        .or_fail()?;
+
+                    final_decrypted_token.extend(
+                        encrypted_token_write_buffer
+                            .take_read_buffer()
+                            .take_remaining()
+                            .iter()
+                            .copied(),
+                    );
+
+                    match result {
+                        BufferResult::BufferUnderflow => break,
+                        BufferResult::BufferOverflow => {}
+                    }
+                }
+
+                Ok(final_decrypted_token)
+            }
+            .map_err(|e: ErrorCode| format!("failed to decrypt resolve token [{}]", e.b64_str()))
         }
 
         #[cfg(not(feature = "std"))]
@@ -477,7 +478,7 @@ pub trait Host {
             if encryption_key.iter().all(|&b| b == 0) {
                 Ok(encrypted_data.to_vec())
             } else {
-                Err("Decryption not available in no_std mode".into())
+                Err("decryption not available in no_std mode".into())
             }
         }
     }
@@ -525,7 +526,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
         if flags_to_resolve.len() > MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE {
             return Err(format!(
-                "Max {} flags allowed in a single resolve request, this request would return {} flags.",
+                "max {} flags allowed in a single resolve request, this request would return {} flags.",
                 MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE,
                 flags_to_resolve.len()));
         }
@@ -611,7 +612,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn apply_flags(&self, request: &flags_resolver::ApplyFlagsRequest) -> Result<(), String> {
         let send_time_ts = request.send_time.as_ref().ok_or("send_time is required")?;
         let send_time = to_date_time_utc(send_time_ts).ok_or("invalid send_time")?;
-        let receive_time: DateTime<Utc> = timestamp_to_datetime(&H::current_time()).or_fail()?;
+        let receive_time: DateTime<Utc> = timestamp_to_datetime(&H::current_time())?;
 
         let resolve_token_outer = self.decrypt_resolve_token(&request.resolve_token)?;
         let Some(flags_resolver::resolve_token::ResolveToken::TokenV1(resolve_token)) =
@@ -671,14 +672,15 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             _ => Err("TargetingKeyError".to_string()),
         }
     }
-    pub fn resolve_flag_name(&'a self, flag_name: &str) -> Option<Fallible<ResolvedValue<'a>>> {
+    pub fn resolve_flag_name(&'a self, flag_name: &str) -> Result<ResolvedValue<'a>, String> {
         self.state
             .flags
             .get(flag_name)
-            .map(|flag| self.resolve_flag(flag))
+            .ok_or("flag not found".to_string())
+            .and_then(|flag| self.resolve_flag(flag))
     }
 
-    pub fn resolve_flag(&'a self, flag: &'a Flag) -> Fallible<ResolvedValue<'a>> {
+    pub fn resolve_flag(&'a self, flag: &'a Flag) -> Result<ResolvedValue<'a>, String> {
         let mut resolved_value = ResolvedValue::new(flag);
 
         if flag.state == flags_admin::flag::State::Archived as i32 {
@@ -889,9 +891,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         resolve_token: &flags_resolver::ResolveToken,
     ) -> Result<Vec<u8>, String> {
         let mut token_buf = Vec::with_capacity(resolve_token.encoded_len());
-        resolve_token
-            .encode(&mut token_buf)
-            .map_err(|_| "encrypt resolve token failed")?;
+        resolve_token.encode(&mut token_buf).or_fail()?;
 
         H::encrypt_resolve_token(&token_buf, &self.encryption_key)
     }
@@ -902,8 +902,8 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     ) -> Result<flags_resolver::ResolveToken, String> {
         let decrypted_data = H::decrypt_resolve_token(encrypted_token, &self.encryption_key)?;
 
-        flags_resolver::ResolveToken::decode(&decrypted_data[..])
-            .map_err(|e| format!("Failed to decode resolve token: {}", e))
+        let t = flags_resolver::ResolveToken::decode(&decrypted_data[..]).or_fail()?;
+        Ok(t)
     }
 }
 
