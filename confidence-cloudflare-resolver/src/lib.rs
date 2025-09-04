@@ -208,14 +208,22 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .run(req, env)
         .await;
 
-    let aggregated = FLAG_LOGGER.pop_flag_log_batch();
-    if !(aggregated.flag_assigned.is_empty()
-        && aggregated.flag_resolve_info.is_empty()
-        && aggregated.client_resolve_info.is_empty())
-    {
-        let converted = serde_json::to_string(&aggregated)?;
-        console_log!("FLAGS_LOGS_QUEUE:{}", converted);
-    }
+    wasm_bindgen_futures::spawn_local(async move {
+        let aggregated = FLAG_LOGGER.pop_flag_log_batch();
+        if !(aggregated.flag_assigned.is_empty()
+            && aggregated.flag_resolve_info.is_empty()
+            && aggregated.client_resolve_info.is_empty())
+        {
+            if let Ok(converted) = serde_json::to_string(&aggregated) {
+                FLAGS_LOGS_QUEUE
+                    .get()
+                    .unwrap()
+                    .send(converted)
+                    .await
+                    .unwrap();
+            }
+        }
+    });
 
     response
 }
