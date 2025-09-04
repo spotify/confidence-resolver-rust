@@ -635,15 +635,23 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         Ok(())
     }
 
-    fn get_targeting_key(&self, targeting_key: &str) -> Result<Option<&str>, String> {
+    fn get_targeting_key(&self, targeting_key: &str) -> Result<Option<String>, String> {
         let unit_value = self.get_attribute_value(targeting_key);
         match &unit_value.kind {
             None => Ok(None),
             Some(Kind::NullValue(_)) => Ok(None),
-            Some(Kind::StringValue(string_unit)) => Ok(Some(string_unit)),
+            Some(Kind::StringValue(string_unit)) => Ok(Some(string_unit.clone())),
+            Some(Kind::NumberValue(num_value)) => {
+                if num_value.is_finite() && num_value.fract() == 0.0 {
+                    Ok(Some(format!("{:.0}", num_value)))
+                } else {
+                    Err("TargetingKeyError".to_string())
+                }
+            }
             _ => Err("TargetingKeyError".to_string()),
         }
     }
+
     pub fn resolve_flag_name(&'a self, flag_name: &str) -> Option<ResolvedValue<'a>> {
         self.state
             .flags
@@ -675,15 +683,13 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             } else {
                 TARGETING_KEY
             };
-            let unit_value = self.get_attribute_value(targeting_key);
-            let unit = match &unit_value.kind {
-                None => continue,
-                Some(Kind::NullValue(_)) => continue,
-                Some(Kind::StringValue(string_unit)) => string_unit,
-                _ => return resolved_value.error(ResolveReason::TargetingKeyError),
+            let unit: String = match self.get_targeting_key(targeting_key) {
+                Ok(Some(u)) => u,
+                Ok(None) => continue,
+                Err(_) => return resolved_value.error(ResolveReason::TargetingKeyError),
             };
 
-            if !self.segment_match(segment, unit) {
+            if !self.segment_match(segment, &unit) {
                 // ResolveReason::SEGMENT_NOT_MATCH
                 continue;
             }
@@ -712,7 +718,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                         resolved_value.attribute_fallthrough_rule(
                             rule,
                             &assignment.assignment_id,
-                            unit,
+                            &unit,
                         );
                         continue;
                     }
@@ -721,7 +727,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                             rule,
                             segment,
                             &assignment.assignment_id,
-                            unit,
+                            &unit,
                         )
                     }
                     rule::assignment::Assignment::Variant(
@@ -739,7 +745,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                             segment,
                             variant,
                             &assignment.assignment_id,
-                            unit,
+                            &unit,
                         );
                     }
                 };
@@ -1589,6 +1595,54 @@ mod tests {
                 "Log should contain the flag name"
             );
         }
+    }
+
+    #[test]
+    fn test_targeting_key_integer_supported() {
+        let state =
+            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+
+        // Using integer for visitor_id should be treated as string and work
+        let context_json = r#"{"visitor_id": 26}"#;
+        let resolver: AccountResolver<'_, L> = state
+            .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
+            .unwrap();
+
+        let flag = resolver
+            .state
+            .flags
+            .get("flags/fallthrough-test-2")
+            .unwrap();
+        let resolved_value = resolver.resolve_flag(flag);
+
+        assert_eq!(resolved_value.reason as i32, ResolveReason::Match as i32);
+        let assignment_match = resolved_value.assignment_match.unwrap();
+        assert_eq!(assignment_match.targeting_key, "26");
+    }
+
+    #[test]
+    fn test_targeting_key_fractional_rejected() {
+        let state =
+            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+
+        // Fractional number for visitor_id should be rejected
+        let context_json = r#"{"visitor_id": 26.5}"#;
+        let resolver: AccountResolver<'_, L> = state
+            .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
+            .unwrap();
+
+        let flag = resolver
+            .state
+            .flags
+            .get("flags/fallthrough-test-2")
+            .unwrap();
+        let resolved_value = resolver.resolve_flag(flag);
+
+        assert_eq!(
+            resolved_value.reason as i32,
+            ResolveReason::TargetingKeyError as i32
+        );
+        assert!(resolved_value.assignment_match.is_none());
     }
 
     // eq rules
