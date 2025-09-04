@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   docker:
-    name: Build image
+    name: build-image
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
