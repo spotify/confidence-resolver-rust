@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Parse tag and select package
         id: parse
@@ -31,6 +33,11 @@ jobs:
             echo "Unsupported tag prefix: $TAG" >&2
             exit 1
           fi
+
+      - name: Checkout tag commit
+        run: |
+          git fetch --tags --force
+          git checkout "$TAG_NAME"
 
       - name: Setup Rust (stable)
         if: env.PACKAGE == 'confidence_resolver'
