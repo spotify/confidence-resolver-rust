@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.1.0...confidence_resolver-v0.2.0) (2025-09-05)
+
+
+### Features
+
+* Support non-fractional Integers as targeting key ([#17](https://github.com/spotify/confidence-resolver-rust/issues/17)) ([554f442](https://github.com/spotify/confidence-resolver-rust/commit/554f442551e3ef8213a52cca266054ae5da0511e))
+
 ## 0.1.0 (2025-09-03)
 
 
