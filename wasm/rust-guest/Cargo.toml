@@ -7,6 +7,11 @@ edition = "2021"
 name = "rust_guest"
 crate-type = ["cdylib"]  # This is required for WASM
 
+[features]
+default = []
+# Enable std in the dependency to validate unified builds (CI job will use this)
+resolver-std = ["confidence_resolver/std"]
+
 [dependencies]
 wasm-msg = { path = "../../wasm-msg" }
 confidence_resolver = { path = "../../confidence-resolver", default-features = false }

@@ -44,6 +44,10 @@ jobs:
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
+      # Check rust-guest with dependency std enabled to catch feature-unification type mismatches.
+      - name: rust-guest check with resolver-std feature
+        run: RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo check -p rust-guest --features resolver-std --target wasm32-unknown-unknown
+
       - name: Build
         run: make build
 
