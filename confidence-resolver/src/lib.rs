@@ -1659,8 +1659,11 @@ mod tests {
 
     #[test]
     fn test_targeting_key_integer_supported() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         // Using integer for visitor_id should be treated as string and work
         let context_json = r#"{"visitor_id": 26}"#;
@@ -1682,8 +1685,11 @@ mod tests {
 
     #[test]
     fn test_targeting_key_fractional_rejected() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().try_into().unwrap(), "confidence-demo-june").unwrap();
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         // Fractional number for visitor_id should be rejected
         let context_json = r#"{"visitor_id": 26.5}"#;

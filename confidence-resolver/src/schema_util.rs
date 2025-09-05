@@ -264,9 +264,6 @@ mod tests {
 
     use super::*;
 
-    #[cfg(feature = "std")]
-    use std::collections::HashMap;
-
     // Match Struct.fields backing map depending on feature:
     // - With "std" feature, pbjson_types::Struct uses HashMap
     // - Without "std", prost_types::Struct uses BTreeMap
