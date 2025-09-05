@@ -111,13 +111,9 @@ impl FlagLogger for Logger {
             }
 
             for f in &flag_logs_message.flag_resolve_info {
-                let flag_info =
-                    if let Some(map_item_resolve_info) = flag_resolve_map.get_mut(&f.flag) {
-                        map_item_resolve_info
-                    } else {
-                        flag_resolve_map.insert(f.flag.clone(), VariantRuleResolveInfo::new());
-                        flag_resolve_map.get_mut(&f.flag).unwrap()
-                    };
+                let flag_info = flag_resolve_map
+                    .entry(f.flag.clone())
+                    .or_insert_with(VariantRuleResolveInfo::new);
                 update_rule_variant_info(flag_info, f);
             }
             for fa in &flag_logs_message.flag_assigned {
@@ -142,7 +138,7 @@ impl FlagLogger for Logger {
                 .iter()
                 .map(|r| VariantResolveInfo {
                     variant: r.0.clone(),
-                    count: r.1.clone(),
+                    count: *r.1,
                 })
                 .collect();
 
@@ -156,7 +152,7 @@ impl FlagLogger for Logger {
                         .assignment_count
                         .iter()
                         .map(|(assignment_id, count)| AssignmentResolveInfo {
-                            count: count.clone(),
+                            count: *count,
                             assignment_id: assignment_id.clone(),
                         })
                         .collect(),
@@ -255,12 +251,11 @@ fn convert_to_write_assign_request(
                 },
             };
             // Create the `FlagAssigned` instance
-            return FlagAssigned {
+            FlagAssigned {
                 client_info: Some(client_info.clone()),
                 resolve_id: ToString::to_string(resolve_id),
                 flags: vec![applied_flag], // Add the `AppliedFlag` to the repeated `flags` field
-                ..Default::default()
-            };
+            }
         })
         .collect();
 
@@ -419,7 +414,7 @@ fn update_rule_variant_info(
         for aa in &rule_info.assignment_resolve_info {
             let count = match current_assignments.get(&aa.assignment_id) {
                 None => 0,
-                Some(a) => a.clone(),
+                Some(a) => *a,
             } + aa.count;
             new_assignment_count.insert(aa.clone().assignment_id, count);
         }
@@ -435,7 +430,7 @@ fn update_rule_variant_info(
     for variant_info in &rule_resolve_info.variant_resolve_info {
         let count = match flag_info.variant_resolve_info.get(&variant_info.variant) {
             None => 0,
-            Some(v) => v.clone(),
+            Some(v) => *v,
         } + variant_info.count;
         flag_info
             .variant_resolve_info

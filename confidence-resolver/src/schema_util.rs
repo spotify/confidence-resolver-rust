@@ -119,7 +119,7 @@ impl SchemaFromEvaluationContext {
 
                         if all_same_kind {
                             Self::add_field_schema(
-                                &list_val.values[0],
+                                unsafe { list_val.values.get_unchecked(0) },
                                 field_path,
                                 flat_schema,
                                 semantic_types,
@@ -225,8 +225,7 @@ impl SchemaFromEvaluationContext {
         }
 
         // Try parsing with custom formats
-        if value.contains('T') {
-            let t_pos = value.find('T').unwrap();
+        if let Some(t_pos) = value.find('T') {
             let time_part = &value[t_pos..];
 
             if value.ends_with('Z') || time_part.contains('+') || time_part.contains('-') {
@@ -246,7 +245,7 @@ impl SchemaFromEvaluationContext {
         } else {
             // Try parsing as date only
             if let Ok(nd) = NaiveDate::parse_from_str(value, "%Y-%m-%d") {
-                let ndt = nd.and_hms_opt(0, 0, 0).unwrap();
+                let ndt = unsafe { nd.and_hms_opt(0, 0, 0).unwrap_unchecked() };
                 return Some(DateTime::from_naive_utc_and_offset(ndt, Utc));
             }
         }
@@ -261,10 +260,9 @@ fn get_iso_country_codes() -> BTreeSet<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[cfg(feature = "std")]
     use std::collections::HashMap;
+
+    use super::*;
 
     // Match Struct.fields backing map depending on feature:
     // - With "std" feature, pbjson_types::Struct uses HashMap
@@ -303,7 +301,7 @@ mod tests {
     }
 
     // Helper function to create a nested struct
-    fn struct_value(fields: MapType<String, Value>) -> Value {
+    fn struct_value(fields: HashMap<String, Value>) -> Value {
         Value {
             kind: Some(Kind::StructValue(Struct { fields })),
         }
@@ -311,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_flat_schema_basic_types() {
-        let mut fields = MapType::new();
+        let mut fields = HashMap::new();
         fields.insert("name".to_string(), string_value("John"));
         fields.insert("age".to_string(), number_value(30.0));
         fields.insert("active".to_string(), bool_value(true));
@@ -344,21 +342,21 @@ mod tests {
 
     #[test]
     fn test_nested_schema_flattening() {
-        let mut profile_fields = MapType::new();
+        let mut profile_fields = HashMap::new();
         profile_fields.insert("country".to_string(), string_value("US"));
         profile_fields.insert("age".to_string(), number_value(25.0));
 
-        let mut address_fields = MapType::new();
+        let mut address_fields = HashMap::new();
         address_fields.insert("city".to_string(), string_value("New York"));
         address_fields.insert("zip".to_string(), string_value("10001"));
 
         profile_fields.insert("address".to_string(), struct_value(address_fields));
 
-        let mut user_fields = MapType::new();
+        let mut user_fields = HashMap::new();
         user_fields.insert("id".to_string(), string_value("user123"));
         user_fields.insert("profile".to_string(), struct_value(profile_fields));
 
-        let mut fields = MapType::new();
+        let mut fields = HashMap::new();
         fields.insert("user".to_string(), struct_value(user_fields));
 
         let evaluation_context = Struct { fields };
@@ -392,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_country_semantic_type_detection() {
-        let mut fields = MapType::new();
+        let mut fields = HashMap::new();
         fields.insert("user_country".to_string(), string_value("US"));
         fields.insert("shipping_country".to_string(), string_value("CA"));
         fields.insert("invalid_country".to_string(), string_value("XX"));
@@ -424,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_date_semantic_type_detection() {
-        let mut fields = MapType::new();
+        let mut fields = HashMap::new();
         fields.insert("birth_date".to_string(), string_value("2023-05-15"));
         fields.insert("created_at".to_string(), string_value("2023-12-01"));
         fields.insert("invalid_date".to_string(), string_value("not-a-date"));
@@ -451,7 +449,7 @@ mod tests {
 
     #[test]
     fn test_timestamp_semantic_type_detection() {
-        let mut fields = MapType::new();
+        let mut fields = HashMap::new();
         fields.insert(
             "created_at".to_string(),
             string_value("2023-05-15T10:30:00Z"),
@@ -492,7 +490,7 @@ mod tests {
 
     #[test]
     fn test_version_semantic_type_detection() {
-        let mut fields = MapType::new();
+        let mut fields = HashMap::new();
         fields.insert("app_version".to_string(), string_value("1.2.3"));
         fields.insert("api_version".to_string(), string_value("10.0.1"));
         fields.insert("lib_version".to_string(), string_value("0.1.0"));
@@ -524,7 +522,7 @@ mod tests {
     #[test]
     fn test_semantic_type_priority() {
         // Test that timestamps take priority over dates when both could match
-        let mut fields = MapType::new();
+        let mut fields = HashMap::new();
         fields.insert(
             "timestamp_field".to_string(),
             string_value("2023-05-15T10:30:00Z"),
@@ -545,15 +543,15 @@ mod tests {
     #[test]
     fn test_complex_nested_evaluation_context() {
         // Create a complex nested structure
-        let mut device_fields = MapType::new();
+        let mut device_fields = HashMap::new();
         device_fields.insert("type".to_string(), string_value("mobile"));
         device_fields.insert("os_version".to_string(), string_value("15.2.1"));
 
-        let mut location_fields = MapType::new();
+        let mut location_fields = HashMap::new();
         location_fields.insert("country".to_string(), string_value("FR"));
         location_fields.insert("city".to_string(), string_value("Paris"));
 
-        let mut user_fields = MapType::new();
+        let mut user_fields = HashMap::new();
         user_fields.insert("id".to_string(), string_value("user_12345"));
         user_fields.insert(
             "created_at".to_string(),
@@ -564,7 +562,7 @@ mod tests {
         user_fields.insert("device".to_string(), struct_value(device_fields));
         user_fields.insert("location".to_string(), struct_value(location_fields));
 
-        let mut fields = MapType::new();
+        let mut fields = HashMap::new();
         fields.insert("user".to_string(), struct_value(user_fields));
         fields.insert("app_version".to_string(), string_value("2.1.0"));
 

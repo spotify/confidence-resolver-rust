@@ -217,7 +217,7 @@ fn get_resolver_state() -> Result<Arc<ResolverState>, String> {
 
 wasm_msg_guest! {
     fn set_resolver_state(request: ResolverStatePb) -> WasmResult<Void> {
-        let new_state = ResolverState::from_proto(request, ACCOUNT_ID);
+        let new_state = ResolverState::from_proto(request, ACCOUNT_ID)?;
         RESOLVER_STATE.store(Some(Arc::new(new_state)));
         Ok(VOID)
     }
@@ -225,20 +225,15 @@ wasm_msg_guest! {
     fn resolve(request: ResolveFlagsRequest) -> WasmResult<ResolveFlagsResponse> {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
-        let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY);
-        match resolver {
-            Some(resolver) => {
-                resolver.resolve_flags(&request)
-            }
-            None => Err("Resolver state not set or client secret could not be found".to_string()),
-        }
+        let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
+        resolver.resolve_flags(&request).into()
     }
 
     fn resolve_simple(request: ResolveSimpleRequest) -> WasmResult<ResolvedFlag> {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY).unwrap();
-        let resolved_value = resolver.resolve_flag_name(&request.name).ok_or("Flag not found")?;
+        let resolved_value = resolver.resolve_flag_name(&request.name)?;
         Ok((&resolved_value).into())
     }
 }
