@@ -1,0 +1,88 @@
+name: Release Repair
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing or desired tag, e.g. confidence_resolver-v0.2.0"
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse tag and select package
+        id: parse
+        run: |
+          TAG="${{ github.event.inputs.tag_name }}"
+          echo "TAG_NAME=$TAG" >> $GITHUB_ENV
+          if [[ "$TAG" == confidence_resolver-v* ]]; then
+            echo "PACKAGE=confidence_resolver" >> $GITHUB_ENV
+          elif [[ "$TAG" == confidence-cloudflare-resolver-v* ]]; then
+            echo "PACKAGE=confidence-cloudflare-resolver" >> $GITHUB_ENV
+          else
+            echo "Unsupported tag prefix: $TAG" >&2
+            exit 1
+          fi
+
+      - name: Setup Rust (stable)
+        if: env.PACKAGE == 'confidence_resolver'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install protoc
+        if: env.PACKAGE == 'confidence_resolver'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Build WASM artifact
+        if: env.PACKAGE == 'confidence_resolver'
+        run: make wasm/confidence_resolver.wasm
+
+      - name: Upload WASM to GitHub Release (create if missing)
+        if: env.PACKAGE == 'confidence_resolver'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            wasm/confidence_resolver.wasm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        if: env.PACKAGE == 'confidence-cloudflare-resolver'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: env.PACKAGE == 'confidence-cloudflare-resolver'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: env.PACKAGE == 'confidence-cloudflare-resolver'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push deployer image
+        if: env.PACKAGE == 'confidence-cloudflare-resolver'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./confidence-cloudflare-resolver/deployer/Dockerfile
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/confidence-cloudflare-deployer:${{ env.TAG_NAME }}
+            ghcr.io/${{ github.repository_owner }}/confidence-cloudflare-deployer:latest
+
