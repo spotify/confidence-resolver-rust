@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "confidence-cloudflare-resolver"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "confidence_resolver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bitvec",
  "bytes",
@@ -1158,7 +1158,7 @@ dependencies = [
 
 [[package]]
 name = "rust-guest"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arc-swap",
  "bytes",
