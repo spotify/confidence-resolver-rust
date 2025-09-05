@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
+      releases_created: ${{ steps.release.outputs.releases_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Checkout
@@ -32,7 +33,7 @@ jobs:
 
   publish-wasm:
     needs: release
-    if: ${{ needs.release.outputs.release_created == 'true' }}
+    if: ${{ needs.release.outputs.releases_created == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -48,13 +49,20 @@ jobs:
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
+      - name: Extract confidence_resolver version and tag
+        id: extract_version
+        run: |
+          VERSION=$(grep -m1 '^version\s*=\s*"' confidence-resolver/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "TAG_NAME=confidence_resolver-v$VERSION" >> $GITHUB_ENV
+
       - name: Build WASM artifact
         run: make wasm/confidence_resolver.wasm
 
       - name: Upload WASM to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.release.outputs.tag_name }}
+          tag_name: ${{ env.TAG_NAME }}
           files: |
             wasm/confidence_resolver.wasm
         env:
@@ -62,7 +70,7 @@ jobs:
 
   publish-cloudflare-deployer-image:
     needs: release
-    if: ${{ needs.release.outputs.release_created == 'true' }}
+    if: ${{ needs.release.outputs.releases_created == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -70,6 +78,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Extract confidence-cloudflare-resolver version and tag
+        id: extract_ccr_version
+        run: |
+          VERSION=$(grep -m1 '^version\s*=\s*"' confidence-cloudflare-resolver/Cargo.toml | sed -E 's/.*"([^\"]+)".*/\1/')
+          echo "CCR_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "CCR_TAG_NAME=confidence-cloudflare-resolver-v$VERSION" >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -90,7 +105,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/confidence-cloudflare-deployer
           tags: |
-            type=raw,value=${{ needs.release.outputs.tag_name }}
+            type=raw,value=${{ env.CCR_TAG_NAME }}
             type=raw,value=latest
 
       - name: Build and push deployer image
