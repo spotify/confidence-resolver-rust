@@ -1,5 +1,11 @@
 # Changelog
 
+* The following workspace dependencies were updated
+  * dependencies
+    * confidence_resolver bumped from 0.1.0 to 0.2.0
+
+## Changelog
+
 
 
 ## Changelog
