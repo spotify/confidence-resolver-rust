@@ -1,7 +1,6 @@
 name = "confidence-cloudflare-resolver"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-01-28"
-tail_consumers = [{service = "confidence-resolver-tail"}]
 
 [observability]
 enabled = true
@@ -10,6 +9,10 @@ enabled = true
 queue = "flag-logs-queue"
 max_batch_size = 100 # max number of messages in a batch
 max_batch_timeout = 10 # seconds
+
+[[queues.producers]]
+queue = "flag-logs-queue"
+binding = "flag_logs_queue"
 
 [vars]
 CONFIDENCE_CLIENT_ID = "ID"
