@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.2.0...confidence_resolver-v0.3.0) (2025-09-08)
+
+
+### Features
+
+* error handling to avoid panics ([2a645a8](https://github.com/spotify/confidence-resolver-rust/commit/2a645a87415bfce30af048498e068952b18ceb5e))
+
 ## [0.2.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.1.0...confidence_resolver-v0.2.0) (2025-09-05)
 
 
