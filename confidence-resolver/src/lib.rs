@@ -1,4 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(test), deny(
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    // clippy::integer_arithmetic
+))]
 
 extern crate alloc;
 
@@ -31,6 +38,8 @@ const TARGETING_KEY: &str = "targeting_key";
 const NULL: Value = Value { kind: None };
 
 const MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE: usize = 200;
+
+use err::Fallible;
 
 pub mod google {
     pub mod r#type {
@@ -121,6 +130,7 @@ pub mod confidence {
     }
 }
 
+mod err;
 pub mod flag_logger;
 mod gzip;
 mod schema_util;
@@ -144,16 +154,19 @@ use flags_types::targeting::Criterion;
 use flags_types::Expression;
 use gzip::decompress_gz;
 
-impl From<Vec<u8>> for ResolverStatePb {
-    fn from(s: Vec<u8>) -> Self {
-        ResolverStatePb::decode(&s[..]).unwrap()
+use crate::err::{ErrorCode, OrFailExt};
+
+impl TryFrom<Vec<u8>> for ResolverStatePb {
+    type Error = ErrorCode;
+    fn try_from(s: Vec<u8>) -> Fallible<Self> {
+        ResolverStatePb::decode(&s[..]).or_fail()
     }
 }
 
-fn timestamp_to_datetime(ts: &Timestamp) -> DateTime<Utc> {
-    DateTime::from_timestamp(ts.seconds, ts.nanos as u32).unwrap()
+fn timestamp_to_datetime(ts: &Timestamp) -> Fallible<DateTime<Utc>> {
+    DateTime::from_timestamp(ts.seconds, ts.nanos as u32).or_fail()
 }
-fn datetime_to_timestamp(dt: DateTime<Utc>) -> Timestamp {
+fn datetime_to_timestamp(dt: &DateTime<Utc>) -> Timestamp {
     Timestamp {
         seconds: dt.timestamp(),
         nanos: dt.timestamp_subsec_nanos() as i32,
@@ -171,14 +184,14 @@ impl Account {
         }
     }
 
-    fn salt(&self) -> String {
-        let id = self.name.split("/").nth(1).unwrap();
-        format!("MegaSalt-{}", id)
+    fn salt(&self) -> Fallible<String> {
+        let id = self.name.split("/").nth(1).or_fail()?;
+        Ok(format!("MegaSalt-{}", id))
     }
 
-    fn salt_unit(&self, unit: &str) -> String {
-        let salt = self.salt();
-        format!("{}|{}", salt, unit)
+    fn salt_unit(&self, unit: &str) -> Fallible<String> {
+        let salt = self.salt()?;
+        Ok(format!("{}|{}", salt, unit))
     }
 }
 
@@ -197,7 +210,7 @@ pub struct ResolverState {
     pub bitsets: HashMap<String, bv::BitVec<u8, bv::Lsb0>>,
 }
 impl ResolverState {
-    pub fn from_proto(state_pb: ResolverStatePb, account_id: &str) -> Self {
+    pub fn from_proto(state_pb: ResolverStatePb, account_id: &str) -> Fallible<Self> {
         let mut secrets = HashMap::new();
         let mut flags = HashMap::new();
         let mut segments = HashMap::new();
@@ -214,13 +227,13 @@ impl ResolverState {
             match b {
                 flags_admin::resolver_state::packed_bitset::Bitset::GzippedBitset(zipped_bytes) => {
                     // unzip bytes
-                    let buffer = decompress_gz(&zipped_bytes[..]).unwrap();
+                    let buffer = decompress_gz(&zipped_bytes[..])?;
                     let bitvec = bv::BitVec::from_slice(&buffer);
                     bitsets.insert(bitset.segment.clone(), bitvec);
                 }
                 // missing bitset treated as full
                 flags_admin::resolver_state::packed_bitset::Bitset::FullBitset(true) => (),
-                _ => panic!("Unexpected bitset case"),
+                _ => fail!(),
             }
         }
         for client in state_pb.clients {
@@ -245,12 +258,12 @@ impl ResolverState {
             }
         }
 
-        ResolverState {
+        Ok(ResolverState {
             secrets,
             flags,
             segments,
             bitsets,
-        }
+        })
     }
 
     // only available in std because of serde/pbjson
@@ -260,10 +273,13 @@ impl ResolverState {
         client_secret: &str,
         evaluation_context: &str,
         encryption_key: &Bytes,
-    ) -> Option<AccountResolver<'a, H>> {
+    ) -> Result<AccountResolver<'a, H>, String> {
         self.get_resolver(
             client_secret,
-            serde_json::from_str(evaluation_context).unwrap(),
+            // allow this unwrap cause it only happens in std
+            #[allow(clippy::unwrap_used)]
+            serde_json::from_str(evaluation_context)
+                .map_err(|_| "failed to parse evaluation context".to_string())?,
             encryption_key,
         )
     }
@@ -273,17 +289,20 @@ impl ResolverState {
         client_secret: &str,
         evaluation_context: Struct,
         encryption_key: &Bytes,
-    ) -> Option<AccountResolver<'a, H>> {
-        self.secrets.get(client_secret).map(|client| {
-            AccountResolver::new(
-                client,
-                self,
-                EvaluationContext {
-                    context: evaluation_context,
-                },
-                encryption_key,
-            )
-        })
+    ) -> Result<AccountResolver<'a, H>, String> {
+        self.secrets
+            .get(client_secret)
+            .ok_or("client secret not found".to_string())
+            .map(|client| {
+                AccountResolver::new(
+                    client,
+                    self,
+                    EvaluationContext {
+                        context: evaluation_context,
+                    },
+                    encryption_key,
+                )
+            })
     }
 }
 
@@ -401,52 +420,56 @@ pub trait Host {
     ) -> Result<Vec<u8>, String> {
         #[cfg(feature = "std")]
         {
-            const ENCRYPTION_WRITE_BUFFER_SIZE: usize = 4096;
+            {
+                const ENCRYPTION_WRITE_BUFFER_SIZE: usize = 4096;
 
-            use crypto::{aes, blockmodes, buffer};
+                use crypto::{aes, blockmodes, buffer};
 
-            let mut iv = [0u8; 16];
-            iv.copy_from_slice(&encrypted_data[0..16]);
+                let mut iv = [0u8; 16];
+                iv.copy_from_slice(encrypted_data.get(0..16).or_fail()?);
 
-            let mut decryptor = aes::cbc_decryptor(
-                aes::KeySize::KeySize128,
-                &iv,
-                encryption_key,
-                blockmodes::PkcsPadding,
-            );
-
-            let encrypted_token_read_buffer =
-                &mut buffer::RefReadBuffer::new(&encrypted_data[16..]);
-            let mut write_buffer = [0; ENCRYPTION_WRITE_BUFFER_SIZE];
-            let encrypted_token_write_buffer = &mut buffer::RefWriteBuffer::new(&mut write_buffer);
-
-            let mut final_decrypted_token = Vec::<u8>::new();
-            loop {
-                use crypto::buffer::{BufferResult, ReadBuffer, WriteBuffer};
-
-                let result = decryptor
-                    .decrypt(
-                        encrypted_token_read_buffer,
-                        encrypted_token_write_buffer,
-                        true,
-                    )
-                    .map_err(|_| "Failed to decrypt resolve token".to_string())?;
-
-                final_decrypted_token.extend(
-                    encrypted_token_write_buffer
-                        .take_read_buffer()
-                        .take_remaining()
-                        .iter()
-                        .copied(),
+                let mut decryptor = aes::cbc_decryptor(
+                    aes::KeySize::KeySize128,
+                    &iv,
+                    encryption_key,
+                    blockmodes::PkcsPadding,
                 );
 
-                match result {
-                    BufferResult::BufferUnderflow => break,
-                    BufferResult::BufferOverflow => {}
-                }
-            }
+                let encrypted_token_read_buffer =
+                    &mut buffer::RefReadBuffer::new(encrypted_data.get(16..).or_fail()?);
+                let mut write_buffer = [0; ENCRYPTION_WRITE_BUFFER_SIZE];
+                let encrypted_token_write_buffer =
+                    &mut buffer::RefWriteBuffer::new(&mut write_buffer);
 
-            Ok(final_decrypted_token)
+                let mut final_decrypted_token = Vec::<u8>::new();
+                loop {
+                    use crypto::buffer::{BufferResult, ReadBuffer, WriteBuffer};
+
+                    let result = decryptor
+                        .decrypt(
+                            encrypted_token_read_buffer,
+                            encrypted_token_write_buffer,
+                            true,
+                        )
+                        .or_fail()?;
+
+                    final_decrypted_token.extend(
+                        encrypted_token_write_buffer
+                            .take_read_buffer()
+                            .take_remaining()
+                            .iter()
+                            .copied(),
+                    );
+
+                    match result {
+                        BufferResult::BufferUnderflow => break,
+                        BufferResult::BufferOverflow => {}
+                    }
+                }
+
+                Ok(final_decrypted_token)
+            }
+            .map_err(|e: ErrorCode| format!("failed to decrypt resolve token [{}]", e.b64_str()))
         }
 
         #[cfg(not(feature = "std"))]
@@ -455,7 +478,7 @@ pub trait Host {
             if encryption_key.iter().all(|&b| b == 0) {
                 Ok(encrypted_data.to_vec())
             } else {
-                Err("Decryption not available in no_std mode".to_string())
+                Err("decryption not available in no_std mode".into())
             }
         }
     }
@@ -503,7 +526,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
         if flags_to_resolve.len() > MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE {
             return Err(format!(
-                "Max {} flags allowed in a single resolve request, this request would return {} flags.",
+                "max {} flags allowed in a single resolve request, this request would return {} flags.",
                 MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE,
                 flags_to_resolve.len()));
         }
@@ -516,12 +539,17 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
         let resolved_values = flags_to_resolve
             .iter()
-            .map(|flag| self.resolve_flag(flag))
-            .collect::<Vec<ResolvedValue>>();
+            .map(|flag| {
+                self.resolve_flag(flag)
+                    .map_err(|e| format!("{}: {}", flag.name, e))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         let resolve_id = H::random_alphanumeric(32);
-        let mut response = flags_resolver::ResolveFlagsResponse::default();
-        response.resolve_id = resolve_id.clone();
+        let mut response = flags_resolver::ResolveFlagsResponse {
+            resolve_id: resolve_id.clone(),
+            ..Default::default()
+        };
         for resolved_value in &resolved_values {
             response.resolved_flags.push(resolved_value.into());
         }
@@ -545,9 +573,11 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             );
         } else {
             // create resolve token
-            let mut resolve_token_v1 = flags_resolver::ResolveTokenV1::default();
-            resolve_token_v1.resolve_id = resolve_id.clone();
-            resolve_token_v1.evaluation_context = Some(self.evaluation_context.context.clone());
+            let mut resolve_token_v1 = flags_resolver::ResolveTokenV1 {
+                resolve_id: resolve_id.clone(),
+                evaluation_context: Some(self.evaluation_context.context.clone()),
+                ..Default::default()
+            };
             for resolved_value in &resolved_values {
                 let assigned_flag: AssignedFlag = resolved_value.into();
                 resolve_token_v1
@@ -580,49 +610,40 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     }
 
     pub fn apply_flags(&self, request: &flags_resolver::ApplyFlagsRequest) -> Result<(), String> {
-        let Some(send_time_ts) = &request.send_time else {
-            return Err("send_time is required".to_string());
-        };
-        let send_time = to_date_time_utc(send_time_ts).unwrap();
-        let receive_time: DateTime<Utc> = timestamp_to_datetime(&H::current_time());
+        let send_time_ts = request.send_time.as_ref().ok_or("send_time is required")?;
+        let send_time = to_date_time_utc(send_time_ts).ok_or("invalid send_time")?;
+        let receive_time: DateTime<Utc> = timestamp_to_datetime(&H::current_time())?;
 
-        let resolve_token_outer = self
-            .decrypt_resolve_token(&request.resolve_token)
-            .map_err(|_| "Failed to decode resolve token".to_string())?;
+        let resolve_token_outer = self.decrypt_resolve_token(&request.resolve_token)?;
         let Some(flags_resolver::resolve_token::ResolveToken::TokenV1(resolve_token)) =
             resolve_token_outer.resolve_token
         else {
-            return Err("Resolve token is not a V1 token".to_string());
+            return Err("resolve token is not a V1 token".to_string());
         };
 
         let assignments = resolve_token.assignments;
-        let evaluation_context = resolve_token.evaluation_context.as_ref().unwrap();
+        let evaluation_context = resolve_token
+            .evaluation_context
+            .as_ref()
+            .ok_or("missing evaluation context")?;
 
         // ensure that all flags are present before we start sending events
+        let mut assigned_flags: Vec<FlagToApply> = Vec::with_capacity(request.flags.len());
         for applied_flag in &request.flags {
-            if !assignments.contains_key(&applied_flag.flag) {
+            let Some(assigned_flag) = assignments.get(&applied_flag.flag) else {
                 return Err("Flag in resolve token does not match flag in request".to_string());
-            }
-            if applied_flag.apply_time.is_none() {
+            };
+            let Some(apply_time) = applied_flag.apply_time.as_ref() else {
                 return Err(format!("Missing apply time for flag {}", applied_flag.flag));
-            }
+            };
+            let apply_time = to_date_time_utc(apply_time).or_fail()?;
+            let skew = send_time.signed_duration_since(apply_time);
+            let skew_adjusted_applied_time = datetime_to_timestamp(&(receive_time - skew));
+            assigned_flags.push(FlagToApply {
+                assigned_flag: assigned_flag.clone(),
+                skew_adjusted_applied_time,
+            });
         }
-
-        let assigned_flags: Vec<FlagToApply> = request
-            .flags
-            .iter()
-            .map(|rf| {
-                let apply_time = to_date_time_utc(rf.apply_time.as_ref().unwrap()).unwrap();
-                let skew = send_time.signed_duration_since(apply_time);
-                let skew_adjusted_applied_time = datetime_to_timestamp(receive_time - skew);
-
-                let assigned_flag: AssignedFlag = assignments.get(&rf.flag).unwrap().clone();
-                FlagToApply {
-                    assigned_flag,
-                    skew_adjusted_applied_time,
-                }
-            })
-            .collect();
 
         H::log_assign(
             &resolve_token.resolve_id,
@@ -651,19 +672,19 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             _ => Err("TargetingKeyError".to_string()),
         }
     }
-
-    pub fn resolve_flag_name(&'a self, flag_name: &str) -> Option<ResolvedValue<'a>> {
+    pub fn resolve_flag_name(&'a self, flag_name: &str) -> Result<ResolvedValue<'a>, String> {
         self.state
             .flags
             .get(flag_name)
-            .map(|flag| self.resolve_flag(flag))
+            .ok_or("flag not found".to_string())
+            .and_then(|flag| self.resolve_flag(flag))
     }
 
-    pub fn resolve_flag(&'a self, flag: &'a Flag) -> ResolvedValue<'a> {
+    pub fn resolve_flag(&'a self, flag: &'a Flag) -> Result<ResolvedValue<'a>, String> {
         let mut resolved_value = ResolvedValue::new(flag);
 
         if flag.state == flags_admin::flag::State::Archived as i32 {
-            return resolved_value.error(ResolveReason::FlagArchived);
+            return Ok(resolved_value.error(ResolveReason::FlagArchived));
         }
 
         for rule in &flag.rules {
@@ -676,7 +697,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 // log something? ResolveReason::SEGMENT_NOT_FOUND
                 continue;
             }
-            let segment = self.state.segments.get(segment_name).unwrap();
+            let segment = self.state.segments.get(segment_name).or_fail()?;
 
             let targeting_key = if !rule.targeting_key_selector.is_empty() {
                 rule.targeting_key_selector.as_str()
@@ -686,10 +707,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             let unit: String = match self.get_targeting_key(targeting_key) {
                 Ok(Some(u)) => u,
                 Ok(None) => continue,
-                Err(_) => return resolved_value.error(ResolveReason::TargetingKeyError),
+                Err(_) => return Ok(resolved_value.error(ResolveReason::TargetingKeyError)),
             };
 
-            if !self.segment_match(segment, &unit) {
+            if !self.segment_match(segment, &unit)? {
                 // ResolveReason::SEGMENT_NOT_MATCH
                 continue;
             }
@@ -698,7 +719,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 continue;
             };
             let bucket_count = spec.bucket_count;
-            let variant_salt = segment_name.split("/").nth(1).unwrap();
+            let variant_salt = segment_name.split("/").nth(1).or_fail()?;
             let key = format!("{}|{}", variant_salt, unit);
             let bucket = bucket(hash(&key), bucket_count as u64) as i32;
 
@@ -723,12 +744,12 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                         continue;
                     }
                     rule::assignment::Assignment::ClientDefault(_) => {
-                        return resolved_value.with_client_default_match(
+                        return Ok(resolved_value.with_client_default_match(
                             rule,
                             segment,
                             &assignment.assignment_id,
                             &unit,
-                        )
+                        ))
                     }
                     rule::assignment::Assignment::Variant(
                         rule::assignment::VariantAssignment {
@@ -739,14 +760,15 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                             .variants
                             .iter()
                             .find(|variant| variant.name == *variant_name)
-                            .unwrap();
-                        return resolved_value.with_variant_match(
+                            .or_fail()?;
+
+                        return Ok(resolved_value.with_variant_match(
                             rule,
                             segment,
                             variant,
                             &assignment.assignment_id,
                             &unit,
-                        );
+                        ));
                     }
                 };
             }
@@ -758,7 +780,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             resolved_value.should_apply = !resolved_value.fallthrough_rules.is_empty();
         }
 
-        resolved_value
+        Ok(resolved_value)
     }
 
     /// Get an attribute value from the [EvaluationContext] struct, adressed by a path specification.
@@ -792,7 +814,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         &NULL
     }
 
-    pub fn segment_match(&self, segment: &Segment, unit: &str) -> bool {
+    pub fn segment_match(&self, segment: &Segment, unit: &str) -> Fallible<bool> {
         self.segment_match_internal(segment, unit, &mut HashSet::new())
     }
 
@@ -801,23 +823,23 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         segment: &Segment,
         unit: &str,
         visited: &mut HashSet<String>,
-    ) -> bool {
+    ) -> Fallible<bool> {
         if visited.contains(&segment.name) {
-            panic!("Circular segment dependency found");
+            fail!("circular segment dependency found");
         }
         visited.insert(segment.name.clone());
 
-        if !self.targeting_match(segment, unit, visited) {
-            return false;
+        if !self.targeting_match(segment, unit, visited)? {
+            return Ok(false);
         }
 
         // check bitset
         let Some(bitset) = self.state.bitsets.get(&segment.name) else {
-            return true;
+            return Ok(true);
         }; // todo: whould this match or not?
-        let salted_unit = self.client.account.salt_unit(unit);
+        let salted_unit = self.client.account.salt_unit(unit)?;
         let unit_hash = bucket(hash(&salted_unit), BUCKETS);
-        bitset[unit_hash]
+        Ok(bitset[unit_hash])
     }
 
     fn targeting_match(
@@ -825,16 +847,16 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         segment: &Segment,
         unit: &str,
         visited: &mut HashSet<String>,
-    ) -> bool {
+    ) -> Fallible<bool> {
         let Some(targeting) = &segment.targeting else {
-            return true;
+            return Ok(true);
         };
         let mut criterion_evaluator = |id: &String| {
             let Some(Criterion {
                 criterion: Some(criterion),
             }) = targeting.criteria.get(id)
             else {
-                return false;
+                return Ok(false);
             };
             match &criterion {
                 criterion::Criterion::Attribute(attribute_criterion) => {
@@ -842,15 +864,15 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                     let attribute_value =
                         self.get_attribute_value(&attribute_criterion.attribute_name);
                     let converted =
-                        value::convert_to_targeting_value(attribute_value, expected_value_type);
+                        value::convert_to_targeting_value(attribute_value, expected_value_type)?;
                     let wrapped = list_wrapper(&converted);
 
-                    value::evaluate_criterion(attribute_criterion, &wrapped)
+                    Ok(value::evaluate_criterion(attribute_criterion, &wrapped))
                 }
                 criterion::Criterion::Segment(segment_criterion) => {
                     let Some(ref_segment) = self.state.segments.get(&segment_criterion.segment)
                     else {
-                        return false;
+                        return Ok(false);
                     };
 
                     self.segment_match_internal(ref_segment, unit, visited)
@@ -859,7 +881,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         };
 
         let Some(expression) = &targeting.expression else {
-            return true;
+            return Ok(true);
         };
         evaluate_expression(expression, &mut criterion_evaluator)
     }
@@ -868,21 +890,20 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         &self,
         resolve_token: &flags_resolver::ResolveToken,
     ) -> Result<Vec<u8>, String> {
-        let mut token_buf = Vec::new();
-        token_buf.reserve(resolve_token.encoded_len());
-        resolve_token.encode(&mut token_buf).unwrap();
+        let mut token_buf = Vec::with_capacity(resolve_token.encoded_len());
+        resolve_token.encode(&mut token_buf).or_fail()?;
 
         H::encrypt_resolve_token(&token_buf, &self.encryption_key)
     }
 
     fn decrypt_resolve_token(
         &self,
-        encrypted_token: &Vec<u8>,
+        encrypted_token: &[u8],
     ) -> Result<flags_resolver::ResolveToken, String> {
         let decrypted_data = H::decrypt_resolve_token(encrypted_token, &self.encryption_key)?;
 
-        flags_resolver::ResolveToken::decode(&decrypted_data[..])
-            .map_err(|e| format!("Failed to decode resolve token: {}", e))
+        let t = flags_resolver::ResolveToken::decode(&decrypted_data[..]).or_fail()?;
+        Ok(t)
     }
 }
 
@@ -892,22 +913,30 @@ fn to_date_time_utc(timestamp: &Timestamp) -> Option<chrono::DateTime<chrono::Ut
 
 fn evaluate_expression(
     expression: &Expression,
-    criterion_evaluator: &mut dyn FnMut(&String) -> bool,
-) -> bool {
+    criterion_evaluator: &mut dyn FnMut(&String) -> Fallible<bool>,
+) -> Fallible<bool> {
     let Some(expression) = &expression.expression else {
-        return false;
+        return Ok(false);
     };
     match expression {
         expression::Expression::Ref(ref_) => criterion_evaluator(ref_),
-        expression::Expression::Not(not) => !evaluate_expression(not, criterion_evaluator),
-        expression::Expression::And(and) => and
-            .operands
-            .iter()
-            .all(|op| evaluate_expression(op, criterion_evaluator)),
-        expression::Expression::Or(or) => or
-            .operands
-            .iter()
-            .any(|op| evaluate_expression(op, criterion_evaluator)),
+        expression::Expression::Not(not) => Ok(!evaluate_expression(not, criterion_evaluator)?),
+        expression::Expression::And(and) => {
+            for op in &and.operands {
+                if !evaluate_expression(op, criterion_evaluator)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        expression::Expression::Or(or) => {
+            for op in &or.operands {
+                if evaluate_expression(op, criterion_evaluator)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
     }
 }
 
@@ -1008,10 +1037,12 @@ impl<'a> ResolvedValue<'a> {
 
 impl<'a> From<&ResolvedValue<'a>> for flags_resolver::ResolvedFlag {
     fn from(value: &ResolvedValue<'a>) -> Self {
-        let mut resolved_flag = flags_resolver::ResolvedFlag::default();
-        resolved_flag.flag = value.flag.name.clone();
-        resolved_flag.reason = value.reason.clone() as i32;
-        resolved_flag.should_apply = value.should_apply;
+        let mut resolved_flag = flags_resolver::ResolvedFlag {
+            flag: value.flag.name.clone(),
+            reason: value.reason.clone() as i32,
+            should_apply: value.should_apply,
+            ..Default::default()
+        };
 
         if let Some(assignment_match) = &value.assignment_match {
             match assignment_match.variant {
@@ -1035,22 +1066,26 @@ impl<'a> From<&ResolvedValue<'a>> for flags_resolver::ResolvedFlag {
 
 impl<'a> From<&ResolvedValue<'a>> for flags_resolver::resolve_token_v1::AssignedFlag {
     fn from(value: &ResolvedValue<'a>) -> Self {
-        let mut assigned_flag = flags_resolver::resolve_token_v1::AssignedFlag::default();
-        assigned_flag.flag = value.flag.name.clone();
-        assigned_flag.reason = value.reason.clone() as i32;
-        assigned_flag.fallthrough_assignments = value
-            .fallthrough_rules
-            .iter()
-            .map(|fallthrough_rule| {
-                let mut assignment = flags_resolver::events::FallthroughAssignment::default();
-                assignment.assignment_id = fallthrough_rule.assignment_id.clone();
-                assignment.rule = fallthrough_rule.rule.name.clone();
-                assignment.targeting_key = fallthrough_rule.targeting_key.clone();
-                assignment.targeting_key_selector =
-                    fallthrough_rule.rule.targeting_key_selector.clone();
-                assignment
-            })
-            .collect();
+        let mut assigned_flag = flags_resolver::resolve_token_v1::AssignedFlag {
+            flag: value.flag.name.clone(),
+            reason: value.reason.clone() as i32,
+            fallthrough_assignments: value
+                .fallthrough_rules
+                .iter()
+                .map(
+                    |fallthrough_rule| flags_resolver::events::FallthroughAssignment {
+                        assignment_id: fallthrough_rule.assignment_id.clone(),
+                        rule: fallthrough_rule.rule.name.clone(),
+                        targeting_key: fallthrough_rule.targeting_key.clone(),
+                        targeting_key_selector: fallthrough_rule
+                            .rule
+                            .targeting_key_selector
+                            .clone(),
+                    },
+                )
+                .collect(),
+            ..Default::default()
+        };
 
         if let Some(assignment_match) = &value.assignment_match {
             assigned_flag.assignment_id = assignment_match.assignment_id.clone();
@@ -1152,8 +1187,11 @@ mod tests {
 
     #[test]
     fn test_parse_state_bitsets() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         let bitvec = state.bitsets.get("segments/qnbpewfufewyn5rpsylm").unwrap();
         let bitvec2 = state.bitsets.get("segments/h2f3kemn2nqbnc7k5lk2").unwrap();
@@ -1172,8 +1210,11 @@ mod tests {
 
     #[test]
     fn test_parse_state_secrets() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         let account_client = state
             .secrets
@@ -1191,7 +1232,7 @@ mod tests {
         let account = Account {
             name: "accounts/confidence-test".to_string(),
         };
-        let bucket = bucket(hash(&account.salt_unit("roug")), BUCKETS);
+        let bucket = bucket(hash(&account.salt_unit("roug").unwrap()), BUCKETS);
         assert_eq!(bucket, 567493); // test matching bucketing result from the java randomizer
     }
 
@@ -1201,13 +1242,16 @@ mod tests {
             name: "accounts/test".to_string(),
         };
 
-        assert_eq!(account.salt(), "MegaSalt-test");
+        assert_eq!(account.salt(), Ok("MegaSalt-test".into()));
     }
 
     #[test]
     fn test_resolve_flag() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         {
             let context_json = r#"{"visitor_id": "tutorial_visitor"}"#;
@@ -1215,7 +1259,7 @@ mod tests {
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
-            let resolved_value = resolver.resolve_flag(flag);
+            let resolved_value = resolver.resolve_flag(flag).unwrap();
             let assignment_match = resolved_value.assignment_match.unwrap();
 
             assert_eq!(
@@ -1235,7 +1279,11 @@ mod tests {
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
-            let assignment_match = resolver.resolve_flag(flag).assignment_match.unwrap();
+            let assignment_match = resolver
+                .resolve_flag(flag)
+                .unwrap()
+                .assignment_match
+                .unwrap();
 
             assert_eq!(
                 assignment_match.rule.name,
@@ -1249,8 +1297,11 @@ mod tests {
     }
     #[test]
     fn test_resolve_flags() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         {
             let context_json = r#"{"visitor_id": "tutorial_visitor"}"#;
@@ -1310,8 +1361,11 @@ mod tests {
 
     #[test]
     fn test_resolve_flags_fallthrough() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         // Single rule
         {
@@ -1434,8 +1488,11 @@ mod tests {
 
     #[test]
     fn test_resolve_flags_no_match() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         {
             let context_json = r#"{}"#; // NO CONTEXT
@@ -1466,8 +1523,11 @@ mod tests {
 
     #[test]
     fn test_resolve_flags_apply_logging() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         // Custom logger that tracks what gets logged
         struct TestLogger {
@@ -1599,8 +1659,11 @@ mod tests {
 
     #[test]
     fn test_targeting_key_integer_supported() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         // Using integer for visitor_id should be treated as string and work
         let context_json = r#"{"visitor_id": 26}"#;
@@ -1613,7 +1676,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolved_value = resolver.resolve_flag(flag);
+        let resolved_value = resolver.resolve_flag(flag).unwrap();
 
         assert_eq!(resolved_value.reason as i32, ResolveReason::Match as i32);
         let assignment_match = resolved_value.assignment_match.unwrap();
@@ -1622,8 +1685,11 @@ mod tests {
 
     #[test]
     fn test_targeting_key_fractional_rejected() {
-        let state =
-            ResolverState::from_proto(EXAMPLE_STATE.to_owned().into(), "confidence-demo-june");
+        let state = ResolverState::from_proto(
+            EXAMPLE_STATE.to_owned().try_into().unwrap(),
+            "confidence-demo-june",
+        )
+        .unwrap();
 
         // Fractional number for visitor_id should be rejected
         let context_json = r#"{"visitor_id": 26.5}"#;
@@ -1636,7 +1702,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolved_value = resolver.resolve_flag(flag);
+        let resolved_value = resolver.resolve_flag(flag).unwrap();
 
         assert_eq!(
             resolved_value.reason as i32,
@@ -1666,7 +1732,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1688,7 +1754,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1710,7 +1776,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1732,7 +1798,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1754,7 +1820,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1776,7 +1842,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1798,7 +1864,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1820,7 +1886,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1842,7 +1908,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1864,7 +1930,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1886,7 +1952,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1908,7 +1974,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1930,7 +1996,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1952,7 +2018,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1974,7 +2040,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -1996,7 +2062,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     // set rules
@@ -2020,7 +2086,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2042,7 +2108,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2064,7 +2130,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2086,7 +2152,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2108,7 +2174,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2130,7 +2196,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2152,7 +2218,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2174,7 +2240,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2196,7 +2262,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2221,7 +2287,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2246,7 +2312,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2271,7 +2337,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2296,7 +2362,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2321,7 +2387,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(!resolver.segment_match(&segment, "test"));
+        assert!(!resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2346,7 +2412,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     // range rules
@@ -2366,7 +2432,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(r#"{"client": { "score": 42.0 }, "user_id": "test"}"#, false);
@@ -2390,7 +2456,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(r#"{"client": { "score": 42.0 }, "user_id": "test"}"#, false);
@@ -2414,7 +2480,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(r#"{"client": { "score": 42.0 }, "user_id": "test"}"#, false);
@@ -2438,7 +2504,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(r#"{"client": { "score": 42.0 }, "user_id": "test"}"#, false);
@@ -2468,7 +2534,7 @@ mod tests {
             .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
             .unwrap();
 
-        assert!(resolver.segment_match(&segment, "test"));
+        assert!(resolver.segment_match(&segment, "test").unwrap());
     }
 
     #[test]
@@ -2485,7 +2551,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(
@@ -2524,7 +2590,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(
@@ -2563,7 +2629,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(
@@ -2602,7 +2668,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(
@@ -2641,7 +2707,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(
@@ -2680,7 +2746,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(
@@ -2719,7 +2785,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(
@@ -2758,7 +2824,7 @@ mod tests {
             let resolver: AccountResolver<'_, L> = state
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
-            assert_eq!(resolver.segment_match(&segment, "test"), expected);
+            assert_eq!(resolver.segment_match(&segment, "test"), Ok(expected));
         };
 
         assert_case(
