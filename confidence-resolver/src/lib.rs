@@ -163,8 +163,7 @@ impl ResolverState {
         })
     }
 
-    // only available in std because of serde/pbjson
-    #[cfg(feature = "std")]
+    #[cfg(feature = "json")]
     pub fn get_resolver_with_json_context<'a, H: Host>(
         &'a self,
         client_secret: &str,

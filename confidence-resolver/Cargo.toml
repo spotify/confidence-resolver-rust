@@ -10,8 +10,9 @@ publish = false
 crate-type = ['rlib']
 
 [features]
-default = ["std"]
-std = ["chrono/clock", "rand/thread_rng", "rust-crypto-wasm", "serde", "serde_json", "pbjson", "pbjson-types"]
+default = ["std", "json"]
+std = ["chrono/clock", "rand/thread_rng", "rust-crypto-wasm"]
+json = ["serde", "serde_json", "pbjson", "pbjson-types"]
 
 [dependencies]
 spin = "0.10.0"

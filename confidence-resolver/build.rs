@@ -42,7 +42,7 @@ fn main() -> Result<()> {
         .file_descriptor_set_path(&descriptor_path)
         .btree_map(["."]);
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "json")]
     {
         // Override prost-types with pbjson-types when std feature is enabled
         config
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
     // Generate prost structs
     config.compile_protos(&proto_files, &[root])?;
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "json")]
     {
         // Generate pbjson serde implementations
         let descriptor_set = std::fs::read(&descriptor_path)?;

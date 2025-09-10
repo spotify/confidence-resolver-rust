@@ -18,11 +18,11 @@ use crate::Struct;
 use crate::{FlagToApply, ResolvedValue};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-#[cfg(feature = "std")]
+#[cfg(feature = "json")]
 use serde::{Deserialize, Serialize};
 use spin::Mutex;
 
-#[cfg(not(feature = "std"))]
+#[cfg(not(feature = "json"))]
 #[derive(Clone, Debug)]
 pub struct FlagLogQueueRequest {
     pub flag_assigned: Vec<FlagAssigned>,
@@ -195,7 +195,7 @@ pub trait FlagLogger {
     fn aggregate_batch(message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest;
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "json")]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FlagLogQueueRequest {
     pub flag_assigned: Vec<FlagAssigned>,
