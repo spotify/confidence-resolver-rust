@@ -24,16 +24,19 @@ use proto::{ResolveSimpleRequest, Void};
 
 use crate::proto::{LogAssignRequest, LogResolveRequest, SdkId};
 use confidence_resolver::{
-    confidence::flags::admin::v1::ResolverState as ResolverStatePb,
-    confidence::flags::resolver::v1::resolve_token_v1::AssignedFlag,
-    confidence::flags::resolver::v1::{
-        ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
+    proto::{
+        confidence::flags::admin::v1::ResolverState as ResolverStatePb,
+        confidence::flags::resolver::v1::resolve_token_v1::AssignedFlag,
+        confidence::flags::resolver::v1::{
+            ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
+        },
+        google::{Struct, Timestamp},
     },
-    Client, FlagToApply, Host, ResolveReason, ResolvedValue, ResolverState, Struct, Timestamp,
+    Client, FlagToApply, Host, ResolveReason, ResolvedValue, ResolverState,
 };
 
 impl Into<proto::FallthroughAssignment>
-    for confidence_resolver::confidence::flags::resolver::v1::events::FallthroughAssignment
+    for confidence_resolver::proto::confidence::flags::resolver::v1::events::FallthroughAssignment
 {
     fn into(self) -> proto::FallthroughAssignment {
         proto::FallthroughAssignment {

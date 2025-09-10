@@ -8,10 +8,10 @@ use chrono::Utc;
 use crate::err::ErrorCode;
 use crate::err::Fallible;
 use crate::err::OrFailExt;
-use crate::{Kind, Timestamp, Value};
+use crate::proto::google::{value::Kind, Timestamp, Value};
 
-use crate::confidence::flags::types::v1::targeting;
-use crate::confidence::flags::types::v1::targeting::criterion;
+use crate::proto::confidence::flags::types::v1::targeting;
+use crate::proto::confidence::flags::types::v1::targeting::criterion;
 
 pub fn convert_to_targeting_value(
     attribute_value: &Value,

@@ -1,17 +1,17 @@
-use crate::confidence::flags::admin::v1::client_resolve_info::EvaluationContextSchemaInstance;
-use crate::confidence::flags::admin::v1::flag_resolve_info::{
+use crate::proto::confidence::flags::admin::v1::client_resolve_info::EvaluationContextSchemaInstance;
+use crate::proto::confidence::flags::admin::v1::flag_resolve_info::{
     AssignmentResolveInfo, RuleResolveInfo, VariantResolveInfo,
 };
-use crate::confidence::flags::admin::v1::{
+use crate::proto::confidence::flags::admin::v1::{
     ClientResolveInfo, ContextFieldSemanticType, FlagResolveInfo,
 };
-use crate::confidence::flags::resolver::v1::events::flag_assigned::applied_flag::Assignment;
-use crate::confidence::flags::resolver::v1::events::flag_assigned::default_assignment::DefaultAssignmentReason;
-use crate::confidence::flags::resolver::v1::events::flag_assigned::{
+use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::applied_flag::Assignment;
+use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::default_assignment::DefaultAssignmentReason;
+use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::{
     AppliedFlag, AssignmentInfo, DefaultAssignment,
 };
-use crate::confidence::flags::resolver::v1::events::{ClientInfo, FlagAssigned};
-use crate::confidence::flags::resolver::v1::Sdk;
+use crate::proto::confidence::flags::resolver::v1::events::{ClientInfo, FlagAssigned};
+use crate::proto::confidence::flags::resolver::v1::Sdk;
 use crate::schema_util::SchemaFromEvaluationContext;
 use crate::Client;
 use crate::Struct;
@@ -264,16 +264,18 @@ fn convert_to_write_assign_request(
     }
 }
 
-fn to_default_assignment(reason: crate::confidence::flags::resolver::v1::ResolveReason) -> i32 {
+fn to_default_assignment(
+    reason: crate::proto::confidence::flags::resolver::v1::ResolveReason,
+) -> i32 {
     #[allow(clippy::needless_return)]
     return match reason {
-        crate::confidence::flags::resolver::v1::ResolveReason::NoSegmentMatch => {
+        crate::proto::confidence::flags::resolver::v1::ResolveReason::NoSegmentMatch => {
             DefaultAssignmentReason::NoSegmentMatch
         }
-        crate::confidence::flags::resolver::v1::ResolveReason::NoTreatmentMatch => {
+        crate::proto::confidence::flags::resolver::v1::ResolveReason::NoTreatmentMatch => {
             DefaultAssignmentReason::NoTreatmentMatch
         }
-        crate::confidence::flags::resolver::v1::ResolveReason::FlagArchived => {
+        crate::proto::confidence::flags::resolver::v1::ResolveReason::FlagArchived => {
             DefaultAssignmentReason::FlagArchived
         }
         _ => DefaultAssignmentReason::Unspecified,
