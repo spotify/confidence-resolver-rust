@@ -309,11 +309,6 @@ RUSTFLAGS='--cfg getrandom_backend="wasm_js"' worker-build --release
 
 # only deploy if NO_DEPLOY is not set
 if test -z "$NO_DEPLOY"; then
-     # deploy the tail worker
-     cd tail
-     wrangler deploy
-     # deploy the resolver worker
-     cd ..
      wrangler deploy
 else
      echo "NO_DEPLOY is set, skipping deploy"
