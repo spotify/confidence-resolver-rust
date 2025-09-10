@@ -1,4 +1,3 @@
-#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(test), deny(
     clippy::panic,
     clippy::unwrap_used,
@@ -7,17 +6,8 @@
     // clippy::integer_arithmetic
 ))]
 
-extern crate alloc;
-
-use alloc::{
-    format,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
-
 use core::marker::PhantomData;
-use hashbrown::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use bitvec::prelude as bv;
 use fastmurmur3::murmur3_x64_128;

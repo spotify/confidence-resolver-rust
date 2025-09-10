@@ -2,9 +2,6 @@ use crate::confidence::flags::admin::v1::context_field_semantic_type::country_se
 use crate::confidence::flags::admin::v1::{
     context_field_semantic_type, evaluation_context_schema_field, ContextFieldSemanticType,
 };
-use alloc::format;
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 
 #[cfg(feature = "std")]
@@ -15,8 +12,8 @@ pub use prost_types::{value::Kind, Struct, Value};
 use crate::confidence::flags::admin::v1::context_field_semantic_type::{
     CountrySemanticType, DateSemanticType, TimestampSemanticType, VersionSemanticType,
 };
-use alloc::collections::{BTreeMap, BTreeSet};
 use isocountry::CountryCode;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone)]
 pub struct DerivedClientSchema {

@@ -1,7 +1,4 @@
-extern crate alloc;
-
 use crate::message;
-use alloc::string::String;
 
 pub type WasmResult<T> = core::result::Result<T, String>;
 

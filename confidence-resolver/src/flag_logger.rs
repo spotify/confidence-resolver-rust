@@ -16,10 +16,8 @@ use crate::schema_util::SchemaFromEvaluationContext;
 use crate::Client;
 use crate::Struct;
 use crate::{FlagToApply, ResolvedValue};
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::{String, ToString};
-use alloc::vec;
-use alloc::vec::Vec;
+use std::collections::{BTreeMap, HashMap, HashSet};
+
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use spin::Mutex;
@@ -84,9 +82,9 @@ impl FlagLogger for Logger {
     }
     fn aggregate_batch(message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest {
         // map of client credential to derived schema
-        let mut schema_map: BTreeMap<String, SchemaItem> = BTreeMap::new();
+        let mut schema_map: HashMap<String, SchemaItem> = HashMap::new();
         // map of flag to flag resolve info
-        let mut flag_resolve_map: BTreeMap<String, VariantRuleResolveInfo> = BTreeMap::new();
+        let mut flag_resolve_map: HashMap<String, VariantRuleResolveInfo> = HashMap::new();
         let mut flag_assigned: Vec<FlagAssigned> = vec![];
 
         for flag_logs_message in message_batch {
@@ -96,7 +94,7 @@ impl FlagLogger for Logger {
                         set.schemas.insert(schema.clone());
                     }
                 } else {
-                    let mut set = BTreeSet::new();
+                    let mut set = HashSet::new();
                     for schema in &c.schema {
                         set.insert(schema.clone());
                     }
@@ -365,29 +363,29 @@ fn convert_to_write_resolve_request(
 
 struct SchemaItem {
     pub client: String,
-    pub schemas: BTreeSet<EvaluationContextSchemaInstance>,
+    pub schemas: HashSet<EvaluationContextSchemaInstance>,
 }
 
 #[derive(Debug, Clone)]
 struct RuleResolveInfoCount {
     pub count: i64,
     // assignment id to count
-    pub assignment_count: BTreeMap<String, i64>,
+    pub assignment_count: HashMap<String, i64>,
 }
 
 #[derive(Debug, Clone)]
 struct VariantRuleResolveInfo {
     // rule to count
-    rule_resolve_info: BTreeMap<String, RuleResolveInfoCount>,
+    rule_resolve_info: HashMap<String, RuleResolveInfoCount>,
     // variant to count
-    variant_resolve_info: BTreeMap<String, i64>,
+    variant_resolve_info: HashMap<String, i64>,
 }
 
 impl VariantRuleResolveInfo {
     fn new() -> VariantRuleResolveInfo {
         VariantRuleResolveInfo {
-            rule_resolve_info: BTreeMap::new(),
-            variant_resolve_info: BTreeMap::new(),
+            rule_resolve_info: HashMap::new(),
+            variant_resolve_info: HashMap::new(),
         }
     }
 }
@@ -403,14 +401,14 @@ fn update_rule_variant_info(
         } + rule_info.count;
 
         // assignment id to count
-        let current_assignments: &BTreeMap<String, i64> =
+        let current_assignments: &HashMap<String, i64> =
             match flag_info.rule_resolve_info.get(&rule_info.rule) {
                 Some(i) => &i.assignment_count,
-                None => &BTreeMap::new(),
+                None => &HashMap::new(),
             };
 
         // assignment id to count
-        let mut new_assignment_count: BTreeMap<String, i64> = BTreeMap::new();
+        let mut new_assignment_count: HashMap<String, i64> = HashMap::new();
         for aa in &rule_info.assignment_resolve_info {
             let count = match current_assignments.get(&aa.assignment_id) {
                 None => 0,

@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     ]
     .iter()
     .for_each(|&p| {
-        config.type_attribute(p, "#[derive(Eq, PartialOrd, Ord)]");
+        config.type_attribute(p, "#[derive(Eq, Hash)]");
     });
 
     config

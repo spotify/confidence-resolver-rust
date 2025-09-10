@@ -1,14 +1,9 @@
-extern crate alloc;
-
 use chrono::DateTime;
 use chrono::LocalResult;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-
-use alloc::string::ToString;
-use alloc::vec::Vec;
 
 use crate::err::ErrorCode;
 use crate::err::Fallible;

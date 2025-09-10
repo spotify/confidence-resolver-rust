@@ -1,10 +1,6 @@
-#![no_std]
+use std::cell::RefCell;
+use std::sync::Arc;
 
-extern crate alloc;
-use alloc::string::String;
-use alloc::string::ToString;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 
@@ -16,7 +12,6 @@ use rand::distr::SampleString;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use wasm_msg;
-use wasm_msg::tls::ThreadLocalStorage;
 use wasm_msg::wasm_msg_guest;
 use wasm_msg::wasm_msg_host;
 use wasm_msg::WasmResult;
@@ -57,7 +52,12 @@ const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
 // TODO simplify by assuming single threaded?
 static RESOLVER_STATE: ArcSwapOption<ResolverState> = ArcSwapOption::const_empty();
-static THREAD_LOCALS: ThreadLocalStorage<SmallRng> = ThreadLocalStorage::new();
+thread_local! {
+    static RNG: RefCell<SmallRng> = RefCell::new({
+        let t = WasmHost::current_time();
+        SmallRng::seed_from_u64((t.seconds as u64) ^ (t.nanos as u64))
+    });
+}
 
 impl<'a> Into<proto::ResolvedValue> for &ResolvedValue<'a> {
     fn into(self) -> proto::ResolvedValue {
@@ -196,11 +196,7 @@ impl Host for WasmHost {
     }
 
     fn random_alphanumeric(len: usize) -> String {
-        let rng = THREAD_LOCALS.get_or_init(|| {
-            let time = WasmHost::current_time();
-            SmallRng::seed_from_u64((time.seconds as u64) ^ (time.nanos as u64))
-        });
-        Alphanumeric.sample_string(rng, len)
+        RNG.with_borrow_mut(|rng| Alphanumeric.sample_string(rng, len))
     }
 }
 

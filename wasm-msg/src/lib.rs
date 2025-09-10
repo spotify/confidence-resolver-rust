@@ -1,6 +1,3 @@
-#![no_std]
-
-extern crate alloc;
 extern crate paste;
 
 // Re-export commonly used items
