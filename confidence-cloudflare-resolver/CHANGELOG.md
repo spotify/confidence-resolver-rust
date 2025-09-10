@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.0...confidence-cloudflare-resolver-v0.2.1) (2025-09-10)
+
+
+### Bug Fixes
+
+* Remove tail worker deployment ([#27](https://github.com/spotify/confidence-resolver-rust/issues/27)) ([889ca5e](https://github.com/spotify/confidence-resolver-rust/commit/889ca5e1f3a9a03f5b8c186dddb3a0aed25b67ce))
+
 ## [0.2.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.1.1...confidence-cloudflare-resolver-v0.2.0) (2025-09-08)
 
 
