@@ -13,7 +13,7 @@ use crate::proto::confidence::flags::admin::v1::context_field_semantic_type::{
 use isocountry::CountryCode;
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct DerivedClientSchema {
     pub fields: BTreeMap<String, evaluation_context_schema_field::Kind>,
     pub semantic_types: BTreeMap<String, ContextFieldSemanticType>,

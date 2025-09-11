@@ -28,6 +28,7 @@ mod err;
 pub mod flag_logger;
 mod gzip;
 pub mod proto;
+pub mod resolve_logger;
 mod schema_util;
 mod value;
 
