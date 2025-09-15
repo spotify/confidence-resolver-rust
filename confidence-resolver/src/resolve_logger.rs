@@ -5,18 +5,30 @@ use std::sync::{
 
 use crate::{
     err::{Fallible, OrFailExt},
-    proto::confidence::flags::admin::v1 as pb,
-};
-use crate::{
-    proto::google::Struct,
     schema_util::{DerivedClientSchema, SchemaFromEvaluationContext},
+    FlagToApply,
 };
 use arc_swap::ArcSwap;
 use papaya::{HashMap, HashSet};
 
-pub struct ResolveInfoRequest {
-    pub flag_resolve_info: Vec<pb::FlagResolveInfo>,
-    pub client_resolve_info: Vec<pb::ClientResolveInfo>,
+mod pb {
+    pub use crate::proto::confidence::flags::admin::v1::{
+        client_resolve_info, flag_resolve_info, ClientResolveInfo, FlagResolveInfo,
+    };
+    pub use crate::proto::confidence::flags::resolver::v1::{events::FlagAssigned, ResolveReason};
+    pub use crate::proto::{
+        confidence::flags::resolver::v1::{
+            events::{
+                flag_assigned::{
+                    self, applied_flag::Assignment, AppliedFlag, AssignmentInfo, DefaultAssignment,
+                },
+                ClientInfo,
+            },
+            WriteFlagLogsRequest,
+        },
+        google::Struct,
+    };
+    pub use flag_assigned::default_assignment::DefaultAssignmentReason;
 }
 
 #[derive(Debug)]
@@ -48,7 +60,7 @@ impl ResolveLogger {
     pub fn log_resolve(
         &self,
         _resolve_id: &str,
-        resolve_context: &Struct,
+        resolve_context: &pb::Struct,
         client_credential: &str,
         values: &[crate::ResolvedValue<'_>],
     ) -> Fallible<()> {
@@ -102,7 +114,74 @@ impl ResolveLogger {
         })
     }
 
-    pub fn checkpoint(&self) -> Fallible<ResolveInfoRequest> {
+    pub fn log_assigns(
+        &self,
+        resolve_id: &str,
+        _evaluation_context: &pb::Struct,
+        assigned_flags: &[crate::FlagToApply],
+        client: &crate::Client,
+        sdk: &Option<crate::flags_resolver::Sdk>,
+    ) -> Fallible<()> {
+        self.with_state(|state: &ResolveInfoState| {
+            let client_info = Some(pb::ClientInfo {
+                client: client.client_name.to_string(),
+                client_credential: client.client_credential_name.to_string(),
+                sdk: sdk.clone(),
+            });
+            let flags = assigned_flags
+                .iter()
+                .map(
+                    |FlagToApply {
+                         assigned_flag: f,
+                         skew_adjusted_applied_time,
+                     }| {
+                        let assignment = if !f.variant.is_empty() {
+                            let assignment_info = pb::AssignmentInfo {
+                                segment: f.segment.clone(),
+                                variant: f.variant.clone(),
+                            };
+                            Some(pb::Assignment::AssignmentInfo(assignment_info))
+                        } else {
+                            let default_reason: pb::DefaultAssignmentReason =
+                                match pb::ResolveReason::try_from(f.reason) {
+                                    Ok(pb::ResolveReason::NoSegmentMatch) => {
+                                        pb::DefaultAssignmentReason::NoSegmentMatch
+                                    }
+                                    Ok(pb::ResolveReason::NoTreatmentMatch) => {
+                                        pb::DefaultAssignmentReason::NoTreatmentMatch
+                                    }
+                                    Ok(pb::ResolveReason::FlagArchived) => {
+                                        pb::DefaultAssignmentReason::FlagArchived
+                                    }
+                                    _ => pb::DefaultAssignmentReason::Unspecified,
+                                };
+                            Some(pb::Assignment::DefaultAssignment(pb::DefaultAssignment {
+                                reason: default_reason.into(),
+                            }))
+                        };
+                        pb::AppliedFlag {
+                            flag: f.flag.clone(),
+                            targeting_key: f.targeting_key.clone(),
+                            targeting_key_selector: f.targeting_key_selector.clone(),
+                            assignment_id: f.assignment_id.clone(),
+                            rule: f.rule.clone(),
+                            fallthrough_assignments: f.fallthrough_assignments.clone(),
+                            apply_time: Some(skew_adjusted_applied_time.clone()),
+                            assignment,
+                        }
+                    },
+                )
+                .collect();
+
+            state.flag_assigned.push(pb::FlagAssigned {
+                resolve_id: resolve_id.to_string(),
+                client_info,
+                flags,
+            });
+        })
+    }
+
+    pub fn checkpoint(&self) -> Fallible<pb::WriteFlagLogsRequest> {
         let state = {
             let lock = self
                 .state
@@ -112,9 +191,11 @@ impl ResolveLogger {
         };
         let client_resolve_info = build_client_resolve_info(&state);
         let flag_resolve_info = build_flag_resolve_info(&state);
-        Ok(ResolveInfoRequest {
+        Ok(pb::WriteFlagLogsRequest {
             flag_resolve_info,
             client_resolve_info,
+            flag_assigned: state.flag_assigned.into_iter().collect(),
+            telemetry_data: None,
         })
     }
 }
@@ -139,6 +220,7 @@ struct ClientResolveInfo {
 struct ResolveInfoState {
     flag_resolve_info: HashMap<String, FlagResolveInfo>,
     client_resolve_info: HashMap<String, ClientResolveInfo>,
+    flag_assigned: crossbeam_queue::SegQueue<pb::FlagAssigned>,
 }
 
 fn extract_client(credential: &str) -> String {
@@ -267,14 +349,9 @@ impl PapayaCounterMapExt for HashMap<String, AtomicU32> {
 #[cfg(test)]
 mod tests {
     use crate::{
-      resolve_logger::ResolveLogger,
-      resolve_logger::ResolveInfoRequest,
-      proto::google::Struct,
-      proto::confidence::flags::admin::v1::{
-        evaluation_context_schema_field,
-        ContextFieldSemanticType,
-        context_field_semantic_type::{CountrySemanticType, DateSemanticType, TimestampSemanticType, VersionSemanticType},
-      },
+      proto::{confidence::flags::admin::v1::{
+        context_field_semantic_type::{CountrySemanticType, DateSemanticType, TimestampSemanticType, VersionSemanticType}, evaluation_context_schema_field, ContextFieldSemanticType
+      }, google::Struct}, resolve_logger::{pb::WriteFlagLogsRequest, ResolveLogger}
     };
     use crate::proto::confidence::flags::admin::v1::context_field_semantic_type::country_semantic_type::CountryFormat;
     use std::{collections::BTreeMap};
@@ -625,7 +702,7 @@ mod tests {
 
         // Spawn one checkpointing thread that checkpoints periodically and sends results
         use std::sync::mpsc::channel;
-        let (tx, rx) = channel::<ResolveInfoRequest>();
+        let (tx, rx) = channel::<WriteFlagLogsRequest>();
         let lg = logger.clone();
         let tx_thread = tx.clone();
         let chk_handle = thread::spawn(move || {
