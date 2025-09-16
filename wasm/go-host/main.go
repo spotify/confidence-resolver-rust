@@ -38,7 +38,7 @@ func main() {
 	defer api.Close(ctx)
 
 	// Set resolver state
-	err = api.SetResolverState(resolverState)
+	err = api.SetResolverState(resolverState, "confidence-demo-june")
 	if err != nil {
 		log.Fatalf("Failed to set resolver state: %v", err)
 	}

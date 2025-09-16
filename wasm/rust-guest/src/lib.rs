@@ -30,10 +30,10 @@ use crate::proto::{LogAssignRequest, LogResolveRequest, SdkId};
 use confidence_resolver::{
     proto::{
         confidence::flags::admin::v1::ResolverState as ResolverStatePb,
-        confidence::flags::resolver::v1::resolve_token_v1::AssignedFlag,
-        confidence::flags::resolver::v1::{
-            ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
-        },
+        confidence::flags::admin::v1::SetResolverStateRequest,
+    confidence::flags::resolver::v1::resolve_token_v1::AssignedFlag,
+    confidence::flags::resolver::v1::{
+        ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,},
         google::{Struct, Timestamp},
     },
     Client, FlagToApply, Host, ResolveReason, ResolvedValue, ResolverState,
@@ -53,8 +53,6 @@ impl Into<proto::FallthroughAssignment>
 }
 
 const VOID: Void = Void {};
-
-const ACCOUNT_ID: &str = "confidence-test";
 const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
 // TODO simplify by assuming single threaded?
@@ -180,8 +178,10 @@ fn get_resolver_state() -> Result<Arc<ResolverState>, String> {
 }
 
 wasm_msg_guest! {
-    fn set_resolver_state(request: ResolverStatePb) -> WasmResult<Void> {
-        let new_state = ResolverState::from_proto(request, ACCOUNT_ID)?;
+    fn set_resolver_state(request: SetResolverStateRequest) -> WasmResult<Void> {
+        let state_pb = ResolverStatePb::decode(request.state.as_slice())
+            .map_err(|e| alloc::format!("Failed to decode resolver state: {}", e))?;
+        let new_state = ResolverState::from_proto(state_pb, request.account_id.as_str())?;
         RESOLVER_STATE.store(Some(Arc::new(new_state)));
         Ok(VOID)
     }

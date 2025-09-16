@@ -58,9 +58,12 @@ message ResolverStateUriResponse {
   google.protobuf.Timestamp expire_time = 2;
 }
 
-// Request to get the resolver state for the whole account
-message ResolverStateRequest {
+message SetResolverStateRequest {
+    bytes state = 1;
+    string account_id = 2;
 }
+
+message ResolverStateRequest {}
 
 // The full state for operating a flags resolver
 message ResolverState {

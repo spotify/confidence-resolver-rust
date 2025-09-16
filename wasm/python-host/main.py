@@ -29,7 +29,7 @@ def main():
 
     # Set resolver state
     try:
-        api.set_resolver_state(resolver_state)
+        api.set_resolver_state(resolver_state, "confidence-demo-june")
     except Exception as e:
         print(f"Failed to set resolver state: {e}")
         sys.exit(1)

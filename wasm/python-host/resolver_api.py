@@ -93,14 +93,14 @@ class ResolverApi:
         # Instantiate the module with imports
         self.instance = linker.instantiate(self.store, self.module)
 
-    def set_resolver_state(self, state: bytes) -> None:
+    def set_resolver_state(self, state: bytes, account_id: str) -> None:
         """Set the resolver state in the WASM module"""
-        # Create request wrapper
-        request = messages_pb2.Request()
-        request.data = state
-        # Transfer request to WASM memory - ensure it's a bytestring
-        serialized_data: bytes = request.SerializeToString()
-        req_ptr = self._transfer(serialized_data)
+        # Create SetResolverStateRequest proto
+        set_resolver_state_request = api_pb2.SetResolverStateRequest()
+        set_resolver_state_request.state = state
+        set_resolver_state_request.account_id = account_id
+        # Transfer request to WASM memory
+        req_ptr = self._transfer_request(set_resolver_state_request)
         # Call the WASM function
         results = self.wasm_msg_guest_set_resolver_state(self.store, req_ptr)
         resp_ptr = results

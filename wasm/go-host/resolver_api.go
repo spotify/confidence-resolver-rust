@@ -121,17 +121,17 @@ func (r *ResolverApi) Close(ctx context.Context) {
 }
 
 // SetResolverState sets the resolver state in the WASM module
-func (r *ResolverApi) SetResolverState(state []byte) error {
+func (r *ResolverApi) SetResolverState(state []byte, accountId string) error {
 	ctx := context.Background()
 
-	// Create request wrapper
-	request := &messages.Request{
-		Data: state,
+	// Create ResolverStateRequest message
+	resolverStateRequest := &resolver.SetResolverStateRequest{
+		State:     state,
+		AccountId: accountId,
 	}
 
 	// Transfer request to WASM memory
-	req, _ := proto.Marshal(request)
-	reqPtr := r.transfer(req)
+	reqPtr := r.transferRequest(resolverStateRequest)
 
 	// Call the WASM function
 	results, err := r.wasmMsgGuestSetResolverState.Call(ctx, uint64(reqPtr))
