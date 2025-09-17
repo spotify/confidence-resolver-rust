@@ -56,6 +56,8 @@ message ResolverStateUriResponse {
   string signed_uri = 1;
   // At what time the state uri expires
   google.protobuf.Timestamp expire_time = 2;
+  // The account the referenced state belongs to
+  string account = 3;
 }
 
 // Request to get the resolver state for the whole account
