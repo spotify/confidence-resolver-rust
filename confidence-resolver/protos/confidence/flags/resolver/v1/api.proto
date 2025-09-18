@@ -115,16 +115,16 @@ message ResolveFlagResponseResult {
 }
 
 message MissingMaterializations {
-    repeated MissingMaterialization items = 1;
+    repeated MissingMaterializationsForUnit items = 1;
     repeated MaterializationUpdate updates = 4;
 }
 
-message MissingMaterialization {
+message MissingMaterializationsForUnit {
     string unit = 1;
-    map<string, MissingRules> materialization_to_rules = 2;
+    map<string, Materializations> materializations_of_rules = 2;
 
-    message MissingRules {
-       repeated string rules = 1;
+    message Materializations {
+       repeated string materializations = 1;
     }
 }
 
