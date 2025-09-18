@@ -1,7 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Void } from './proto/messages.ts';
-import { ResolveFlagsRequest, ResolveFlagsResponse, ResolveReason } from './proto/resolver/api.ts';
+import {
+  ResolveFlagsRequest,
+  ResolveFlagsResponse,
+  ResolveReason
+} from './proto/resolver/api.ts';
+import { SetResolverStateRequest } from './proto/messages.js';
 import { Timestamp } from './proto/google/protobuf/timestamp.ts';
 import { ApiBuilder } from './wasm-msg.ts';
 
@@ -16,7 +21,7 @@ const resolverState = fs.readFileSync(path.join(dirname, '../../resolver_state.p
 const wasmModule = new WebAssembly.Module(wasmBuffer);
 
 const api = new ApiBuilder()
-  .guestRaw('set_resolver_state')
+  .guest('set_resolver_state', SetResolverStateRequest, Void, false)
   .guest('resolve', ResolveFlagsRequest, ResolveFlagsResponse, false)
   .host('log_resolve', Void, Void, false, () => ({}))
   .host('log_assign', Void, Void, false, () => ({}))
@@ -26,7 +31,10 @@ const api = new ApiBuilder()
   })
   .build(wasmModule);
 
-api.set_resolver_state(resolverState);
+api.set_resolver_state({
+  state: resolverState,
+  accountId: 'confidence-demo-june'
+});
 
 // Verify MATCH reason and non-empty variant for tutorial_visitor
 {

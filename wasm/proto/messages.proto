@@ -8,6 +8,11 @@ import "google/protobuf/struct.proto";
 
 message Void {}
 
+message SetResolverStateRequest {
+    bytes state = 1;
+    string account_id = 2;
+}
+
 message ResolveSimpleRequest {
     string client_secret = 1;
     google.protobuf.Struct evaluation_context = 2;

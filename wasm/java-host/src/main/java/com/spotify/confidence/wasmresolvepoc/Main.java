@@ -2,6 +2,7 @@ package com.spotify.confidence.wasmresolvepoc;
 
 import com.dylibso.chicory.wasm.Parser;
 import com.dylibso.chicory.wasm.WasmModule;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
@@ -11,7 +12,7 @@ import com.spotify.confidence.flags.resolver.v1.ResolveReason;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
- 
+import rust_guest.Messages.SetResolverStateRequest;
 
 public class Main {
 
@@ -31,7 +32,9 @@ public class Main {
         Path resolveStatePath = Path.of("../resolver_state.pb");
         byte[] resolveState = Files.readAllBytes(resolveStatePath);
 
-        main.resolverApi.setResolverState(resolveState);
+        main.resolverApi
+                .setResolverState(SetResolverStateRequest.newBuilder()
+                        .setState(ByteString.copyFrom(resolveState)).setAccountId("confidence-demo-june").build());
 
         // Verify RESOLVE_REASON_MATCH reason and non-empty variant for tutorial_visitor
         final ResolveFlagsResponse verifyResp = main.resolverApi.resolve(

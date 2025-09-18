@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::sync::OnceLock;
 
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
+use prost::Message;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -24,13 +24,10 @@ use wasm_msg::WasmResult;
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/rust_guest.rs"));
 }
-use proto::{ResolveSimpleRequest, Void};
-
-use crate::proto::{LogAssignRequest, LogResolveRequest, SdkId};
+use crate::proto::SetResolverStateRequest;
 use confidence_resolver::{
     proto::{
         confidence::flags::admin::v1::ResolverState as ResolverStatePb,
-        confidence::flags::resolver::v1::resolve_token_v1::AssignedFlag,
         confidence::flags::resolver::v1::{
             ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
         },
@@ -38,6 +35,7 @@ use confidence_resolver::{
     },
     Client, FlagToApply, Host, ResolveReason, ResolvedValue, ResolverState,
 };
+use proto::{ResolveSimpleRequest, Void};
 
 impl Into<proto::FallthroughAssignment>
     for confidence_resolver::proto::confidence::flags::resolver::v1::events::FallthroughAssignment
@@ -53,8 +51,6 @@ impl Into<proto::FallthroughAssignment>
 }
 
 const VOID: Void = Void {};
-
-const ACCOUNT_ID: &str = "confidence-test";
 const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
 // TODO simplify by assuming single threaded?
@@ -180,8 +176,10 @@ fn get_resolver_state() -> Result<Arc<ResolverState>, String> {
 }
 
 wasm_msg_guest! {
-    fn set_resolver_state(request: ResolverStatePb) -> WasmResult<Void> {
-        let new_state = ResolverState::from_proto(request, ACCOUNT_ID)?;
+    fn set_resolver_state(request: SetResolverStateRequest) -> WasmResult<Void> {
+        let state_pb = ResolverStatePb::decode(request.state.as_slice())
+            .map_err(|e| format!("Failed to decode resolver state: {}", e))?;
+        let new_state = ResolverState::from_proto(state_pb, request.account_id.as_str())?;
         RESOLVER_STATE.store(Some(Arc::new(new_state)));
         Ok(VOID)
     }

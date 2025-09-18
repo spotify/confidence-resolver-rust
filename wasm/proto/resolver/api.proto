@@ -79,7 +79,6 @@ message ResolvedFlag {
   ResolveReason reason = 5;
 }
 
-
 enum ResolveReason {
   // Unspecified enum.
   RESOLVE_REASON_UNSPECIFIED = 0;
