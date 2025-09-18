@@ -491,7 +491,16 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         let mut missing_materialization_items: Vec<MissingMaterializationItem> = vec![];
 
         for flag in flags_to_resolve {
-            let resolve_result = self.resolve_flag(flag, NoStickyContext);
+            let sticky_context = if let Some(context) = &request.materialization_context {
+                ResolveWithStickyContext::WithStickyContext(StickyResolveContext {
+                    // don't evaluate the flag when already have some dependency missing
+                    skip_on_not_missing: !missing_materialization_items.is_empty(),
+                    context: context.clone(),
+                })
+            } else {
+                NoStickyContext
+            };
+            let resolve_result = self.resolve_flag(flag, sticky_context);
             match resolve_result {
                 Ok(resolve_result) => resolve_results.push(resolve_result),
 
@@ -510,7 +519,6 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 resolve_result: Some(ResolveResult::MissingMaterializations(
                     MissingMaterializations {
                         items: missing_materialization_items,
-                        updates: vec![],
                     },
                 )),
             });
@@ -711,7 +719,16 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             });
         }
 
-        let mut skip_evaluation = false;
+        let materialization_context = match &sticky_context {
+            ResolveWithStickyContext::WithStickyContext(ctx) => Some(ctx),
+            NoStickyContext => None,
+        };
+
+        let skip_evaluation = if let Some(ctx) = &materialization_context {
+            ctx.skip_on_not_missing
+        } else {
+            false
+        };
 
         for rule in &flag.rules {
             if !rule.enabled {
@@ -741,33 +758,20 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 }
             };
 
-            let mut materialization_matched = false;
-
             if let Some(materialization_spec) = &rule.materialization_spec {
                 let rule_name = &rule.name;
                 let read_materialization = materialization_spec.read_materialization.clone();
                 if !read_materialization.is_empty() {
                     // check if the materialization for the unit exists
-                    match &sticky_context {
-                        ResolveWithStickyContext::WithStickyContext(sticky_context) => {
-                            skip_evaluation = sticky_context.skip_on_not_missing;
-
-                            if !sticky_context
-                                .context
-                                .unit_materialization_info
-                                .contains_key(&unit)
-                            {
-                                missing_materializations.push(MissingMaterializationItem {
-                                    unit: unit.clone(),
-                                    rule: rule_name.clone(),
-                                    read_materialization,
-                                });
-                                // check the other rule
-                                continue;
-                            }
-                        }
-                        NoStickyContext => {
-                            materialization_matched = false;
+                    if let Some(ctx) = materialization_context {
+                        if !ctx.context.unit_materialization_info.contains_key(&unit) {
+                            missing_materializations.push(MissingMaterializationItem {
+                                unit: unit.clone(),
+                                rule: rule_name.clone(),
+                                read_materialization,
+                            });
+                            // check the other rule
+                            continue;
                         }
                     }
                 }
@@ -779,6 +783,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 or when we are in discovery mode (finding missing dependencies for rules)
                  */
                 continue;
+            }
+
+            if let Some(ctx) = materialization_context {
+                // now we have all the dependencies required for evaluating the sticky assignments
             }
 
             if !self.segment_match(segment, &unit)? {
@@ -1809,9 +1817,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver
-            .resolve_flag(flag, ResolveWithStickyContext::NoStickyContext)
-            .unwrap();
+        let resolve_result = resolver.resolve_flag(flag, NoStickyContext).unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(resolved_value.reason as i32, ResolveReason::Match as i32);

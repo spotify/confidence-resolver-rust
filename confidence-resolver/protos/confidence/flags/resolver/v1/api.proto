@@ -116,7 +116,6 @@ message ResolveFlagResponseResult {
 
 message MissingMaterializations {
     repeated MissingMaterializationItem items = 1;
-    repeated MaterializationUpdate updates = 4;
 }
 
 message MissingMaterializationItem {

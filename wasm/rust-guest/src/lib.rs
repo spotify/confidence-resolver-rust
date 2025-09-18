@@ -188,14 +188,14 @@ wasm_msg_guest! {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
-        resolver.resolve_flags_sticky(&request).map_err(|e| e.message).into()
+        resolver.resolve_flags_sticky(&request).into()
     }
 
     fn resolve(request: ResolveFlagsRequest) -> WasmResult<ResolveFlagsResponse> {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
-        resolver.resolve_flags(&request).map_err(|e| e.message).into()
+        resolver.resolve_flags(&request).into()
     }
     fn resolve_simple(request: ResolveSimpleRequest) -> WasmResult<ResolvedFlag> {
         let resolver_state = get_resolver_state()?;
