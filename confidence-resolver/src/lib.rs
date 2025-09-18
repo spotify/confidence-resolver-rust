@@ -53,11 +53,14 @@ use flags_types::Expression;
 use gzip::decompress_gz;
 use proto::confidence::flags::resolver::v1::resolve_flag_response_result::ResolveResult;
 use proto::confidence::flags::resolver::v1::{
-    MaterializationContext, MaterializationUpdate, MissingMaterializations,
-    MissingMaterializationsForUnit, ResolveFlagResponseResult,
+    MaterializationContext, MaterializationUpdate, ResolveFlagResponseResult,
 };
 
 use crate::err::{ErrorCode, OrFailExt};
+use crate::proto::confidence::flags::resolver::v1::{
+    MissingMaterializationItem, MissingMaterializations,
+};
+use crate::ResolveWithStickyContext::NoStickyContext;
 
 impl TryFrom<Vec<u8>> for ResolverStatePb {
     type Error = ErrorCode;
@@ -212,7 +215,7 @@ pub struct EvaluationContext {
     pub context: Struct,
 }
 pub struct FlagToApply {
-    pub assigned_flag: flags_resolver::resolve_token_v1::AssignedFlag,
+    pub assigned_flag: AssignedFlag,
     pub skew_adjusted_applied_time: Timestamp,
 }
 
@@ -394,16 +397,20 @@ pub struct AccountResolver<'a, H: Host> {
     host: PhantomData<H>,
 }
 
-struct ResolveMaterializationContext {
+pub enum ResolveWithStickyContext {
+    WithStickyContext(StickyResolveContext),
+    NoStickyContext,
+}
+
+pub struct StickyResolveContext {
     context: MaterializationContext,
-    process_sticky: bool,
     skip_on_not_missing: bool,
 }
 
 #[derive(Debug)]
 pub struct ResolveFlagError {
     pub message: String,
-    pub missing_materializations: Vec<MissingMaterializationsForUnit>,
+    pub missing_materializations: Vec<MissingMaterializationItem>,
 }
 
 impl ResolveFlagError {
@@ -414,9 +421,7 @@ impl ResolveFlagError {
         }
     }
 
-    pub fn missing_materializations(
-        items: Vec<MissingMaterializationsForUnit>,
-    ) -> ResolveFlagError {
+    pub fn missing_materializations(items: Vec<MissingMaterializationItem>) -> ResolveFlagError {
         ResolveFlagError {
             message: "Processing sticky assignments, missing materializations from the store"
                 .to_string(),
@@ -456,7 +461,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn resolve_flags_sticky(
         &self,
         request: &flags_resolver::ResolveFlagsRequest,
-    ) -> Result<ResolveFlagResponseResult, ResolveFlagError> {
+    ) -> Result<ResolveFlagResponseResult, String> {
         let timestamp = H::current_time();
 
         let flag_names = &request.flags;
@@ -470,28 +475,46 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             .collect::<Vec<&Flag>>();
 
         if flags_to_resolve.len() > MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE {
-            return Err(ResolveFlagError::err(format!(
+            return Err(format!(
                 "max {} flags allowed in a single resolve request, this request would return {} flags.",
                 MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE,
-                flags_to_resolve.len()).as_str()));
+                flags_to_resolve.len()));
         }
 
         if let Ok(Some(unit)) = self.get_targeting_key(TARGETING_KEY) {
             if unit.len() > 100 {
-                return Err(ResolveFlagError::err(
-                    "Targeting key is too larger, max 100 characters.",
-                ));
+                return Err("Targeting key is too larger, max 100 characters.".to_string());
             }
         }
 
-        let resolve_results = flags_to_resolve
-            .iter()
-            .map(|flag| {
-                self.resolve_flag(flag)
-                    .map_err(|e| format!("{}: {}", flag.name, e.message))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .or_fail()?;
+        let mut resolve_results = Vec::with_capacity(flags_to_resolve.len());
+        let mut missing_materialization_items: Vec<MissingMaterializationItem> = vec![];
+
+        for flag in flags_to_resolve {
+            let resolve_result = self.resolve_flag(flag, NoStickyContext);
+            match resolve_result {
+                Ok(resolve_result) => resolve_results.push(resolve_result),
+
+                Err(err) => {
+                    if err.missing_materializations.is_empty() {
+                        return Err(err.message.to_string());
+                    } else {
+                        missing_materialization_items.extend(err.missing_materializations);
+                    }
+                }
+            }
+        }
+
+        if !missing_materialization_items.is_empty() {
+            return Ok(ResolveFlagResponseResult {
+                resolve_result: Some(ResolveResult::MissingMaterializations(
+                    MissingMaterializations {
+                        items: missing_materialization_items,
+                        updates: vec![],
+                    },
+                )),
+            });
+        }
 
         let resolved_values: Vec<&ResolvedValue> =
             resolve_results.iter().map(|r| &r.resolved_value).collect();
@@ -573,7 +596,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn resolve_flags(
         &self,
         request: &flags_resolver::ResolveFlagsRequest,
-    ) -> Result<flags_resolver::ResolveFlagsResponse, ResolveFlagError> {
+    ) -> Result<flags_resolver::ResolveFlagsResponse, String> {
         let response = self.resolve_flags_sticky(&flags_resolver::ResolveFlagsRequest {
             flags: request.flags.clone(),
             sdk: request.sdk.clone(),
@@ -586,11 +609,11 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
         match response {
             Ok(v) => match v.resolve_result {
-                None => Err(ResolveFlagError::err("failed to resolve flags")),
+                None => Err("failed to resolve flags".to_string()),
                 Some(r) => match r {
                     ResolveResult::Response(flags_response) => Ok(flags_response),
                     ResolveResult::MissingMaterializations(_) => {
-                        Err(ResolveFlagError::err("sticky assignments is not supported"))
+                        Err("sticky assignments is not supported".to_string())
                     }
                 },
             },
@@ -669,15 +692,16 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             .flags
             .get(flag_name)
             .ok_or(ResolveFlagError::err("flag not found"))
-            .and_then(|flag| self.resolve_flag(flag))
+            .and_then(|flag| self.resolve_flag(flag, NoStickyContext))
     }
 
     pub fn resolve_flag(
         &'a self,
         flag: &'a Flag,
+        sticky_context: ResolveWithStickyContext,
     ) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
         let mut updates: Vec<MaterializationUpdate> = Vec::new();
-        let mut missing_materializations: Vec<MissingMaterializationsForUnit> = Vec::new();
+        let mut missing_materializations: Vec<MissingMaterializationItem> = Vec::new();
         let mut resolved_value = ResolvedValue::new(flag);
 
         if flag.state == flags_admin::flag::State::Archived as i32 {
@@ -686,6 +710,8 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 updates: vec![],
             });
         }
+
+        let mut skip_evaluation = false;
 
         for rule in &flag.rules {
             if !rule.enabled {
@@ -718,7 +744,41 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             let mut materialization_matched = false;
 
             if let Some(materialization_spec) = &rule.materialization_spec {
+                let rule_name = &rule.name;
                 let read_materialization = materialization_spec.read_materialization.clone();
+                if !read_materialization.is_empty() {
+                    // check if the materialization for the unit exists
+                    match &sticky_context {
+                        ResolveWithStickyContext::WithStickyContext(sticky_context) => {
+                            skip_evaluation = sticky_context.skip_on_not_missing;
+
+                            if !sticky_context
+                                .context
+                                .unit_materialization_info
+                                .contains_key(&unit)
+                            {
+                                missing_materializations.push(MissingMaterializationItem {
+                                    unit: unit.clone(),
+                                    rule: rule_name.clone(),
+                                    read_materialization,
+                                });
+                                // check the other rule
+                                continue;
+                            }
+                        }
+                        NoStickyContext => {
+                            materialization_matched = false;
+                        }
+                    }
+                }
+            }
+
+            if !missing_materializations.is_empty() || skip_evaluation {
+                /***
+                don't want to evaluate the rules when we have missing dependencies
+                or when we are in discovery mode (finding missing dependencies for rules)
+                 */
+                continue;
             }
 
             if !self.segment_match(segment, &unit)? {
@@ -813,6 +873,12 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                     }
                 };
             }
+        }
+
+        if !missing_materializations.is_empty() {
+            return Err(ResolveFlagError::missing_materializations(
+                missing_materializations,
+            ));
         }
 
         if resolved_value.reason == ResolveReason::Match {
@@ -1198,6 +1264,7 @@ pub fn bucket(hash: u128, buckets: u64) -> usize {
 mod tests {
     use super::*;
     use crate::proto::confidence::flags::resolver::v1::{ResolveFlagsResponse, Sdk};
+    use crate::ResolveWithStickyContext::NoStickyContext;
 
     const EXAMPLE_STATE: &[u8] = include_bytes!("../test-payloads/resolver_state.pb");
     const SECRET: &str = "mkjJruAATQWjeY7foFIWfVAcBWnci2YF";
@@ -1309,7 +1376,9 @@ mod tests {
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
-            let resolve_result = resolver.resolve_flag(flag).unwrap();
+            let resolve_result = resolver
+                .resolve_flag(flag, ResolveWithStickyContext::NoStickyContext)
+                .unwrap();
             let resolved_value = &resolve_result.resolved_value;
             let assignment_match = resolved_value.assignment_match.as_ref().unwrap();
 
@@ -1331,7 +1400,7 @@ mod tests {
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
             let assignment_match = resolver
-                .resolve_flag(flag)
+                .resolve_flag(flag, ResolveWithStickyContext::NoStickyContext)
                 .unwrap()
                 .resolved_value
                 .assignment_match
@@ -1740,7 +1809,9 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver.resolve_flag(flag).unwrap();
+        let resolve_result = resolver
+            .resolve_flag(flag, ResolveWithStickyContext::NoStickyContext)
+            .unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(resolved_value.reason as i32, ResolveReason::Match as i32);
@@ -1767,7 +1838,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver.resolve_flag(flag).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, NoStickyContext).unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(
