@@ -40,9 +40,6 @@ use proto::confidence::iam::v1 as iam;
 use proto::google::{value::Kind, Struct, Timestamp, Value};
 use proto::Message;
 
-use crate::confidence::flags::resolver::v1::resolve_flag_response_result::ResolveResult;
-use crate::confidence::flags::resolver::v1::{MaterializationContext, MaterializationUpdate, MissingMaterializations, MissingMaterializationsForUnit, ResolveFlagResponseResult};
-use confidence::flags::types::v1 as flags_types;
 use flags_admin::flag::rule;
 use flags_admin::flag::{Rule, Variant};
 use flags_admin::Flag;
@@ -54,6 +51,11 @@ use flags_types::targeting::criterion;
 use flags_types::targeting::Criterion;
 use flags_types::Expression;
 use gzip::decompress_gz;
+use proto::confidence::flags::resolver::v1::resolve_flag_response_result::ResolveResult;
+use proto::confidence::flags::resolver::v1::{
+    MaterializationContext, MaterializationUpdate, MissingMaterializations,
+    MissingMaterializationsForUnit, ResolveFlagResponseResult,
+};
 
 use crate::err::{ErrorCode, OrFailExt};
 
@@ -401,7 +403,7 @@ struct ResolveMaterializationContext {
 #[derive(Debug)]
 pub struct ResolveFlagError {
     pub message: String,
-    pub missing_materializations: Vec<MissingMaterializationsForUnit>
+    pub missing_materializations: Vec<MissingMaterializationsForUnit>,
 }
 
 impl ResolveFlagError {
@@ -412,11 +414,20 @@ impl ResolveFlagError {
         }
     }
 
-    pub fn missing_materializations(items: Vec<MissingMaterializationsForUnit>) -> ResolveFlagError {
+    pub fn missing_materializations(
+        items: Vec<MissingMaterializationsForUnit>,
+    ) -> ResolveFlagError {
         ResolveFlagError {
-            message: "Processing sticky assignments, missing materializations from the store".to_string(),
-            missing_materializations: items
+            message: "Processing sticky assignments, missing materializations from the store"
+                .to_string(),
+            missing_materializations: items,
         }
+    }
+}
+
+impl From<ResolveFlagError> for String {
+    fn from(value: ResolveFlagError) -> Self {
+        value.message.to_string()
     }
 }
 
@@ -445,7 +456,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn resolve_flags_sticky(
         &self,
         request: &flags_resolver::ResolveFlagsRequest,
-    ) -> Result<ResolveFlagResponseResult, String> {
+    ) -> Result<ResolveFlagResponseResult, ResolveFlagError> {
         let timestamp = H::current_time();
 
         let flag_names = &request.flags;
@@ -459,15 +470,17 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             .collect::<Vec<&Flag>>();
 
         if flags_to_resolve.len() > MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE {
-            return Err(format!(
+            return Err(ResolveFlagError::err(format!(
                 "max {} flags allowed in a single resolve request, this request would return {} flags.",
                 MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE,
-                flags_to_resolve.len()));
+                flags_to_resolve.len()).as_str()));
         }
 
         if let Ok(Some(unit)) = self.get_targeting_key(TARGETING_KEY) {
             if unit.len() > 100 {
-                return Err("Targeting key is too larger, max 100 characters.".to_string());
+                return Err(ResolveFlagError::err(
+                    "Targeting key is too larger, max 100 characters.",
+                ));
             }
         }
 
@@ -477,7 +490,8 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 self.resolve_flag(flag)
                     .map_err(|e| format!("{}: {}", flag.name, e.message))
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .or_fail()?;
 
         let resolved_values: Vec<&ResolvedValue> =
             resolve_results.iter().map(|r| &r.resolved_value).collect();
@@ -535,7 +549,8 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
             let encrypted_token = self
                 .encrypt_resolve_token(&resolve_token)
-                .map_err(|_| "Failed to encrypt resolve token".to_string())?;
+                .map_err(|_| "Failed to encrypt resolve token".to_string())
+                .or_fail()?;
 
             response.resolve_token = encrypted_token;
         }
@@ -579,7 +594,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                     }
                 },
             },
-            Err(e) => Err(ResolveFlagError::err(e.as_str())),
+            Err(e) => Err(e),
         }
     }
 
@@ -646,7 +661,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             _ => Err("TargetingKeyError".to_string()),
         }
     }
-    pub fn resolve_flag_name(&'a self, flag_name: &str) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
+    pub fn resolve_flag_name(
+        &'a self,
+        flag_name: &str,
+    ) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
         self.state
             .flags
             .get(flag_name)
@@ -654,7 +672,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             .and_then(|flag| self.resolve_flag(flag))
     }
 
-    pub fn resolve_flag(&'a self, flag: &'a Flag) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
+    pub fn resolve_flag(
+        &'a self,
+        flag: &'a Flag,
+    ) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
         let mut updates: Vec<MaterializationUpdate> = Vec::new();
         let mut missing_materializations: Vec<MissingMaterializationsForUnit> = Vec::new();
         let mut resolved_value = ResolvedValue::new(flag);

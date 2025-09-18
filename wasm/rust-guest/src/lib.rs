@@ -25,12 +25,12 @@ pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/rust_guest.rs"));
 }
 use crate::proto::SetResolverStateRequest;
-use confidence_resolver::confidence::flags::resolver::v1::resolve_flag_response_result;
 use confidence_resolver::{
     proto::{
         confidence::flags::admin::v1::ResolverState as ResolverStatePb,
         confidence::flags::resolver::v1::{
-            ResolveFlagResponseResult, ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,},
+            ResolveFlagResponseResult, ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
+        },
         google::{Struct, Timestamp},
     },
     Client, FlagToApply, Host, ResolveReason, ResolvedValue, ResolverState,
@@ -188,14 +188,14 @@ wasm_msg_guest! {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
-        resolver.resolve_flags_sticky(&request).into()
+        resolver.resolve_flags_sticky(&request).map_err(|e| e.message).into()
     }
 
     fn resolve(request: ResolveFlagsRequest) -> WasmResult<ResolveFlagsResponse> {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
-        resolver.resolve_flags(&request).into()
+        resolver.resolve_flags(&request).map_err(|e| e.message).into()
     }
     fn resolve_simple(request: ResolveSimpleRequest) -> WasmResult<ResolvedFlag> {
         let resolver_state = get_resolver_state()?;
