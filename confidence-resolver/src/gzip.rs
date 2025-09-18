@@ -1,7 +1,3 @@
-// use std::ffi::CString;
-// use std::io::{BufRead, Error, ErrorKind, Read, Result, Write};
-// use std::time;
-use alloc::vec::Vec;
 use miniz_oxide::inflate::decompress_to_vec;
 
 use crate::err::{Fallible, OrFailExt};
@@ -63,7 +59,6 @@ pub fn decompress_gz(buffer: &[u8]) -> Fallible<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    extern crate std;
     use super::*;
     use std::fs::File;
     use std::io::Read;

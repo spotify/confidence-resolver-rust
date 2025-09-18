@@ -1,4 +1,3 @@
-use alloc::string::{String, ToString};
 use core::panic::Location;
 
 /// A minimal error type suitable as a replacement for runtime panics.

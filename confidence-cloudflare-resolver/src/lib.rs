@@ -1,5 +1,7 @@
-use confidence_resolver::confidence::flags::resolver::v1::events::FlagAssigned;
-use confidence_resolver::{confidence, FlagToApply, Host, ResolvedValue, ResolverState, Struct};
+use confidence_resolver::{
+    proto::{confidence, google::Struct},
+    FlagToApply, Host, ResolvedValue, ResolverState,
+};
 use worker::*;
 
 use base64::engine::general_purpose::STANDARD;
@@ -8,7 +10,9 @@ use bytes::Bytes;
 use serde_json::from_slice;
 use serde_json::json;
 
-use confidence::flags::resolver::v1::{ApplyFlagsRequest, ApplyFlagsResponse, ResolveFlagsRequest};
+use confidence::flags::resolver::v1::{
+    events::FlagAssigned, ApplyFlagsRequest, ApplyFlagsResponse, ResolveFlagsRequest,
+};
 
 use confidence_resolver::Client;
 use once_cell::sync::Lazy;
@@ -19,8 +23,8 @@ const ACCOUNT_ID: &str = include_str!("../../data/account_id");
 const STATE_JSON: &[u8] = include_bytes!("../../data/resolver_state_current.pb");
 const ENCRYPTION_KEY_BASE64: &str = include_str!("../../data/encryption_key");
 
-use confidence_resolver::confidence::flags::admin::v1::{ClientResolveInfo, FlagResolveInfo};
-use confidence_resolver::confidence::flags::resolver::v1::Sdk;
+use confidence::flags::admin::v1::{ClientResolveInfo, FlagResolveInfo};
+use confidence::flags::resolver::v1::Sdk;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 

@@ -1,8 +1,6 @@
-extern crate alloc;
-use alloc::alloc::{alloc, dealloc, Layout};
-use alloc::vec::Vec;
 use core::mem;
 use core::ptr;
+use std::alloc::{alloc, dealloc, Layout};
 
 /// Custom allocation function that stores total allocation size before the data
 /// Returns a pointer to the data area (after the size)

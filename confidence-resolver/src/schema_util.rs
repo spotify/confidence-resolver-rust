@@ -1,24 +1,19 @@
-use crate::confidence::flags::admin::v1::context_field_semantic_type::country_semantic_type::CountryFormat;
-use crate::confidence::flags::admin::v1::{
+use crate::proto::confidence::flags::admin::v1::context_field_semantic_type::country_semantic_type::CountryFormat;
+use crate::proto::confidence::flags::admin::v1::{
     context_field_semantic_type, evaluation_context_schema_field, ContextFieldSemanticType,
 };
-use alloc::format;
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
+use crate::{
+    Kind, Value, Struct
+};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 
-#[cfg(feature = "std")]
-use pbjson_types::{value::Kind, Struct, Value};
-#[cfg(not(feature = "std"))]
-pub use prost_types::{value::Kind, Struct, Value};
-
-use crate::confidence::flags::admin::v1::context_field_semantic_type::{
+use crate::proto::confidence::flags::admin::v1::context_field_semantic_type::{
     CountrySemanticType, DateSemanticType, TimestampSemanticType, VersionSemanticType,
 };
-use alloc::collections::{BTreeMap, BTreeSet};
 use isocountry::CountryCode;
+use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct DerivedClientSchema {
     pub fields: BTreeMap<String, evaluation_context_schema_field::Kind>,
     pub semantic_types: BTreeMap<String, ContextFieldSemanticType>,
@@ -263,14 +258,6 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-
-    // Match Struct.fields backing map depending on feature:
-    // - With "std" feature, pbjson_types::Struct uses HashMap
-    // - Without "std", prost_types::Struct uses BTreeMap
-    #[cfg(feature = "std")]
-    type MapType<K, V> = HashMap<K, V>;
-    #[cfg(not(feature = "std"))]
-    type MapType<K, V> = BTreeMap<K, V>;
 
     // Helper function to create a Value with a string
     fn string_value(s: &str) -> Value {

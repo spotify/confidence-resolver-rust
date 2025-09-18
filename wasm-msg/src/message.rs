@@ -1,8 +1,4 @@
-extern crate alloc;
-
 use crate::memory::{consume_buffer, transfer_buffer};
-use alloc::string::String;
-use alloc::vec::Vec;
 
 // Include the generated protobuf code
 pub mod proto {

@@ -1,30 +1,28 @@
-use crate::confidence::flags::admin::v1::client_resolve_info::EvaluationContextSchemaInstance;
-use crate::confidence::flags::admin::v1::flag_resolve_info::{
+use crate::proto::confidence::flags::admin::v1::client_resolve_info::EvaluationContextSchemaInstance;
+use crate::proto::confidence::flags::admin::v1::flag_resolve_info::{
     AssignmentResolveInfo, RuleResolveInfo, VariantResolveInfo,
 };
-use crate::confidence::flags::admin::v1::{
+use crate::proto::confidence::flags::admin::v1::{
     ClientResolveInfo, ContextFieldSemanticType, FlagResolveInfo,
 };
-use crate::confidence::flags::resolver::v1::events::flag_assigned::applied_flag::Assignment;
-use crate::confidence::flags::resolver::v1::events::flag_assigned::default_assignment::DefaultAssignmentReason;
-use crate::confidence::flags::resolver::v1::events::flag_assigned::{
+use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::applied_flag::Assignment;
+use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::default_assignment::DefaultAssignmentReason;
+use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::{
     AppliedFlag, AssignmentInfo, DefaultAssignment,
 };
-use crate::confidence::flags::resolver::v1::events::{ClientInfo, FlagAssigned};
-use crate::confidence::flags::resolver::v1::Sdk;
+use crate::proto::confidence::flags::resolver::v1::events::{ClientInfo, FlagAssigned};
+use crate::proto::confidence::flags::resolver::v1::Sdk;
 use crate::schema_util::SchemaFromEvaluationContext;
 use crate::Client;
 use crate::Struct;
 use crate::{FlagToApply, ResolvedValue};
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::{String, ToString};
-use alloc::vec;
-use alloc::vec::Vec;
-#[cfg(feature = "std")]
+use std::collections::{BTreeMap, HashMap, HashSet};
+
+#[cfg(feature = "json")]
 use serde::{Deserialize, Serialize};
 use spin::Mutex;
 
-#[cfg(not(feature = "std"))]
+#[cfg(not(feature = "json"))]
 #[derive(Clone, Debug)]
 pub struct FlagLogQueueRequest {
     pub flag_assigned: Vec<FlagAssigned>,
@@ -84,9 +82,9 @@ impl FlagLogger for Logger {
     }
     fn aggregate_batch(message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest {
         // map of client credential to derived schema
-        let mut schema_map: BTreeMap<String, SchemaItem> = BTreeMap::new();
+        let mut schema_map: HashMap<String, SchemaItem> = HashMap::new();
         // map of flag to flag resolve info
-        let mut flag_resolve_map: BTreeMap<String, VariantRuleResolveInfo> = BTreeMap::new();
+        let mut flag_resolve_map: HashMap<String, VariantRuleResolveInfo> = HashMap::new();
         let mut flag_assigned: Vec<FlagAssigned> = vec![];
 
         for flag_logs_message in message_batch {
@@ -96,7 +94,7 @@ impl FlagLogger for Logger {
                         set.schemas.insert(schema.clone());
                     }
                 } else {
-                    let mut set = BTreeSet::new();
+                    let mut set = HashSet::new();
                     for schema in &c.schema {
                         set.insert(schema.clone());
                     }
@@ -197,7 +195,7 @@ pub trait FlagLogger {
     fn aggregate_batch(message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest;
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "json")]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FlagLogQueueRequest {
     pub flag_assigned: Vec<FlagAssigned>,
@@ -266,16 +264,18 @@ fn convert_to_write_assign_request(
     }
 }
 
-fn to_default_assignment(reason: crate::confidence::flags::resolver::v1::ResolveReason) -> i32 {
+fn to_default_assignment(
+    reason: crate::proto::confidence::flags::resolver::v1::ResolveReason,
+) -> i32 {
     #[allow(clippy::needless_return)]
     return match reason {
-        crate::confidence::flags::resolver::v1::ResolveReason::NoSegmentMatch => {
+        crate::proto::confidence::flags::resolver::v1::ResolveReason::NoSegmentMatch => {
             DefaultAssignmentReason::NoSegmentMatch
         }
-        crate::confidence::flags::resolver::v1::ResolveReason::NoTreatmentMatch => {
+        crate::proto::confidence::flags::resolver::v1::ResolveReason::NoTreatmentMatch => {
             DefaultAssignmentReason::NoTreatmentMatch
         }
-        crate::confidence::flags::resolver::v1::ResolveReason::FlagArchived => {
+        crate::proto::confidence::flags::resolver::v1::ResolveReason::FlagArchived => {
             DefaultAssignmentReason::FlagArchived
         }
         _ => DefaultAssignmentReason::Unspecified,
@@ -365,29 +365,29 @@ fn convert_to_write_resolve_request(
 
 struct SchemaItem {
     pub client: String,
-    pub schemas: BTreeSet<EvaluationContextSchemaInstance>,
+    pub schemas: HashSet<EvaluationContextSchemaInstance>,
 }
 
 #[derive(Debug, Clone)]
 struct RuleResolveInfoCount {
     pub count: i64,
     // assignment id to count
-    pub assignment_count: BTreeMap<String, i64>,
+    pub assignment_count: HashMap<String, i64>,
 }
 
 #[derive(Debug, Clone)]
 struct VariantRuleResolveInfo {
     // rule to count
-    rule_resolve_info: BTreeMap<String, RuleResolveInfoCount>,
+    rule_resolve_info: HashMap<String, RuleResolveInfoCount>,
     // variant to count
-    variant_resolve_info: BTreeMap<String, i64>,
+    variant_resolve_info: HashMap<String, i64>,
 }
 
 impl VariantRuleResolveInfo {
     fn new() -> VariantRuleResolveInfo {
         VariantRuleResolveInfo {
-            rule_resolve_info: BTreeMap::new(),
-            variant_resolve_info: BTreeMap::new(),
+            rule_resolve_info: HashMap::new(),
+            variant_resolve_info: HashMap::new(),
         }
     }
 }
@@ -403,14 +403,14 @@ fn update_rule_variant_info(
         } + rule_info.count;
 
         // assignment id to count
-        let current_assignments: &BTreeMap<String, i64> =
+        let current_assignments: &HashMap<String, i64> =
             match flag_info.rule_resolve_info.get(&rule_info.rule) {
                 Some(i) => &i.assignment_count,
-                None => &BTreeMap::new(),
+                None => &HashMap::new(),
             };
 
         // assignment id to count
-        let mut new_assignment_count: BTreeMap<String, i64> = BTreeMap::new();
+        let mut new_assignment_count: HashMap<String, i64> = HashMap::new();
         for aa in &rule_info.assignment_resolve_info {
             let count = match current_assignments.get(&aa.assignment_id) {
                 None => 0,

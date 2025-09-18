@@ -1,22 +1,21 @@
-#![no_std]
+use std::cell::RefCell;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::sync::OnceLock;
 
-extern crate alloc;
-use alloc::string::String;
-use alloc::string::ToString;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+use confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest;
+use confidence_resolver::resolve_logger::ResolveLogger;
 use rand::distr::Alphanumeric;
 use rand::distr::SampleString;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use wasm_msg;
-use wasm_msg::tls::ThreadLocalStorage;
 use wasm_msg::wasm_msg_guest;
 use wasm_msg::wasm_msg_host;
 use wasm_msg::WasmResult;
@@ -29,16 +28,19 @@ use proto::{ResolveSimpleRequest, Void};
 
 use crate::proto::{LogAssignRequest, LogResolveRequest, SdkId};
 use confidence_resolver::{
-    confidence::flags::admin::v1::ResolverState as ResolverStatePb,
-    confidence::flags::resolver::v1::resolve_token_v1::AssignedFlag,
-    confidence::flags::resolver::v1::{
-        ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
+    proto::{
+        confidence::flags::admin::v1::ResolverState as ResolverStatePb,
+        confidence::flags::resolver::v1::resolve_token_v1::AssignedFlag,
+        confidence::flags::resolver::v1::{
+            ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
+        },
+        google::{Struct, Timestamp},
     },
-    Client, FlagToApply, Host, ResolveReason, ResolvedValue, ResolverState, Struct, Timestamp,
+    Client, FlagToApply, Host, ResolveReason, ResolvedValue, ResolverState,
 };
 
 impl Into<proto::FallthroughAssignment>
-    for confidence_resolver::confidence::flags::resolver::v1::events::FallthroughAssignment
+    for confidence_resolver::proto::confidence::flags::resolver::v1::events::FallthroughAssignment
 {
     fn into(self) -> proto::FallthroughAssignment {
         proto::FallthroughAssignment {
@@ -57,7 +59,14 @@ const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
 // TODO simplify by assuming single threaded?
 static RESOLVER_STATE: ArcSwapOption<ResolverState> = ArcSwapOption::const_empty();
-static THREAD_LOCALS: ThreadLocalStorage<SmallRng> = ThreadLocalStorage::new();
+static LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
+
+thread_local! {
+    static RNG: RefCell<SmallRng> = RefCell::new({
+        let t = WasmHost::current_time();
+        SmallRng::seed_from_u64((t.seconds as u64) ^ (t.nanos as u64))
+    });
+}
 
 impl<'a> Into<proto::ResolvedValue> for &ResolvedValue<'a> {
     fn into(self) -> proto::ResolvedValue {
@@ -128,18 +137,12 @@ impl Host for WasmHost {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        let request = proto::LogResolveRequest {
-            resolve_id: resolve_id.to_string(),
-            evaluation_context: Some(evaluation_context.clone()),
-            client: Some(converted_client(&client)),
-            sdk: Some(proto::Sdk {
-                version: "TODO".to_string(),
-                sdk: Some(proto::sdk::Sdk::Id(i32::from(SdkId::RustProvider))),
-            }),
-            value: values.into_iter().map(|v| v.into()).collect(),
-        };
-
-        log_resolve(request).unwrap();
+        let _ = LOGGER.log_resolve(
+            resolve_id,
+            evaluation_context,
+            &client.client_credential_name,
+            values,
+        );
     }
 
     fn log_assign(
@@ -149,44 +152,9 @@ impl Host for WasmHost {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        let convert_assign_flag: fn(AssignedFlag) -> proto::AssignedFlag =
-            move |assigned_flag: AssignedFlag| proto::AssignedFlag {
-                flag: assigned_flag.flag,
-                targeting_key: assigned_flag.targeting_key,
-                targeting_key_selector: assigned_flag.targeting_key_selector,
-                segment: assigned_flag.segment,
-                variant: assigned_flag.variant,
-                rule: assigned_flag.rule,
-                reason: assigned_flag.reason,
-                fallthrough_assignments: assigned_flag
-                    .fallthrough_assignments
-                    .into_iter()
-                    .map(|fa| fa.into())
-                    .collect(),
-                assignment_id: assigned_flag.assignment_id,
-            };
-
-        let converted_assigned_flags: Vec<proto::FlagToApply> = assigned_flags
-            .into_iter()
-            .map(|f: &FlagToApply| proto::FlagToApply {
-                skew_adjusted_applied_time: Some(f.skew_adjusted_applied_time.clone()),
-                assigned_flags: Some(convert_assign_flag(f.assigned_flag.clone())),
-            })
-            .collect();
-
-        let request = proto::LogAssignRequest {
-            resolve_id: resolve_id.to_string(),
-            evaluation_context: Some(evaluation_context.clone()),
-            assigned_flags: converted_assigned_flags,
-            client: Some(converted_client(&client)),
-            sdk: Some(proto::Sdk {
-                version: "TODO".to_string(),
-                sdk: Some(proto::sdk::Sdk::Id(i32::from(SdkId::RustProvider))),
-            }),
-        };
-
-        log_assign(request).unwrap();
+        let _ = LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
     }
+
     fn encrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
         Ok(token_data.to_vec())
     }
@@ -196,11 +164,7 @@ impl Host for WasmHost {
     }
 
     fn random_alphanumeric(len: usize) -> String {
-        let rng = THREAD_LOCALS.get_or_init(|| {
-            let time = WasmHost::current_time();
-            SmallRng::seed_from_u64((time.seconds as u64) ^ (time.nanos as u64))
-        });
-        Alphanumeric.sample_string(rng, len)
+        RNG.with_borrow_mut(|rng| Alphanumeric.sample_string(rng, len))
     }
 }
 
@@ -228,7 +192,6 @@ wasm_msg_guest! {
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
         resolver.resolve_flags(&request).into()
     }
-
     fn resolve_simple(request: ResolveSimpleRequest) -> WasmResult<ResolvedFlag> {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
@@ -236,11 +199,13 @@ wasm_msg_guest! {
         let resolved_value = resolver.resolve_flag_name(&request.name)?;
         Ok((&resolved_value).into())
     }
+    fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
+        LOGGER.checkpoint().map_err(|e| e.into())
+    }
+
 }
 
 // Declare the add function as a host function
 wasm_msg_host! {
-    fn log_resolve(request: LogResolveRequest) -> WasmResult<Void>;
-    fn log_assign(request: LogAssignRequest) -> WasmResult<Void>;
     fn current_time(request: Void) -> WasmResult<Timestamp>;
 }
