@@ -125,7 +125,7 @@ func (r *ResolverApi) SetResolverState(state []byte, accountId string) error {
 	ctx := context.Background()
 
 	// Create ResolverStateRequest message
-	resolverStateRequest := &resolver.SetResolverStateRequest{
+	resolverStateRequest := &messages.SetResolverStateRequest{
 		State:     state,
 		AccountId: accountId,
 	}

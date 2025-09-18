@@ -96,7 +96,7 @@ class ResolverApi:
     def set_resolver_state(self, state: bytes, account_id: str) -> None:
         """Set the resolver state in the WASM module"""
         # Create SetResolverStateRequest proto
-        set_resolver_state_request = api_pb2.SetResolverStateRequest()
+        set_resolver_state_request = messages_pb2.SetResolverStateRequest()
         set_resolver_state_request.state = state
         set_resolver_state_request.account_id = account_id
         # Transfer request to WASM memory

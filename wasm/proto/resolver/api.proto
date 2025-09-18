@@ -79,11 +79,6 @@ message ResolvedFlag {
   ResolveReason reason = 5;
 }
 
-message SetResolverStateRequest {
-    bytes state = 1;
-    string account_id = 2;
-}
-
 enum ResolveReason {
   // Unspecified enum.
   RESOLVE_REASON_UNSPECIFIED = 0;

@@ -4,9 +4,9 @@ import { Void } from './proto/messages.ts';
 import {
   ResolveFlagsRequest,
   ResolveFlagsResponse,
-  ResolveReason,
-  SetResolverStateRequest
+  ResolveReason
 } from './proto/resolver/api.ts';
+import { SetResolverStateRequest } from './proto/messages.js';
 import { Timestamp } from './proto/google/protobuf/timestamp.ts';
 import { ApiBuilder } from './wasm-msg.ts';
 

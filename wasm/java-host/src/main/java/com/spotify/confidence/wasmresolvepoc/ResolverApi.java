@@ -17,7 +17,7 @@ import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolvedFlag;
 
-import com.spotify.confidence.flags.resolver.v1.SetResolverStateRequest;
+import rust_guest.Messages.SetResolverStateRequest;
 import rust_guest.Messages;
 import rust_guest.Messages.ResolveSimpleRequest;
 import rust_guest.Types;

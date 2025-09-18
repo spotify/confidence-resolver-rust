@@ -8,12 +8,11 @@ import com.google.protobuf.Value;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveReason;
-import com.spotify.confidence.flags.resolver.v1.SetResolverStateRequest;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
- 
+import rust_guest.Messages.SetResolverStateRequest;
 
 public class Main {
 
