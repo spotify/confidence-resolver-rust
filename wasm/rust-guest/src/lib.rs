@@ -192,7 +192,13 @@ wasm_msg_guest! {
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
         resolver.resolve_flags(&request).into()
     }
-
+    fn resolve_simple(request: ResolveSimpleRequest) -> WasmResult<ResolvedFlag> {
+        let resolver_state = get_resolver_state()?;
+        let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
+        let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY).unwrap();
+        let resolved_value = resolver.resolve_flag_name(&request.name)?;
+        Ok((&resolved_value).into())
+    }
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
         LOGGER.checkpoint().map_err(|e| e.into())
     }
