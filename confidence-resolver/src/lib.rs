@@ -509,6 +509,15 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                         return Err(err.message.to_string());
                     } else {
                         missing_materialization_items.extend(err.missing_materializations);
+                        if request.fail_fast_on_sticky {
+                            return Ok(ResolveFlagResponseResult {
+                                resolve_result: Some(ResolveResult::MissingMaterializations(
+                                    MissingMaterializations {
+                                        items: missing_materialization_items,
+                                    },
+                                )),
+                            });
+                        }
                     }
                 }
             }
@@ -612,6 +621,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             client_secret: request.client_secret.clone(),
             apply: request.apply.clone(),
             materialization_context: None,
+            fail_fast_on_sticky: false,
             process_sticky: false,
         });
 
@@ -838,7 +848,11 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                                             }
                                         })
                                     {
-                                        let variant = self.state.flags[flag.name.as_str()]
+                                        let variant = self
+                                            .state
+                                            .flags
+                                            .get(flag.name.as_str())
+                                            .unwrap()
                                             .variants
                                             .iter()
                                             .find(|v| v.name == *variant_name)
@@ -1509,6 +1523,7 @@ mod tests {
             let resolve_flag_req = flags_resolver::ResolveFlagsRequest {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
+                fail_fast_on_sticky: false,
                 process_sticky: false,
                 materialization_context: None,
                 flags: vec!["flags/tutorial-feature".to_string()],
@@ -1577,7 +1592,9 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/fallthrough-test-1".to_string()],
+                fail_fast_on_sticky: false,
                 process_sticky: false,
+
                 materialization_context: None,
                 apply: false,
                 sdk: Some(Sdk {
@@ -1635,7 +1652,9 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/fallthrough-test-2".to_string()],
+                fail_fast_on_sticky: false,
                 process_sticky: false,
+
                 materialization_context: None,
                 apply: false,
                 sdk: Some(Sdk {
@@ -1707,7 +1726,9 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/tutorial-feature".to_string()],
+                fail_fast_on_sticky: false,
                 process_sticky: false,
+
                 materialization_context: None,
                 apply: false,
                 sdk: Some(Sdk {
@@ -1803,7 +1824,9 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/tutorial-feature".to_string()],
+                fail_fast_on_sticky: false,
                 process_sticky: false,
+
                 materialization_context: None,
                 apply: true,
                 sdk: Some(Sdk {
@@ -1838,7 +1861,9 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/tutorial-feature".to_string()],
+                fail_fast_on_sticky: false,
                 process_sticky: false,
+
                 materialization_context: None,
                 apply: true,
                 sdk: Some(Sdk {
