@@ -785,18 +785,86 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 continue;
             }
 
-            if let Some(ctx) = materialization_context {
-                // now we have all the dependencies required for evaluating the sticky assignments
-            }
-
-            if !self.segment_match(segment, &unit)? {
-                // ResolveReason::SEGMENT_NOT_MATCH
-                continue;
-            }
-
             let Some(spec) = &rule.assignment_spec else {
                 continue;
             };
+
+            let mut materialization_matched = false;
+
+            if let Some(ctx) = materialization_context {
+                // now we have all the dependencies required for evaluating the sticky assignments
+                if let Some(materialization_spec) = &rule.materialization_spec {
+                    let read_materialization = &materialization_spec.read_materialization;
+                    if !read_materialization.is_empty() {
+                        let materialization_info = ctx.context.unit_materialization_info.get(&unit);
+                        if let Some(materialization_info) = materialization_info {
+                            materialization_matched = if !materialization_info.unit_in_info {
+                                if materialization_spec
+                                    .mode
+                                    .as_ref()
+                                    .map(|mode| mode.materialization_must_match)
+                                    .unwrap_or(false)
+                                {
+                                    // Materialization must match but unit is not in materialization
+                                    continue;
+                                }
+                                false
+                            } else {
+                                if materialization_spec
+                                    .mode
+                                    .as_ref()
+                                    .map(|mode| mode.segment_targeting_can_be_ignored)
+                                    .unwrap_or(false)
+                                {
+                                    true
+                                } else {
+                                    self.segment_match(segment, &unit)?
+                                }
+                            };
+
+                            if materialization_matched {
+                                if let Some(variant_name) =
+                                    materialization_info.rule_to_variant.get(&rule.name)
+                                {
+                                    if let Some(assignment) =
+                                        spec.assignments.iter().find(|assignment| {
+                                            if let Some(rule::assignment::Assignment::Variant(
+                                                ref variant_assignment,
+                                            )) = &assignment.assignment
+                                            {
+                                                variant_assignment.variant == *variant_name
+                                            } else {
+                                                false
+                                            }
+                                        })
+                                    {
+                                        let variant = self.state.flags[flag.name.as_str()]
+                                            .variants
+                                            .iter()
+                                            .find(|v| v.name == *variant_name)
+                                            .or_fail()?;
+                                        return Ok(FlagResolveResult {
+                                            resolved_value: resolved_value.with_variant_match(
+                                                rule,
+                                                segment,
+                                                variant,
+                                                &assignment.assignment_id,
+                                                &unit,
+                                            ),
+                                            updates: vec![],
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !materialization_matched && !self.segment_match(segment, &unit)? {
+                // ResolveReason::SEGMENT_NOT_MATCH
+                continue;
+            }
             let bucket_count = spec.bucket_count;
             let variant_salt = segment_name.split("/").nth(1).or_fail()?;
             let key = format!("{}|{}", variant_salt, unit);
