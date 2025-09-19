@@ -848,11 +848,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                                             }
                                         })
                                     {
-                                        let variant = self
-                                            .state
-                                            .flags
-                                            .get(flag.name.as_str())
-                                            .unwrap()
+                                        let variant = flag
                                             .variants
                                             .iter()
                                             .find(|v| v.name == *variant_name)
