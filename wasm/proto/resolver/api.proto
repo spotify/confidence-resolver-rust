@@ -37,14 +37,6 @@ message ResolveFlagsRequest {
 
   // Information about the SDK used to initiate the request.
   // Sdk sdk = 5;
-
-  // if the resolver should handle sticky assignments
-  bool process_sticky = 6;
-  // Context about the materialization required for the resolve
-  MaterializationContext materialization_context = 7;
-
-  // if a materialization info is missing, we want tor return to the caller immediately
-  bool fail_fast_on_sticky = 8;
 }
 
 
@@ -60,41 +52,6 @@ message ResolveFlagsResponse {
 
   // Unique identifier for this particular resolve request.
   string resolve_id = 3;
-  repeated MaterializationUpdate updates = 4;
-}
-
-message MaterializationContext {
- map<string, MaterializationInfo> unit_materialization_info = 1;
-}
-
-message MaterializationInfo {
- bool unit_in_info = 1;
- map<string, string> rule_to_variant = 2;
-}
-
-message ResolveFlagResponseResult {
- oneof result {
- ResolveFlagsResponse response = 1;
- MissingMaterializations missing_materializations = 2;
- }
-}
-
-message MissingMaterializations {
-    repeated MissingMaterializationItem items = 1;
-    repeated MaterializationUpdate updates = 4;
-}
-
-message MissingMaterializationItem {
-    string unit = 1;
-    string rule = 2;
-    string read_materialization = 3;
-}
-
-message MaterializationUpdate {
-     string unit = 1;
-     string write_materialization = 2;
-     string rule = 3;
-     string variant = 4;
 }
 
 

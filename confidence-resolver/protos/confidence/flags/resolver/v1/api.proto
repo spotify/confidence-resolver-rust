@@ -90,15 +90,19 @@ message ResolveFlagsRequest {
   Sdk sdk = 5 [
     (google.api.field_behavior) = OPTIONAL
   ];
+}
 
-    // if the resolver should handle sticky assignments
+message ResolveWithStickyRequest {
+  ResolveFlagsRequest resolve_request = 1;
+
+  // if the resolver should handle sticky assignments
   bool process_sticky = 6;
 
   // Context about the materialization required for the resolve
   MaterializationContext materialization_context = 7;
 
   // if a materialization info is missing, we want tor return to the caller immediately
-    bool fail_fast_on_sticky = 8;
+  bool fail_fast_on_sticky = 8;
 }
 
 message MaterializationContext {
@@ -112,9 +116,14 @@ message MaterializationInfo {
 
 message ResolveFlagResponseResult {
  oneof resolve_result {
- ResolveFlagsResponse response = 1;
+ ResolveWithStickySuccess success = 1;
  MissingMaterializations missing_materializations = 2;
  }
+}
+
+message ResolveWithStickySuccess {
+ ResolveFlagsResponse response = 1;
+ repeated MaterializationUpdate updates = 2;
 }
 
 message MissingMaterializations {
@@ -145,8 +154,6 @@ message ResolveFlagsResponse {
 
   // Unique identifier for this particular resolve request.
   string resolve_id = 3;
-
-  repeated MaterializationUpdate updates = 4;
 }
 
 message ApplyFlagsRequest {

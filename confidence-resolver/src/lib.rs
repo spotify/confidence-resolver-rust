@@ -58,7 +58,8 @@ use proto::confidence::flags::resolver::v1::{
 
 use crate::err::{ErrorCode, OrFailExt};
 use crate::proto::confidence::flags::resolver::v1::{
-    MissingMaterializationItem, MissingMaterializations,
+    MissingMaterializationItem, MissingMaterializations, ResolveFlagsRequest, ResolveFlagsResponse,
+    ResolveWithStickyRequest, ResolveWithStickySuccess,
 };
 use crate::ResolveWithStickyContext::NoStickyContext;
 
@@ -442,6 +443,36 @@ impl From<ErrorCode> for ResolveFlagError {
     }
 }
 
+impl ResolveFlagResponseResult {
+    fn with_success(response: ResolveFlagsResponse, updates: Vec<MaterializationUpdate>) -> Self {
+        ResolveFlagResponseResult {
+            resolve_result: Some(ResolveResult::Success(ResolveWithStickySuccess {
+                response: Some(response),
+                updates,
+            })),
+        }
+    }
+
+    fn with_missing_materializations(items: Vec<MissingMaterializationItem>) -> Self {
+        ResolveFlagResponseResult {
+            resolve_result: Some(ResolveResult::MissingMaterializations(
+                MissingMaterializations { items },
+            )),
+        }
+    }
+}
+
+impl ResolveWithStickyRequest {
+    fn without_sticky(resolve_request: ResolveFlagsRequest) -> ResolveWithStickyRequest {
+        ResolveWithStickyRequest {
+            resolve_request: Some(resolve_request),
+            process_sticky: false,
+            fail_fast_on_sticky: false,
+            materialization_context: None,
+        }
+    }
+}
+
 impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn new(
         client: &'a Client,
@@ -460,11 +491,12 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
     pub fn resolve_flags_sticky(
         &self,
-        request: &flags_resolver::ResolveFlagsRequest,
+        request: &flags_resolver::ResolveWithStickyRequest,
     ) -> Result<ResolveFlagResponseResult, String> {
         let timestamp = H::current_time();
 
-        let flag_names = &request.flags;
+        let resolve_request = request.resolve_request.as_ref().unwrap();
+        let flag_names = resolve_request.flags.clone();
         let flags_to_resolve = self
             .state
             .flags
@@ -510,13 +542,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                     } else {
                         missing_materialization_items.extend(err.missing_materializations);
                         if request.fail_fast_on_sticky {
-                            return Ok(ResolveFlagResponseResult {
-                                resolve_result: Some(ResolveResult::MissingMaterializations(
-                                    MissingMaterializations {
-                                        items: missing_materialization_items,
-                                    },
-                                )),
-                            });
+                            return Ok(ResolveFlagResponseResult::with_missing_materializations(
+                                missing_materialization_items,
+                            ));
                         }
                     }
                 }
@@ -524,13 +552,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         }
 
         if !missing_materialization_items.is_empty() {
-            return Ok(ResolveFlagResponseResult {
-                resolve_result: Some(ResolveResult::MissingMaterializations(
-                    MissingMaterializations {
-                        items: missing_materialization_items,
-                    },
-                )),
-            });
+            return Ok(ResolveFlagResponseResult::with_missing_materializations(
+                missing_materialization_items,
+            ));
         }
 
         let resolved_values: Vec<&ResolvedValue> =
@@ -541,16 +565,17 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             resolve_id: resolve_id.clone(),
             ..Default::default()
         };
+        let mut updates: Vec<MaterializationUpdate> = vec![];
         for resolved_value in &resolved_values {
             response.resolved_flags.push((*resolved_value).into());
         }
 
         // Collect all materialization updates from all resolve results
         for resolve_result in &resolve_results {
-            response.updates.extend(resolve_result.updates.clone());
+            updates.extend(resolve_result.updates.clone());
         }
 
-        if request.apply {
+        if resolve_request.apply {
             let flags_to_apply: Vec<FlagToApply> = resolved_values
                 .iter()
                 .filter(|v| v.should_apply)
@@ -565,7 +590,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 &self.evaluation_context.context,
                 flags_to_apply.as_slice(),
                 self.client,
-                &request.sdk,
+                &resolve_request.sdk.clone(),
             );
         } else {
             // create resolve token
@@ -602,34 +627,31 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             &self.evaluation_context.context,
             owned_values.as_slice(),
             self.client,
-            &request.sdk,
+            &resolve_request.sdk.clone(),
         );
 
-        Ok(ResolveFlagResponseResult {
-            resolve_result: Some(ResolveResult::Response(response)),
-        })
+        Ok(ResolveFlagResponseResult::with_success(response, updates))
     }
 
     pub fn resolve_flags(
         &self,
         request: &flags_resolver::ResolveFlagsRequest,
     ) -> Result<flags_resolver::ResolveFlagsResponse, String> {
-        let response = self.resolve_flags_sticky(&flags_resolver::ResolveFlagsRequest {
-            flags: request.flags.clone(),
-            sdk: request.sdk.clone(),
-            evaluation_context: request.evaluation_context.clone(),
-            client_secret: request.client_secret.clone(),
-            apply: request.apply.clone(),
-            materialization_context: None,
-            fail_fast_on_sticky: false,
-            process_sticky: false,
-        });
+        let response = self.resolve_flags_sticky(&ResolveWithStickyRequest::without_sticky(
+            flags_resolver::ResolveFlagsRequest {
+                flags: request.flags.clone(),
+                sdk: request.sdk.clone(),
+                evaluation_context: request.evaluation_context.clone(),
+                client_secret: request.client_secret.clone(),
+                apply: request.apply.clone(),
+            },
+        ));
 
         match response {
             Ok(v) => match v.resolve_result {
                 None => Err("failed to resolve flags".to_string()),
                 Some(r) => match r {
-                    ResolveResult::Response(flags_response) => Ok(flags_response),
+                    ResolveResult::Success(flags_response) => Ok(flags_response.response.unwrap()),
                     ResolveResult::MissingMaterializations(_) => {
                         Err("sticky assignments is not supported".to_string())
                     }
@@ -1519,9 +1541,6 @@ mod tests {
             let resolve_flag_req = flags_resolver::ResolveFlagsRequest {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
-                fail_fast_on_sticky: false,
-                process_sticky: false,
-                materialization_context: None,
                 flags: vec!["flags/tutorial-feature".to_string()],
                 apply: false,
                 sdk: Some(Sdk {
@@ -1588,10 +1607,6 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/fallthrough-test-1".to_string()],
-                fail_fast_on_sticky: false,
-                process_sticky: false,
-
-                materialization_context: None,
                 apply: false,
                 sdk: Some(Sdk {
                     sdk: None,
@@ -1648,10 +1663,6 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/fallthrough-test-2".to_string()],
-                fail_fast_on_sticky: false,
-                process_sticky: false,
-
-                materialization_context: None,
                 apply: false,
                 sdk: Some(Sdk {
                     sdk: None,
@@ -1722,10 +1733,6 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/tutorial-feature".to_string()],
-                fail_fast_on_sticky: false,
-                process_sticky: false,
-
-                materialization_context: None,
                 apply: false,
                 sdk: Some(Sdk {
                     sdk: None,
@@ -1820,10 +1827,6 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/tutorial-feature".to_string()],
-                fail_fast_on_sticky: false,
-                process_sticky: false,
-
-                materialization_context: None,
                 apply: true,
                 sdk: Some(Sdk {
                     sdk: None,
@@ -1857,10 +1860,6 @@ mod tests {
                 evaluation_context: Some(Struct::default()),
                 client_secret: SECRET.to_string(),
                 flags: vec!["flags/tutorial-feature".to_string()],
-                fail_fast_on_sticky: false,
-                process_sticky: false,
-
-                materialization_context: None,
                 apply: true,
                 sdk: Some(Sdk {
                     sdk: None,
