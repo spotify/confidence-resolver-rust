@@ -95,9 +95,6 @@ message ResolveFlagsRequest {
 message ResolveWithStickyRequest {
   ResolveFlagsRequest resolve_request = 1;
 
-  // if the resolver should handle sticky assignments
-  bool process_sticky = 6;
-
   // Context about the materialization required for the resolve
   MaterializationContext materialization_context = 7;
 

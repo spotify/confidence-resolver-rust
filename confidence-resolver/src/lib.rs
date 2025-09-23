@@ -466,7 +466,6 @@ impl ResolveWithStickyRequest {
     fn without_sticky(resolve_request: ResolveFlagsRequest) -> ResolveWithStickyRequest {
         ResolveWithStickyRequest {
             resolve_request: Some(resolve_request),
-            process_sticky: false,
             fail_fast_on_sticky: false,
             materialization_context: None,
         }
@@ -495,7 +494,11 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     ) -> Result<ResolveFlagResponseResult, String> {
         let timestamp = H::current_time();
 
-        let resolve_request = request.resolve_request.as_ref().unwrap();
+        let resolve_request = if let Some(req) = &request.resolve_request {
+            req
+        } else {
+            return Err("resolve_request is None".into());
+        };
         let flag_names = resolve_request.flags.clone();
         let flags_to_resolve = self
             .state
@@ -651,7 +654,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             Ok(v) => match v.resolve_result {
                 None => Err("failed to resolve flags".to_string()),
                 Some(r) => match r {
-                    ResolveResult::Success(flags_response) => Ok(flags_response.response.unwrap()),
+                    ResolveResult::Success(flags_response) => match flags_response.response {
+                        Some(flags_response) => Ok(flags_response),
+                        None => Err("failed to resolve flags".to_string()),
+                    },
                     ResolveResult::MissingMaterializations(_) => {
                         Err("sticky assignments is not supported".to_string())
                     }
@@ -1263,7 +1269,7 @@ impl<'a> From<&ResolvedValue<'a>> for flags_resolver::ResolvedFlag {
     fn from(value: &ResolvedValue<'a>) -> Self {
         let mut resolved_flag = flags_resolver::ResolvedFlag {
             flag: value.flag.name.clone(),
-            reason: value.reason.clone() as i32,
+            reason: value.reason as i32,
             should_apply: value.should_apply,
             ..Default::default()
         };
@@ -1292,7 +1298,7 @@ impl<'a> From<&ResolvedValue<'a>> for flags_resolver::resolve_token_v1::Assigned
     fn from(value: &ResolvedValue<'a>) -> Self {
         let mut assigned_flag = flags_resolver::resolve_token_v1::AssignedFlag {
             flag: value.flag.name.clone(),
-            reason: value.reason.clone() as i32,
+            reason: value.reason as i32,
             fallthrough_assignments: value
                 .fallthrough_rules
                 .iter()
