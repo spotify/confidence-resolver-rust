@@ -811,16 +811,16 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             };
 
             if let Some(materialization_spec) = &rule.materialization_spec {
-                let rule_name = &rule.name;
-                let read_materialization = materialization_spec.read_materialization.clone();
+                let rule_name = &rule.name.as_str();
+                let read_materialization = materialization_spec.read_materialization.as_str();
                 if !read_materialization.is_empty() {
                     // check if the materialization for the unit exists
                     if let Some(ctx) = materialization_context {
                         if !ctx.context.unit_materialization_info.contains_key(&unit) {
                             missing_materializations.push(MissingMaterializationItem {
-                                unit: unit.clone(),
-                                rule: rule_name.clone(),
-                                read_materialization,
+                                unit,
+                                rule: rule_name.to_string(),
+                                read_materialization: read_materialization.to_string(),
                             });
                             // check the other rule
                             continue;
