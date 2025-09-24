@@ -51,15 +51,13 @@ use flags_types::targeting::criterion;
 use flags_types::targeting::Criterion;
 use flags_types::Expression;
 use gzip::decompress_gz;
-use proto::confidence::flags::resolver::v1::resolve_flag_response_result::ResolveResult;
-use proto::confidence::flags::resolver::v1::{
-    MaterializationContext, MaterializationUpdate, ResolveFlagResponseResult,
-};
 
 use crate::err::{ErrorCode, OrFailExt};
 use crate::flag_logger::Logger;
+use crate::proto::confidence::flags::resolver::v1::resolve_flag_response_result::ResolveResult;
 use crate::proto::confidence::flags::resolver::v1::{
-    MissingMaterializationItem, MissingMaterializations, ResolveFlagsRequest, ResolveFlagsResponse,
+    MaterializationContext, MaterializationUpdate, MissingMaterializationItem,
+    MissingMaterializations, ResolveFlagResponseResult, ResolveFlagsRequest, ResolveFlagsResponse,
     ResolveWithStickyRequest, ResolveWithStickySuccess,
 };
 use crate::resolve_logger::ResolveLogger;

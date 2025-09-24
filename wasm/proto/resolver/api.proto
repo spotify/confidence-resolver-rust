@@ -39,8 +39,6 @@ message ResolveFlagsRequest {
   // Sdk sdk = 5;
 }
 
-
-
 message ResolveFlagsResponse {
   // The list of all flags that could be resolved. Note: if any flag was
   // archived it will not be included in this list.
