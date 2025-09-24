@@ -57,10 +57,12 @@ use proto::confidence::flags::resolver::v1::{
 };
 
 use crate::err::{ErrorCode, OrFailExt};
+use crate::flag_logger::Logger;
 use crate::proto::confidence::flags::resolver::v1::{
     MissingMaterializationItem, MissingMaterializations, ResolveFlagsRequest, ResolveFlagsResponse,
     ResolveWithStickyRequest, ResolveWithStickySuccess,
 };
+use crate::resolve_logger::ResolveLogger;
 use crate::ResolveWithStickyContext::NoStickyContext;
 
 impl TryFrom<Vec<u8>> for ResolverStatePb {
@@ -472,6 +474,18 @@ impl ResolveWithStickyRequest {
     }
 }
 
+impl Default for ResolveLogger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for Logger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn new(
         client: &'a Client,
@@ -646,7 +660,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 sdk: request.sdk.clone(),
                 evaluation_context: request.evaluation_context.clone(),
                 client_secret: request.client_secret.clone(),
-                apply: request.apply.clone(),
+                apply: request.apply,
             },
         ));
 
@@ -847,17 +861,15 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                                     continue;
                                 }
                                 false
+                            } else if materialization_spec
+                                .mode
+                                .as_ref()
+                                .map(|mode| mode.segment_targeting_can_be_ignored)
+                                .unwrap_or(false)
+                            {
+                                true
                             } else {
-                                if materialization_spec
-                                    .mode
-                                    .as_ref()
-                                    .map(|mode| mode.segment_targeting_can_be_ignored)
-                                    .unwrap_or(false)
-                                {
-                                    true
-                                } else {
-                                    self.segment_match(segment, &unit)?
-                                }
+                                self.segment_match(segment, &unit)?
                             };
 
                             if materialization_matched {
@@ -915,10 +927,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                     .any(|range| range.lower <= bucket && bucket < range.upper)
             });
 
-            let has_write_spec = match &rule.materialization_spec {
-                Some(materialization_spec) => Some(&materialization_spec.write_materialization),
-                None => None,
-            };
+            let has_write_spec = rule
+                .materialization_spec
+                .as_ref()
+                .map(|materialization_spec| &materialization_spec.write_materialization);
 
             if let Some(assignment) = matched_assignment {
                 let Some(a) = &assignment.assignment else {
