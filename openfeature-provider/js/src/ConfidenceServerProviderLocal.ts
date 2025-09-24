@@ -133,7 +133,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     };
   }
 
-  async updateState() {
+  async updateState():Promise<void> {
     const { signedUri, account } = await this.stateUriProvider();
     const req = new Request(signedUri);
     if(this.stateEtag) {
@@ -155,7 +155,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     })
   }
 
-  async flush() {
+  async flush():Promise<void> {
     const writeFlagLogRequest = this.resolver.flushLogs();
     if(writeFlagLogRequest.length == 0) {
       // nothing to send
