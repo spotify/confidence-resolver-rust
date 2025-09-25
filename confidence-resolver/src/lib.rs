@@ -61,7 +61,7 @@ use crate::proto::confidence::flags::resolver::v1::{
     ResolveWithStickyRequest, ResolveWithStickySuccess,
 };
 use crate::resolve_logger::ResolveLogger;
-use crate::ResolveWithStickyContext::NoStickyContext;
+use crate::ResolveWithStickyContext::EmptyStickyContext;
 
 impl TryFrom<Vec<u8>> for ResolverStatePb {
     type Error = ErrorCode;
@@ -400,40 +400,41 @@ pub struct AccountResolver<'a, H: Host> {
 
 pub enum ResolveWithStickyContext {
     WithStickyContext(StickyResolveContext),
-    NoStickyContext,
+    EmptyStickyContext,
 }
 
 pub struct StickyResolveContext {
     context: MaterializationContext,
-    skip_on_not_missing: bool,
 }
 
 #[derive(Debug)]
-pub struct ResolveFlagError {
-    pub message: String,
-    pub missing_materializations: Vec<MissingMaterializationItem>,
+pub enum ResolveFlagError {
+    Message(String),
+    MissingMaterializations(),
+}
+
+impl ResolveFlagError {
+    fn message(&self) -> String {
+        match self {
+            ResolveFlagError::Message(msg) => msg.clone(),
+            ResolveFlagError::MissingMaterializations() => "Missing materializations".to_string(),
+        }
+    }
 }
 
 impl ResolveFlagError {
     pub fn err(message: &str) -> ResolveFlagError {
-        ResolveFlagError {
-            message: message.to_string(),
-            missing_materializations: vec![],
-        }
+        ResolveFlagError::Message(message.to_string())
     }
 
-    pub fn missing_materializations(items: Vec<MissingMaterializationItem>) -> ResolveFlagError {
-        ResolveFlagError {
-            message: "Processing sticky assignments, missing materializations from the store"
-                .to_string(),
-            missing_materializations: items,
-        }
+    pub fn missing_materializations() -> ResolveFlagError {
+        ResolveFlagError::MissingMaterializations()
     }
 }
 
 impl From<ResolveFlagError> for String {
     fn from(value: ResolveFlagError) -> Self {
-        value.message.to_string()
+        value.message().to_string()
     }
 }
 
@@ -535,41 +536,42 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         }
 
         let mut resolve_results = Vec::with_capacity(flags_to_resolve.len());
-        let mut missing_materialization_items: Vec<MissingMaterializationItem> = vec![];
 
         for flag in flags_to_resolve {
             let sticky_context = if let Some(context) = &request.materialization_context {
                 ResolveWithStickyContext::WithStickyContext(StickyResolveContext {
-                    // don't evaluate the flag when already have some dependency missing
-                    skip_on_not_missing: !missing_materialization_items.is_empty(),
                     context: context.clone(),
                 })
             } else {
-                NoStickyContext
+                EmptyStickyContext
             };
             let resolve_result = self.resolve_flag(flag, sticky_context);
             match resolve_result {
                 Ok(resolve_result) => resolve_results.push(resolve_result),
-
                 Err(err) => {
-                    if err.missing_materializations.is_empty() {
-                        return Err(err.message.to_string());
-                    } else {
-                        missing_materialization_items.extend(err.missing_materializations);
-                        if request.fail_fast_on_sticky {
-                            return Ok(ResolveFlagResponseResult::with_missing_materializations(
-                                missing_materialization_items,
-                            ));
+                    return match err {
+                        ResolveFlagError::Message(msg) => Err(msg.to_string()),
+                        ResolveFlagError::MissingMaterializations() => {
+                            // we want to fallback on online resolver, return early
+                            if request.fail_fast_on_sticky {
+                                Ok(ResolveFlagResponseResult::with_missing_materializations(
+                                    vec![],
+                                ))
+                            } else {
+                                let deps = self.collect_missing_materializations(&flag);
+                                match deps {
+                                    Ok(deps) => Ok(
+                                        ResolveFlagResponseResult::with_missing_materializations(
+                                            deps,
+                                        ),
+                                    ),
+                                    Err(err) => Err(err),
+                                }
+                            }
                         }
-                    }
+                    };
                 }
             }
-        }
-
-        if !missing_materialization_items.is_empty() {
-            return Ok(ResolveFlagResponseResult::with_missing_materializations(
-                missing_materialization_items,
-            ));
         }
 
         let resolved_values: Vec<&ResolvedValue> =
@@ -750,7 +752,50 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             .flags
             .get(flag_name)
             .ok_or(ResolveFlagError::err("flag not found"))
-            .and_then(|flag| self.resolve_flag(flag, NoStickyContext))
+            .and_then(|flag| self.resolve_flag(flag, EmptyStickyContext))
+    }
+
+    pub fn collect_missing_materializations(
+        &'a self,
+        flag: &'a Flag,
+    ) -> Result<Vec<MissingMaterializationItem>, String> {
+        let mut missing_materializations: Vec<MissingMaterializationItem> = Vec::new();
+
+        if flag.state == flags_admin::flag::State::Archived as i32 {
+            return Ok(vec![]);
+        }
+
+        for rule in &flag.rules {
+            if !rule.enabled {
+                continue;
+            }
+
+            let targeting_key = if !rule.targeting_key_selector.is_empty() {
+                rule.targeting_key_selector.as_str()
+            } else {
+                TARGETING_KEY
+            };
+            let unit: String = match self.get_targeting_key(targeting_key) {
+                Ok(Some(u)) => u,
+                Ok(None) => continue,
+                Err(_) => return Err("Targeting key error".to_string()),
+            };
+
+            if let Some(materialization_spec) = &rule.materialization_spec {
+                let rule_name = &rule.name.as_str();
+                let read_materialization = materialization_spec.read_materialization.as_str();
+                if !read_materialization.is_empty() {
+                    missing_materializations.push(MissingMaterializationItem {
+                        unit,
+                        rule: rule_name.to_string(),
+                        read_materialization: read_materialization.to_string(),
+                    });
+                    continue;
+                }
+            }
+        }
+
+        Ok(missing_materializations)
     }
 
     pub fn resolve_flag(
@@ -759,7 +804,6 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         sticky_context: ResolveWithStickyContext,
     ) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
         let mut updates: Vec<MaterializationUpdate> = Vec::new();
-        let mut missing_materializations: Vec<MissingMaterializationItem> = Vec::new();
         let mut resolved_value = ResolvedValue::new(flag);
 
         if flag.state == flags_admin::flag::State::Archived as i32 {
@@ -768,17 +812,6 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 updates: vec![],
             });
         }
-
-        let materialization_context = match &sticky_context {
-            ResolveWithStickyContext::WithStickyContext(ctx) => Some(ctx),
-            NoStickyContext => None,
-        };
-
-        let skip_evaluation = if let Some(ctx) = &materialization_context {
-            ctx.skip_on_not_missing
-        } else {
-            false
-        };
 
         for rule in &flag.rules {
             if !rule.enabled {
@@ -808,47 +841,17 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 }
             };
 
-            if let Some(materialization_spec) = &rule.materialization_spec {
-                let rule_name = &rule.name.as_str();
-                let read_materialization = materialization_spec.read_materialization.as_str();
-                if !read_materialization.is_empty() {
-                    // check if the materialization for the unit exists
-                    if let Some(ctx) = materialization_context {
-                        if !ctx.context.unit_materialization_info.contains_key(&unit) {
-                            missing_materializations.push(MissingMaterializationItem {
-                                unit,
-                                rule: rule_name.to_string(),
-                                read_materialization: read_materialization.to_string(),
-                            });
-                            // check the other rule
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            if !missing_materializations.is_empty() || skip_evaluation {
-                /***
-                don't want to evaluate the rules when we have missing dependencies
-                or when we are in discovery mode (finding missing dependencies for rules)
-                 */
-                continue;
-            }
-
             let Some(spec) = &rule.assignment_spec else {
                 continue;
             };
 
             let mut materialization_matched = false;
-
-            if let Some(ctx) = materialization_context {
-                // now we have all the dependencies required for evaluating the sticky assignments
-                if let Some(materialization_spec) = &rule.materialization_spec {
+            if let Some(materialization_spec) = &rule.materialization_spec {
+                if let ResolveWithStickyContext::WithStickyContext(ctx) = &sticky_context {
                     let read_materialization = &materialization_spec.read_materialization;
                     if !read_materialization.is_empty() {
-                        let materialization_info = ctx.context.unit_materialization_info.get(&unit);
-                        if let Some(materialization_info) = materialization_info {
-                            materialization_matched = if !materialization_info.unit_in_info {
+                        if let Some(info) = ctx.context.unit_materialization_info.get(&unit) {
+                            materialization_matched = if !info.unit_in_info {
                                 if materialization_spec
                                     .mode
                                     .as_ref()
@@ -869,11 +872,8 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                             } else {
                                 self.segment_match(segment, &unit)?
                             };
-
                             if materialization_matched {
-                                if let Some(variant_name) =
-                                    materialization_info.rule_to_variant.get(&rule.name)
-                                {
+                                if let Some(variant_name) = info.rule_to_variant.get(&rule.name) {
                                     if let Some(assignment) =
                                         spec.assignments.iter().find(|assignment| {
                                             if let Some(rule::assignment::Assignment::Variant(
@@ -904,8 +904,12 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                                     }
                                 }
                             }
-                        }
+                        } else {
+                            materialization_matched = false;
+                        };
                     }
+                } else {
+                    return Err(ResolveFlagError::missing_materializations());
                 }
             }
 
@@ -997,12 +1001,6 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                     }
                 };
             }
-        }
-
-        if !missing_materializations.is_empty() {
-            return Err(ResolveFlagError::missing_materializations(
-                missing_materializations,
-            ));
         }
 
         if resolved_value.reason == ResolveReason::Match {
@@ -1388,7 +1386,6 @@ pub fn bucket(hash: u128, buckets: u64) -> usize {
 mod tests {
     use super::*;
     use crate::proto::confidence::flags::resolver::v1::{ResolveFlagsResponse, Sdk};
-    use crate::ResolveWithStickyContext::NoStickyContext;
 
     const EXAMPLE_STATE: &[u8] = include_bytes!("../test-payloads/resolver_state.pb");
     const SECRET: &str = "mkjJruAATQWjeY7foFIWfVAcBWnci2YF";
@@ -1501,7 +1498,7 @@ mod tests {
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
             let resolve_result = resolver
-                .resolve_flag(flag, ResolveWithStickyContext::NoStickyContext)
+                .resolve_flag(flag, ResolveWithStickyContext::EmptyStickyContext)
                 .unwrap();
             let resolved_value = &resolve_result.resolved_value;
             let assignment_match = resolved_value.assignment_match.as_ref().unwrap();
@@ -1524,7 +1521,7 @@ mod tests {
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
             let assignment_match = resolver
-                .resolve_flag(flag, ResolveWithStickyContext::NoStickyContext)
+                .resolve_flag(flag, ResolveWithStickyContext::EmptyStickyContext)
                 .unwrap()
                 .resolved_value
                 .assignment_match
@@ -1921,7 +1918,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver.resolve_flag(flag, NoStickyContext).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, EmptyStickyContext).unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(resolved_value.reason as i32, ResolveReason::Match as i32);
@@ -1948,7 +1945,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver.resolve_flag(flag, NoStickyContext).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, EmptyStickyContext).unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(
