@@ -61,7 +61,6 @@ use crate::proto::confidence::flags::resolver::v1::{
     ResolveWithStickyRequest, ResolveWithStickySuccess,
 };
 use crate::resolve_logger::ResolveLogger;
-use crate::ResolveWithStickyContext::EmptyStickyContext;
 
 impl TryFrom<Vec<u8>> for ResolverStatePb {
     type Error = ErrorCode;
@@ -398,15 +397,6 @@ pub struct AccountResolver<'a, H: Host> {
     host: PhantomData<H>,
 }
 
-pub enum ResolveWithStickyContext {
-    WithStickyContext(StickyResolveContext),
-    EmptyStickyContext,
-}
-
-pub struct StickyResolveContext {
-    context: MaterializationContext,
-}
-
 #[derive(Debug)]
 pub enum ResolveFlagError {
     Message(String),
@@ -538,14 +528,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         let mut resolve_results = Vec::with_capacity(flags_to_resolve.len());
 
         for flag in flags_to_resolve {
-            let sticky_context = if let Some(context) = &request.materialization_context {
-                ResolveWithStickyContext::WithStickyContext(StickyResolveContext {
-                    context: context.clone(),
-                })
-            } else {
-                EmptyStickyContext
-            };
-            let resolve_result = self.resolve_flag(flag, sticky_context);
+            let resolve_result = self.resolve_flag(flag, request.materialization_context.clone());
             match resolve_result {
                 Ok(resolve_result) => resolve_results.push(resolve_result),
                 Err(err) => {
@@ -752,7 +735,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             .flags
             .get(flag_name)
             .ok_or(ResolveFlagError::err("flag not found"))
-            .and_then(|flag| self.resolve_flag(flag, EmptyStickyContext))
+            .and_then(|flag| self.resolve_flag(flag, None))
     }
 
     pub fn collect_missing_materializations(
@@ -801,7 +784,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn resolve_flag(
         &'a self,
         flag: &'a Flag,
-        sticky_context: ResolveWithStickyContext,
+        sticky_context: Option<MaterializationContext>,
     ) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
         let mut updates: Vec<MaterializationUpdate> = Vec::new();
         let mut resolved_value = ResolvedValue::new(flag);
@@ -847,10 +830,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
             let mut materialization_matched = false;
             if let Some(materialization_spec) = &rule.materialization_spec {
-                if let ResolveWithStickyContext::WithStickyContext(ctx) = &sticky_context {
+                if let Some(context) = &sticky_context {
                     let read_materialization = &materialization_spec.read_materialization;
                     if !read_materialization.is_empty() {
-                        if let Some(info) = ctx.context.unit_materialization_info.get(&unit) {
+                        if let Some(info) = context.unit_materialization_info.get(&unit) {
                             materialization_matched = if !info.unit_in_info {
                                 if materialization_spec
                                     .mode
@@ -1497,9 +1480,7 @@ mod tests {
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
-            let resolve_result = resolver
-                .resolve_flag(flag, ResolveWithStickyContext::EmptyStickyContext)
-                .unwrap();
+            let resolve_result = resolver.resolve_flag(flag, None).unwrap();
             let resolved_value = &resolve_result.resolved_value;
             let assignment_match = resolved_value.assignment_match.as_ref().unwrap();
 
@@ -1521,7 +1502,7 @@ mod tests {
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
             let assignment_match = resolver
-                .resolve_flag(flag, ResolveWithStickyContext::EmptyStickyContext)
+                .resolve_flag(flag, None)
                 .unwrap()
                 .resolved_value
                 .assignment_match
@@ -1918,7 +1899,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver.resolve_flag(flag, EmptyStickyContext).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, None).unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(resolved_value.reason as i32, ResolveReason::Match as i32);
@@ -1945,7 +1926,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver.resolve_flag(flag, EmptyStickyContext).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, None).unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(
