@@ -53,11 +53,10 @@ use flags_types::Expression;
 use gzip::decompress_gz;
 
 use crate::err::{ErrorCode, OrFailExt};
-use crate::flag_logger::Logger;
-use crate::proto::confidence::flags::resolver::v1::resolve_flag_response_result::ResolveResult;
+use crate::proto::confidence::flags::resolver::v1::resolve_flag_sticky_response::ResolveResult;
 use crate::proto::confidence::flags::resolver::v1::{
     MaterializationContext, MaterializationUpdate, MissingMaterializationItem,
-    MissingMaterializations, ResolveFlagResponseResult, ResolveFlagsRequest, ResolveFlagsResponse,
+    MissingMaterializations, ResolveFlagStickyResponse, ResolveFlagsRequest, ResolveFlagsResponse,
     ResolveWithStickyRequest, ResolveWithStickySuccess,
 };
 use crate::resolve_logger::ResolveLogger;
@@ -410,9 +409,7 @@ impl ResolveFlagError {
             ResolveFlagError::MissingMaterializations() => "Missing materializations".to_string(),
         }
     }
-}
 
-impl ResolveFlagError {
     pub fn err(message: &str) -> ResolveFlagError {
         ResolveFlagError::Message(message.to_string())
     }
@@ -434,9 +431,9 @@ impl From<ErrorCode> for ResolveFlagError {
     }
 }
 
-impl ResolveFlagResponseResult {
+impl ResolveFlagStickyResponse {
     fn with_success(response: ResolveFlagsResponse, updates: Vec<MaterializationUpdate>) -> Self {
-        ResolveFlagResponseResult {
+        ResolveFlagStickyResponse {
             resolve_result: Some(ResolveResult::Success(ResolveWithStickySuccess {
                 response: Some(response),
                 updates,
@@ -445,7 +442,7 @@ impl ResolveFlagResponseResult {
     }
 
     fn with_missing_materializations(items: Vec<MissingMaterializationItem>) -> Self {
-        ResolveFlagResponseResult {
+        ResolveFlagStickyResponse {
             resolve_result: Some(ResolveResult::MissingMaterializations(
                 MissingMaterializations { items },
             )),
@@ -458,20 +455,8 @@ impl ResolveWithStickyRequest {
         ResolveWithStickyRequest {
             resolve_request: Some(resolve_request),
             fail_fast_on_sticky: false,
-            materialization_context: None,
+            materialization_context: Some(MaterializationContext::default()),
         }
-    }
-}
-
-impl Default for ResolveLogger {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Default for Logger {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -494,14 +479,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn resolve_flags_sticky(
         &self,
         request: &flags_resolver::ResolveWithStickyRequest,
-    ) -> Result<ResolveFlagResponseResult, String> {
+    ) -> Result<ResolveFlagStickyResponse, String> {
         let timestamp = H::current_time();
 
-        let resolve_request = if let Some(req) = &request.resolve_request {
-            req
-        } else {
-            return Err("resolve_request is None".into());
-        };
+        let resolve_request = &request.resolve_request.clone().or_fail()?;
         let flag_names = resolve_request.flags.clone();
         let flags_to_resolve = self
             .state
@@ -537,14 +518,14 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                         ResolveFlagError::MissingMaterializations() => {
                             // we want to fallback on online resolver, return early
                             if request.fail_fast_on_sticky {
-                                Ok(ResolveFlagResponseResult::with_missing_materializations(
+                                Ok(ResolveFlagStickyResponse::with_missing_materializations(
                                     vec![],
                                 ))
                             } else {
                                 let deps = self.collect_missing_materializations(&flag);
                                 match deps {
                                     Ok(deps) => Ok(
-                                        ResolveFlagResponseResult::with_missing_materializations(
+                                        ResolveFlagStickyResponse::with_missing_materializations(
                                             deps,
                                         ),
                                     ),
@@ -557,8 +538,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             }
         }
 
-        let resolved_values: Vec<&ResolvedValue> =
-            resolve_results.iter().map(|r| &r.resolved_value).collect();
+        let resolved_values: Vec<ResolvedValue> = resolve_results
+            .iter()
+            .map(|r| r.resolved_value.clone())
+            .collect();
 
         let resolve_id = H::random_alphanumeric(32);
         let mut response = flags_resolver::ResolveFlagsResponse {
@@ -567,7 +550,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         };
         let mut updates: Vec<MaterializationUpdate> = vec![];
         for resolved_value in &resolved_values {
-            response.resolved_flags.push((*resolved_value).into());
+            response.resolved_flags.push(resolved_value.into());
         }
 
         // Collect all materialization updates from all resolve results
@@ -580,7 +563,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 .iter()
                 .filter(|v| v.should_apply)
                 .map(|v| FlagToApply {
-                    assigned_flag: (*v).into(),
+                    assigned_flag: v.into(),
                     skew_adjusted_applied_time: timestamp.clone(),
                 })
                 .collect();
@@ -600,7 +583,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 ..Default::default()
             };
             for resolved_value in &resolved_values {
-                let assigned_flag: AssignedFlag = (*resolved_value).into();
+                let assigned_flag: AssignedFlag = resolved_value.into();
                 resolve_token_v1
                     .assignments
                     .insert(assigned_flag.flag.clone(), assigned_flag);
@@ -630,7 +613,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             &resolve_request.sdk.clone(),
         );
 
-        Ok(ResolveFlagResponseResult::with_success(response, updates))
+        Ok(ResolveFlagStickyResponse::with_success(response, updates))
     }
 
     pub fn resolve_flags(
@@ -753,21 +736,20 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 continue;
             }
 
-            let targeting_key = if !rule.targeting_key_selector.is_empty() {
-                rule.targeting_key_selector.as_str()
-            } else {
-                TARGETING_KEY
-            };
-            let unit: String = match self.get_targeting_key(targeting_key) {
-                Ok(Some(u)) => u,
-                Ok(None) => continue,
-                Err(_) => return Err("Targeting key error".to_string()),
-            };
-
             if let Some(materialization_spec) = &rule.materialization_spec {
                 let rule_name = &rule.name.as_str();
                 let read_materialization = materialization_spec.read_materialization.as_str();
                 if !read_materialization.is_empty() {
+                    let targeting_key = if !rule.targeting_key_selector.is_empty() {
+                        rule.targeting_key_selector.as_str()
+                    } else {
+                        TARGETING_KEY
+                    };
+                    let unit: String = match self.get_targeting_key(targeting_key) {
+                        Ok(Some(u)) => u,
+                        Ok(None) => continue,
+                        Err(_) => return Err("Targeting key error".to_string()),
+                    };
                     missing_materializations.push(MissingMaterializationItem {
                         unit,
                         rule: rule_name.to_string(),
@@ -998,7 +980,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         })
     }
 
-    /// Get an attribute value from the [EvaluationContext] struct, adressed by a path specification.
+    /// Get an attribute value from the [EvaluationContext] struct, addressed by a path specification.
     /// If the struct is `{user:{name:"roug",id:42}}`, then getting the `"user.name"` field will return
     /// the value `"roug"`.
     pub fn get_attribute_value(&self, field_path: &str) -> &Value {

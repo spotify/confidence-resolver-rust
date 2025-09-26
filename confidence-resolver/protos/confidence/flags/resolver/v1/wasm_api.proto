@@ -37,7 +37,7 @@ message MaterializationInfo {
  map<string, string> rule_to_variant = 2;
 }
 
-message ResolveFlagResponseResult {
+message ResolveFlagStickyResponse {
  oneof resolve_result {
  ResolveWithStickySuccess success = 1;
  MissingMaterializations missing_materializations = 2;

@@ -31,7 +31,7 @@ use confidence_resolver::{
     proto::{
         confidence::flags::admin::v1::ResolverState as ResolverStatePb,
         confidence::flags::resolver::v1::{
-            ResolveFlagResponseResult, ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
+            ResolveFlagStickyResponse, ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
         },
         google::{Struct, Timestamp},
     },
@@ -186,7 +186,7 @@ wasm_msg_guest! {
         Ok(VOID)
     }
 
-    fn resolve_with_sticky(request: ResolveWithStickyRequest) -> WasmResult<ResolveFlagResponseResult> {
+    fn resolve_with_sticky(request: ResolveWithStickyRequest) -> WasmResult<ResolveFlagStickyResponse> {
         let resolver_state = get_resolver_state()?;
         let resolve_request = &request.resolve_request.clone().unwrap();
         let evaluation_context = resolve_request.evaluation_context.clone().unwrap();
