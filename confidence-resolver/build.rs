@@ -9,6 +9,7 @@ fn main() -> Result<()> {
         root.join("confidence/flags/admin/v1/resolver.proto"),
         root.join("confidence/flags/resolver/v1/api.proto"),
         root.join("confidence/flags/resolver/v1/internal_api.proto"),
+        root.join("confidence/flags/resolver/v1/wasm_api.proto"),
         root.join("confidence/flags/resolver/v1/events/events.proto"),
     ];
 
