@@ -6,8 +6,8 @@ use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use prost::Message;
 
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+// #[global_allocator]
+// static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 use confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest;
 use confidence_resolver::resolve_logger::ResolveLogger;
