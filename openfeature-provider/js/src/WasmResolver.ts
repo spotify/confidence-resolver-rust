@@ -79,7 +79,8 @@ export class WasmResolver {
 
   private consume<T>(ptr: number, codec: Codec<T>): T {
     const data = this.viewBuffer(ptr);
-    const res = codec.decode(data);
+    // we need this defensive copy cause codec.decode might returns views into the buffer
+    const res = codec.decode(data.slice());
     this.free(ptr);
     return res;
   }
