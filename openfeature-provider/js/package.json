@@ -33,6 +33,9 @@
     "test": "vitest",
     "proto:gen": "rm -rf src/proto && mkdir -p src/proto && protoc --plugin=node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt useOptionals=messages --ts_proto_opt esModuleInterop=true --ts_proto_out src/proto -Iproto api.proto messages.proto"
   },
+  "dependencies": {
+    "loglevel": "^1.9.2"
+  },
   "devDependencies": {
     "@openfeature/core": "^1.9.0",
     "@openfeature/server-sdk": "^1.19.0",

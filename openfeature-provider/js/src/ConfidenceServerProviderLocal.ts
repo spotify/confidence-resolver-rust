@@ -7,19 +7,17 @@ import {
   ProviderStatus,
   ResolutionDetails,
   ResolutionReason,
-  OpenFeature
 } from '@openfeature/server-sdk';
 import { WasmResolver } from './WasmResolver';
-import { CachedProvider, Lease, leaseFactory } from './lease';
 import { ResolveReason } from './proto/api';
+import { Fetch, withAuth, withRetry, withRouter, withTimeout } from './fetch';
 
-const DEFAULT_STATE_INTERVAL = 10_000;
+const DEFAULT_STATE_INTERVAL = 30_000;
 const DEFAULT_FLUSH_INTERVAL = 10_000;
 export interface ProviderOptions {
-  clientKey:string,
-  clientId:string,
-  clientSecret:string,
-  stateUpdateInterval?:number,
+  flagClientSecret:string,
+  apiClientId:string,
+  apiClientSecret:string,
   flushInterval?:number, 
 }
 
@@ -47,8 +45,7 @@ export class ConfidenceServerProviderLocal implements Provider {
   /** Current status of the provider. Can be READY, NOT_READY, ERROR, STALE and FATAL. */
   status: ProviderStatus = ProviderStatus.NOT_READY;
 
-  private tokenProvider:CachedProvider<string>;
-  private stateUriProvider:CachedProvider<{ signedUri:string, account:string }>;
+  private fetch:Fetch;
   private flushInterval?:NodeJS.Timeout; 
   private stateInterval?:NodeJS.Timeout;
   private stateEtag:string | null = null;
@@ -57,23 +54,30 @@ export class ConfidenceServerProviderLocal implements Provider {
   constructor(private resolver:WasmResolver, private options:ProviderOptions) {
     // TODO better error handling
     // TODO validate options
-    this.tokenProvider = leaseFactory(async () => {
-      const { accessToken, expiresIn } = await this.fetchToken();
+    const tokenProvider = async (fetch:Fetch):Promise<[string, Date]> => {
+      const { accessToken, expiresIn } = await this.fetchToken(fetch);
       return [accessToken, new Date(Date.now() + 1000*expiresIn)]
-    });
-    this.stateUriProvider = leaseFactory(async () => {
-      const { signedUri, account, expireTime } = await this.fetchResolveStateUri();
-      return [{signedUri, account}, new Date(expireTime)];
-    });
+    };
+    this.fetch = Fetch.create([
+      withAuth(tokenProvider),
+      withRouter({
+        '*/v1/flagLogs:write': [withTimeout(this.options.flushInterval ?? DEFAULT_FLUSH_INTERVAL)],
+        'https://storage.googleapis.com/*':[withTimeout(DEFAULT_STATE_INTERVAL)],
+        '*':[]
+      }),
+      withRetry(),
+      withTimeout(5000)
+    ])
   }
 
   async initialize(context?: EvaluationContext): Promise<void> {
+    // TODO this fn can't throw or setProviderAndAwait will throw..
     await this.updateState();
     this.flushInterval = setInterval(() => this.flush(), this.options.flushInterval ?? DEFAULT_FLUSH_INTERVAL);
     if(typeof this.flushInterval.unref === 'function') {
       this.flushInterval.unref();
     } 
-    this.stateInterval = setInterval(() => this.updateState(), this.options.stateUpdateInterval ?? DEFAULT_STATE_INTERVAL);
+    this.stateInterval = setInterval(() => this.updateState(), DEFAULT_STATE_INTERVAL);
     if(typeof this.stateInterval.unref === 'function') {
       this.stateInterval.unref();
     } 
@@ -93,7 +97,7 @@ export class ConfidenceServerProviderLocal implements Provider {
       flags: [`flags/${flagName}`],
       evaluationContext: ConfidenceServerProviderLocal.convertEvaluationContext(context),
       apply: true,
-      clientSecret: this.options.clientKey
+      clientSecret: this.options.flagClientSecret
     });
     if(!flag) {
       return {
@@ -134,7 +138,7 @@ export class ConfidenceServerProviderLocal implements Provider {
   }
 
   async updateState():Promise<void> {
-    const { signedUri, account } = await this.stateUriProvider();
+    const { signedUri, account } = await this.fetchResolveStateUri();
     const req = new Request(signedUri);
     if(this.stateEtag) {
       req.headers.set('If-None-Match', this.stateEtag);
@@ -161,40 +165,32 @@ export class ConfidenceServerProviderLocal implements Provider {
       // nothing to send
       return;
     }
-    const resp = await fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
+    const resp = await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
       method: 'post',
       headers: {
         'Content-Type': 'application/x-protobuf',
-        'Authorization': `Bearer ${await this.tokenProvider()}`
       },
       body: writeFlagLogRequest as Uint8Array<ArrayBuffer>
     });
-    if(resp.ok) {
-    } else {
-    }
   }
 
   private async fetchResolveStateUri():Promise<ResolveStateUri> {
-    const resp = await fetch('https://flags.confidence.dev/v1/resolverState:resolverStateUri', {
-      headers: {
-        'Authorization': `Bearer ${await this.tokenProvider()}`
-      }
-    });
+    const resp = await this.fetch('https://flags.confidence.dev/v1/resolverState:resolverStateUri');
     if(!resp.ok) {
       throw new Error('Failed to get resolve state url');
     }
     return resp.json();
   }
 
-  private async fetchToken():Promise<AccessToken> {
-    const resp = await fetch('https://iam.confidence.dev/v1/oauth/token', {
+  private async fetchToken(unAuthFetch:Fetch):Promise<AccessToken> {
+    const resp = await unAuthFetch('https://iam.confidence.dev/v1/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        clientId: this.options.clientId,
-        clientSecret: this.options.clientSecret,
+        clientId: this.options.apiClientId,
+        clientSecret: this.options.apiClientSecret,
         grantType: 'client_credentials'
       })
     })

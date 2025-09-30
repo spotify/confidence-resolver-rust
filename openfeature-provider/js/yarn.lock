@@ -686,6 +686,7 @@ __metadata:
     "@types/node": "npm:^24.0.1"
     "@vitest/coverage-v8": "npm:^3.2.4"
     dotenv: "npm:^17.2.2"
+    loglevel: "npm:^1.9.2"
     rolldown: "npm:1.0.0-beta.38"
     ts-proto: "npm:^2.7.3"
     tsdown: "npm:latest"
@@ -1533,6 +1534,13 @@ __metadata:
   bin:
     jsesc: bin/jsesc
   checksum: 10c0/531779df5ec94f47e462da26b4cbf05eb88a83d9f08aac2ba04206508fc598527a153d08bd462bae82fc78b3eaa1a908e1a4a79f886e9238641c4cdefaf118b1
+  languageName: node
+  linkType: hard
+
+"loglevel@npm:^1.9.2":
+  version: 1.9.2
+  resolution: "loglevel@npm:1.9.2"
+  checksum: 10c0/1e317fa4648fe0b4a4cffef6de037340592cee8547b07d4ce97a487abe9153e704b98451100c799b032c72bb89c9366d71c9fb8192ada8703269263ae77acdc7
   languageName: node
   linkType: hard
 

@@ -3,6 +3,8 @@ import { OpenFeature } from '@openfeature/server-sdk';
 import { ConfidenceServerProviderLocal } from './ConfidenceServerProviderLocal';
 import { readFileSync } from 'node:fs';
 import { WasmResolver } from './WasmResolver';
+// import log from 'loglevel';
+// log.setLevel("debug");
 
 const {
   CONFIDENCE_API_CLIENT_ID,
@@ -13,9 +15,9 @@ const moduleBytes = readFileSync(__dirname + '/../../../wasm/confidence_resolver
 const module = new WebAssembly.Module(moduleBytes);
 const resolver = await WasmResolver.load(module);
 const confidenceProvider = new ConfidenceServerProviderLocal(resolver, {
-  clientKey: 'RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV',
-  clientId: CONFIDENCE_API_CLIENT_ID,
-  clientSecret: CONFIDENCE_API_CLIENT_SECRET
+  flagClientSecret: 'RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV',
+  apiClientId: CONFIDENCE_API_CLIENT_ID,
+  apiClientSecret: CONFIDENCE_API_CLIENT_SECRET
 });
 
 describe('ConfidenceServerProvider E2E tests', () => {
