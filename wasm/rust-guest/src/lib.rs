@@ -9,7 +9,9 @@ use prost::Message;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-use confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest;
+use confidence_resolver::proto::confidence::flags::resolver::v1::{
+    ResolveWithStickyRequest, WriteFlagLogsRequest,
+};
 use confidence_resolver::resolve_logger::ResolveLogger;
 use rand::distr::Alphanumeric;
 use rand::distr::SampleString;
@@ -29,7 +31,7 @@ use confidence_resolver::{
     proto::{
         confidence::flags::admin::v1::ResolverState as ResolverStatePb,
         confidence::flags::resolver::v1::{
-            ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
+            ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyResponse, ResolvedFlag, Sdk,
         },
         google::{Struct, Timestamp},
     },
@@ -184,6 +186,14 @@ wasm_msg_guest! {
         Ok(VOID)
     }
 
+    fn resolve_with_sticky(request: ResolveWithStickyRequest) -> WasmResult<ResolveWithStickyResponse> {
+        let resolver_state = get_resolver_state()?;
+        let resolve_request = &request.resolve_request.clone().unwrap();
+        let evaluation_context = resolve_request.evaluation_context.clone().unwrap();
+        let resolver = resolver_state.get_resolver::<WasmHost>(resolve_request.client_secret.as_str(), evaluation_context, &ENCRYPTION_KEY)?;
+        resolver.resolve_flags_sticky(&request).into()
+    }
+
     fn resolve(request: ResolveFlagsRequest) -> WasmResult<ResolveFlagsResponse> {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
@@ -194,8 +204,8 @@ wasm_msg_guest! {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY).unwrap();
-        let resolved_value = resolver.resolve_flag_name(&request.name)?;
-        Ok((&resolved_value).into())
+        let resolve_result = resolver.resolve_flag_name(&request.name)?;
+        Ok((&resolve_result.resolved_value).into())
     }
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
         LOGGER.checkpoint().map_err(|e| e.into())
