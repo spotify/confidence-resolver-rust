@@ -37,31 +37,32 @@ message MaterializationInfo {
  map<string, string> rule_to_variant = 2;
 }
 
-message ResolveFlagStickyResponse {
+message ResolveWithStickyResponse {
  oneof resolve_result {
- ResolveWithStickySuccess success = 1;
+ Success success = 1;
  MissingMaterializations missing_materializations = 2;
+ }
+
+ message Success {
+  ResolveFlagsResponse response = 1;
+  repeated MaterializationUpdate updates = 2;
+ }
+
+ message MissingMaterializations {
+     repeated MissingMaterializationItem items = 1;
+ }
+
+ message MissingMaterializationItem {
+     string unit = 1;
+     string rule = 2;
+     string read_materialization = 3;
+ }
+
+ message MaterializationUpdate {
+      string unit = 1;
+      string write_materialization = 2;
+      string rule = 3;
+      string variant = 4;
  }
 }
 
-message ResolveWithStickySuccess {
- ResolveFlagsResponse response = 1;
- repeated MaterializationUpdate updates = 2;
-}
-
-message MissingMaterializations {
-    repeated MissingMaterializationItem items = 1;
-}
-
-message MissingMaterializationItem {
-    string unit = 1;
-    string rule = 2;
-    string read_materialization = 3;
-}
-
-message MaterializationUpdate {
-     string unit = 1;
-     string write_materialization = 2;
-     string rule = 3;
-     string variant = 4;
-}

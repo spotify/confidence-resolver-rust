@@ -53,13 +53,13 @@ use flags_types::Expression;
 use gzip::decompress_gz;
 
 use crate::err::{ErrorCode, OrFailExt};
-use crate::proto::confidence::flags::resolver::v1::resolve_flag_sticky_response::ResolveResult;
-use crate::proto::confidence::flags::resolver::v1::{
-    MaterializationContext, MaterializationUpdate, MissingMaterializationItem,
-    MissingMaterializations, ResolveFlagStickyResponse, ResolveFlagsRequest, ResolveFlagsResponse,
-    ResolveWithStickyRequest, ResolveWithStickySuccess,
+use crate::proto::confidence::flags::resolver::v1::resolve_with_sticky_response::{
+    MaterializationUpdate, ResolveResult,
 };
-use crate::resolve_logger::ResolveLogger;
+use crate::proto::confidence::flags::resolver::v1::{
+    resolve_with_sticky_response, MaterializationContext, ResolveFlagsRequest,
+    ResolveFlagsResponse, ResolveWithStickyRequest, ResolveWithStickyResponse,
+};
 
 impl TryFrom<Vec<u8>> for ResolverStatePb {
     type Error = ErrorCode;
@@ -431,20 +431,24 @@ impl From<ErrorCode> for ResolveFlagError {
     }
 }
 
-impl ResolveFlagStickyResponse {
+impl ResolveWithStickyResponse {
     fn with_success(response: ResolveFlagsResponse, updates: Vec<MaterializationUpdate>) -> Self {
-        ResolveFlagStickyResponse {
-            resolve_result: Some(ResolveResult::Success(ResolveWithStickySuccess {
-                response: Some(response),
-                updates,
-            })),
+        ResolveWithStickyResponse {
+            resolve_result: Some(ResolveResult::Success(
+                resolve_with_sticky_response::Success {
+                    response: Some(response),
+                    updates,
+                },
+            )),
         }
     }
 
-    fn with_missing_materializations(items: Vec<MissingMaterializationItem>) -> Self {
-        ResolveFlagStickyResponse {
+    fn with_missing_materializations(
+        items: Vec<resolve_with_sticky_response::MissingMaterializationItem>,
+    ) -> Self {
+        ResolveWithStickyResponse {
             resolve_result: Some(ResolveResult::MissingMaterializations(
-                MissingMaterializations { items },
+                resolve_with_sticky_response::MissingMaterializations { items },
             )),
         }
     }
@@ -479,7 +483,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn resolve_flags_sticky(
         &self,
         request: &flags_resolver::ResolveWithStickyRequest,
-    ) -> Result<ResolveFlagStickyResponse, String> {
+    ) -> Result<ResolveWithStickyResponse, String> {
         let timestamp = H::current_time();
 
         let resolve_request = &request.resolve_request.clone().or_fail()?;
@@ -518,14 +522,14 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                         ResolveFlagError::MissingMaterializations() => {
                             // we want to fallback on online resolver, return early
                             if request.fail_fast_on_sticky {
-                                Ok(ResolveFlagStickyResponse::with_missing_materializations(
+                                Ok(ResolveWithStickyResponse::with_missing_materializations(
                                     vec![],
                                 ))
                             } else {
                                 let deps = self.collect_missing_materializations(&flag);
                                 match deps {
                                     Ok(deps) => Ok(
-                                        ResolveFlagStickyResponse::with_missing_materializations(
+                                        ResolveWithStickyResponse::with_missing_materializations(
                                             deps,
                                         ),
                                     ),
@@ -613,7 +617,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             &resolve_request.sdk.clone(),
         );
 
-        Ok(ResolveFlagStickyResponse::with_success(response, updates))
+        Ok(ResolveWithStickyResponse::with_success(response, updates))
     }
 
     pub fn resolve_flags(
@@ -724,8 +728,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn collect_missing_materializations(
         &'a self,
         flag: &'a Flag,
-    ) -> Result<Vec<MissingMaterializationItem>, String> {
-        let mut missing_materializations: Vec<MissingMaterializationItem> = Vec::new();
+    ) -> Result<Vec<resolve_with_sticky_response::MissingMaterializationItem>, String> {
+        let mut missing_materializations: Vec<
+            resolve_with_sticky_response::MissingMaterializationItem,
+        > = Vec::new();
 
         if flag.state == flags_admin::flag::State::Archived as i32 {
             return Ok(vec![]);
@@ -750,11 +756,13 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                         Ok(None) => continue,
                         Err(_) => return Err("Targeting key error".to_string()),
                     };
-                    missing_materializations.push(MissingMaterializationItem {
-                        unit,
-                        rule: rule_name.to_string(),
-                        read_materialization: read_materialization.to_string(),
-                    });
+                    missing_materializations.push(
+                        resolve_with_sticky_response::MissingMaterializationItem {
+                            unit,
+                            rule: rule_name.to_string(),
+                            read_materialization: read_materialization.to_string(),
+                        },
+                    );
                     continue;
                 }
             }
