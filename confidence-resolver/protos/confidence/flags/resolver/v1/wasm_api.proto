@@ -37,6 +37,10 @@ message MaterializationInfo {
  map<string, string> rule_to_variant = 2;
 }
 
+message LogMessage {
+ string message = 1;
+}
+
 message ResolveWithStickyResponse {
  oneof resolve_result {
  Success success = 1;
