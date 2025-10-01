@@ -617,12 +617,10 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             response.resolve_token = encrypted_token;
         }
 
-        let owned_values: Vec<ResolvedValue> =
-            resolved_values.iter().map(|v| (*v).clone()).collect();
         H::log_resolve(
             &resolve_id,
             &self.evaluation_context.context,
-            owned_values.as_slice(),
+            &resolved_values,
             self.client,
             &resolve_request.sdk.clone(),
         );
