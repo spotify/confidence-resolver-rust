@@ -15,7 +15,6 @@ prost = { version = "0.12", default-features = false }
 prost-types = { version = "0.12", default-features = false }
 # TODO re-export Bytes
 bytes = { version = "1.4.0", default-features = false }
-wee_alloc = "0.4"
 arc-swap = "1.7.1"
 
 [build-dependencies]

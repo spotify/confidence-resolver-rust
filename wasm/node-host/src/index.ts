@@ -22,9 +22,8 @@ const wasmModule = new WebAssembly.Module(wasmBuffer);
 
 const api = new ApiBuilder()
   .guest('set_resolver_state', SetResolverStateRequest, Void, false)
+  .guestRaw('flush_logs')
   .guest('resolve', ResolveFlagsRequest, ResolveFlagsResponse, false)
-  .host('log_resolve', Void, Void, false, () => ({}))
-  .host('log_assign', Void, Void, false, () => ({}))
   .host('current_time', Void, Timestamp, false, () => {
     const now = Date.now();
     return { seconds: Math.floor(now / 1000), nanos: (now % 1000) * 1000000 }
@@ -40,7 +39,7 @@ api.set_resolver_state({
 {
   const resp = api.resolve({
     clientSecret: 'mkjJruAATQWjeY7foFIWfVAcBWnci2YF',
-    apply: false,
+    apply: true,
     evaluationContext: {
       targeting_key: 'tutorial_visitor',
       visitor_id: 'tutorial_visitor',
@@ -71,5 +70,8 @@ api.set_resolver_state({
     }
   }
   console.log(`tutorial-feature verified: reason=RESOLVE_REASON_MATCH variant=${rf.variant} title=${titleVal}`);
+
+  const buf = api.flush_logs(new Uint8Array(0));
+  fs.writeFileSync('events.bin', buf);
 }
 // Done: single flag verified above
