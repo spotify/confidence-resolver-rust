@@ -6,11 +6,11 @@
     // clippy::integer_arithmetic
 ))]
 
-use core::marker::PhantomData;
-use std::collections::{HashMap, HashSet};
-
 use bitvec::prelude as bv;
+use core::marker::PhantomData;
 use fastmurmur3::murmur3_x64_128;
+use std::collections::{HashMap, HashSet};
+use std::fmt::format;
 
 use bytes::Bytes;
 
@@ -225,6 +225,10 @@ pub trait Host {
     fn random_alphanumeric(len: usize) -> String {
         use rand::distr::{Alphanumeric, SampleString};
         Alphanumeric.sample_string(&mut rand::rng(), len)
+    }
+
+    fn log(_: &str) {
+        // noop
     }
 
     #[cfg(not(feature = "std"))]
@@ -512,7 +516,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
         let mut resolve_results = Vec::with_capacity(flags_to_resolve.len());
 
-        for flag in flags_to_resolve {
+        let mut has_missing_materializations = false;
+
+        for flag in flags_to_resolve.clone() {
             let resolve_result = self.resolve_flag(flag, request.materialization_context.clone());
             match resolve_result {
                 Ok(resolve_result) => resolve_results.push(resolve_result),
@@ -526,19 +532,23 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                                     vec![],
                                 ))
                             } else {
-                                let deps = self.collect_missing_materializations(&flag);
-                                match deps {
-                                    Ok(deps) => Ok(
-                                        ResolveWithStickyResponse::with_missing_materializations(
-                                            deps,
-                                        ),
-                                    ),
-                                    Err(err) => Err(err),
-                                }
+                                has_missing_materializations = true;
+                                break;
                             }
                         }
                     };
                 }
+            }
+        }
+
+        if has_missing_materializations {
+            let result = self.collect_missing_materializations(flags_to_resolve);
+            if let Ok(missing) = result {
+                return Ok(ResolveWithStickyResponse::with_missing_materializations(
+                    missing,
+                ));
+            } else {
+                return Err("Could not collect missing materializations".to_string());
             }
         }
 
@@ -727,6 +737,27 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
     pub fn collect_missing_materializations(
         &'a self,
+        flags: Vec<&'a Flag>,
+    ) -> Result<Vec<resolve_with_sticky_response::MissingMaterializationItem>, String> {
+        let mut missing_materializations: Vec<
+            resolve_with_sticky_response::MissingMaterializationItem,
+        > = Vec::new();
+        for flag in flags {
+            let result = self.collect_missing_materializations_for_flag(flag);
+            if let Ok(items) = result {
+                missing_materializations.extend(items);
+            } else {
+                return Err(format!(
+                    "Could not collect missing materializations for flag {}",
+                    flag.name
+                ));
+            }
+        }
+        Ok(missing_materializations)
+    }
+
+    fn collect_missing_materializations_for_flag(
+        &'a self,
         flag: &'a Flag,
     ) -> Result<Vec<resolve_with_sticky_response::MissingMaterializationItem>, String> {
         let mut missing_materializations: Vec<
@@ -767,7 +798,6 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 }
             }
         }
-
         Ok(missing_materializations)
     }
 

@@ -10,7 +10,7 @@ use prost::Message;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 use confidence_resolver::proto::confidence::flags::resolver::v1::{
-    ResolveWithStickyRequest, WriteFlagLogsRequest,
+    LogMessage, ResolveWithStickyRequest, WriteFlagLogsRequest,
 };
 use confidence_resolver::resolve_logger::ResolveLogger;
 use rand::distr::Alphanumeric;
@@ -124,6 +124,17 @@ fn converted_client(client: &Client) -> crate::proto::Client {
 struct WasmHost;
 
 impl Host for WasmHost {
+    fn random_alphanumeric(len: usize) -> String {
+        RNG.with_borrow_mut(|rng| Alphanumeric.sample_string(rng, len))
+    }
+
+    fn log(message: &str) {
+        log_message(LogMessage {
+            message: message.to_string(),
+        })
+        .unwrap();
+    }
+
     fn current_time() -> Timestamp {
         current_time(Void {}).unwrap()
     }
@@ -159,10 +170,6 @@ impl Host for WasmHost {
 
     fn decrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
         Ok(token_data.to_vec())
-    }
-
-    fn random_alphanumeric(len: usize) -> String {
-        RNG.with_borrow_mut(|rng| Alphanumeric.sample_string(rng, len))
     }
 }
 
@@ -215,5 +222,6 @@ wasm_msg_guest! {
 
 // Declare the add function as a host function
 wasm_msg_host! {
+    fn log_message(message: LogMessage) -> WasmResult<Void>;
     fn current_time(request: Void) -> WasmResult<Timestamp>;
 }
