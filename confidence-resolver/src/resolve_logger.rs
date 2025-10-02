@@ -43,7 +43,7 @@ impl ResolveLogger {
         }
     }
 
-    fn with_state<F: FnOnce(&ResolveInfoState)>(&self, f: F) -> Fallible<()> {
+    fn with_state<F: FnOnce(&ResolveInfoState)>(&self, f: F) {
         loop {
             let lock = self.state.load_full();
             let Ok(rg) = lock.try_read() else {
@@ -51,9 +51,15 @@ impl ResolveLogger {
                 // swapped and acquired the write lock so we can just retry and get the next state
                 continue;
             };
-            let state = rg.as_ref().or_fail()?;
-            f(state);
-            break Ok(());
+            // In an earlier version we failed on this Option being None, leading to flakey tests.
+            // The Option can be none if thread T1 has a reference to the lock, but parks before try_lock.
+            // In the meantime a checkpoint thread T2, swaps out the lock, takes a write lock, takes the option
+            // (replacing it with None) and releases the lock. Now T1 wakes up and tries and succeeds the read
+            // lock. This scenario is rare and as above it's sound to retry,
+            if let Some(state) = rg.as_ref() {
+                f(state);
+                break;
+            };
         }
     }
 
@@ -63,7 +69,7 @@ impl ResolveLogger {
         resolve_context: &pb::Struct,
         client_credential: &str,
         values: &[crate::ResolvedValue<'_>],
-    ) -> Fallible<()> {
+    ) {
         self.with_state(|state: &ResolveInfoState| {
             state
                 .client_resolve_info
@@ -121,7 +127,7 @@ impl ResolveLogger {
         assigned_flags: &[crate::FlagToApply],
         client: &crate::Client,
         sdk: &Option<crate::flags_resolver::Sdk>,
-    ) -> Fallible<()> {
+    ) {
         self.with_state(|state: &ResolveInfoState| {
             let client_info = Some(pb::ClientInfo {
                 client: client.client_name.to_string(),
@@ -181,22 +187,29 @@ impl ResolveLogger {
         })
     }
 
-    pub fn checkpoint(&self) -> Fallible<pb::WriteFlagLogsRequest> {
-        let state = {
-            let lock = self
-                .state
-                .swap(Arc::new(RwLock::new(Some(ResolveInfoState::default()))));
-            let mut wg = lock.write().or_fail()?;
-            wg.take().or_fail()?
-        };
-        let client_resolve_info = build_client_resolve_info(&state);
-        let flag_resolve_info = build_flag_resolve_info(&state);
-        Ok(pb::WriteFlagLogsRequest {
-            flag_resolve_info,
-            client_resolve_info,
-            flag_assigned: state.flag_assigned.into_iter().collect(),
-            telemetry_data: None,
-        })
+    pub fn checkpoint(&self) -> pb::WriteFlagLogsRequest {
+        let lock = self
+            .state
+            .swap(Arc::new(RwLock::new(Some(ResolveInfoState::default()))));
+        // the only operation we do under write-lock is take the option, and that can't panic, so lock shouldn't be poisoned,
+        // even so, if it some how was it's safe to still use the value.
+        let mut wg = lock
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // also shouldn't be possible for this Option to be None as we never insert None and only one thread can swap the value out
+        // if this assertion somehow is faulty, returning an empty WriteFlagLogsRequest is sound.
+        wg.take()
+            .map(|state| {
+                let client_resolve_info = build_client_resolve_info(&state);
+                let flag_resolve_info = build_flag_resolve_info(&state);
+                pb::WriteFlagLogsRequest {
+                    flag_resolve_info,
+                    client_resolve_info,
+                    flag_assigned: state.flag_assigned.into_iter().collect(),
+                    telemetry_data: None,
+                }
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -373,7 +386,7 @@ mod tests {
         let cred = "clients/test/clientCredentials/test";
         let rv = [];
         logger.log_resolve("id", &ctx, cred, &rv);
-        let req = logger.checkpoint().unwrap();
+        let req = logger.checkpoint();
         // find the client entry in the built request
         let crec = req
             .client_resolve_info
@@ -463,7 +476,7 @@ mod tests {
         let cred = "clients/test/clientCredentials/test";
         let rv = [];
         logger.log_resolve("id", &ctx, cred, &rv);
-        let req = logger.checkpoint().unwrap();
+        let req = logger.checkpoint();
         let crec = req
             .client_resolve_info
             .iter()
@@ -522,7 +535,7 @@ mod tests {
 
         let cred = "clients/test/clientCredentials/test";
         logger.log_resolve("id", &Struct::default(), cred, &rv);
-        let req = logger.checkpoint().unwrap();
+        let req = logger.checkpoint();
 
         let flag_info = req
             .flag_resolve_info
@@ -593,7 +606,7 @@ mod tests {
 
         let cred = "clients/test/clientCredentials/test";
         logger.log_resolve("id", &Struct::default(), cred, &rv);
-        let req = logger.checkpoint().unwrap();
+        let req = logger.checkpoint();
 
         let flag_info = req
             .flag_resolve_info
@@ -706,17 +719,17 @@ mod tests {
         let lg = logger.clone();
         let tx_thread = tx.clone();
         let chk_handle = thread::spawn(move || {
-            for _ in 0..3 {
+            for _ in 0..10 {
                 thread::sleep(Duration::from_millis(10));
-                let req = lg.checkpoint().unwrap();
-                let _ = tx_thread.send(req);
+                tx_thread.send(lg.checkpoint()).unwrap();
             }
         });
 
         chk_handle.join().unwrap();
         done.store(true, Ordering::Relaxed);
         let total_expected = handles.into_iter().map(|h| h.join().unwrap()).sum::<i64>();
-        let _ = tx.send(logger.checkpoint().unwrap());
+        // logger.checkpoint().iter().
+        tx.send(logger.checkpoint()).unwrap();
 
         // Aggregate all checkpoint outputs
         let mut sum_variants: i64 = 0;

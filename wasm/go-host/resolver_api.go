@@ -269,7 +269,9 @@ func (r *ResolverApi) consume(addr uint32) []byte {
 	length := binary.LittleEndian.Uint32(lenBytes) - 4
 
 	// Read data
-	data, _ := memory.Read(addr, length)
+	view, _ := memory.Read(addr, length)
+	// make a copy before freeing
+	data := append([]byte(nil), view...)
 
 	// Free memory
 	ctx := context.Background()

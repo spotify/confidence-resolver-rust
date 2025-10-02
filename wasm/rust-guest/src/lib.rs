@@ -6,9 +6,6 @@ use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use prost::Message;
 
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 use confidence_resolver::proto::confidence::flags::resolver::v1::{
     LogMessage, ResolveWithStickyRequest, WriteFlagLogsRequest,
 };
@@ -146,7 +143,7 @@ impl Host for WasmHost {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        let _ = LOGGER.log_resolve(
+        LOGGER.log_resolve(
             resolve_id,
             evaluation_context,
             &client.client_credential_name,
@@ -161,7 +158,7 @@ impl Host for WasmHost {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        let _ = LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
+        LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
     }
 
     fn encrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
@@ -215,7 +212,7 @@ wasm_msg_guest! {
         Ok((&resolve_result.resolved_value).into())
     }
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
-        LOGGER.checkpoint().map_err(|e| e.into())
+        Ok(LOGGER.checkpoint())
     }
 
 }

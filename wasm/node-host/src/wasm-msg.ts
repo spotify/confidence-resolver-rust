@@ -122,7 +122,7 @@ export class ApiBuilder<T = {}> {
 
   private consume<T>(ptr:number, codec:Codec<T>): T {
     const data = this.viewBuffer(ptr);
-    const res = codec.decode(data);
+    const res = codec.decode(data.slice());
     this.free(ptr);
     return res;
   }
