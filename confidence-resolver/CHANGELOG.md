@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.3.0...confidence_resolver-v0.3.1) (2025-10-02)
+
+
+### Bug Fixes
+
+* various memory issues ([#35](https://github.com/spotify/confidence-resolver-rust/issues/35)) ([13c53fc](https://github.com/spotify/confidence-resolver-rust/commit/13c53fcc5c1a51c90d51c47adb574316866c9b5b))
+
 ## [0.3.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.2.0...confidence_resolver-v0.3.0) (2025-09-08)
 
 
