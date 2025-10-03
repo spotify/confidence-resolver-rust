@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::format;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
@@ -212,7 +213,8 @@ wasm_msg_guest! {
         Ok((&resolve_result.resolved_value).into())
     }
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
-        Ok(LOGGER.checkpoint())
+        let response = LOGGER.checkpoint();
+        Ok(response)
     }
 
 }
