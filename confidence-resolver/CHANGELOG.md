@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.3.1...confidence_resolver-v0.4.0) (2025-10-03)
+
+
+### Features
+
+* update sticky ([#38](https://github.com/spotify/confidence-resolver-rust/issues/38)) ([41a42d2](https://github.com/spotify/confidence-resolver-rust/commit/41a42d2917401de7389dcc37719b16de1e30199c))
+
 ## [0.3.1](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.3.0...confidence_resolver-v0.3.1) (2025-10-02)
 
 
