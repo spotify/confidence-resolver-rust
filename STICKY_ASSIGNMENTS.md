@@ -1,7 +1,5 @@
 # Sticky Assignments in Confidence Flag Resolver
 
-## Overview
-
 Sticky assignments are a feature in the Confidence Flag Resolver that allows flag assignments to persist across multiple resolve requests. This ensures consistent user experiences and enables advanced experimentation workflows by maintaining assignment state over time.
 
 ## What are Sticky Assignments?
