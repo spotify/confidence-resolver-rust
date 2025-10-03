@@ -9,7 +9,7 @@
 use bitvec::prelude as bv;
 use core::marker::PhantomData;
 use fastmurmur3::murmur3_x64_128;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::format;
 
 use bytes::Bytes;
@@ -57,8 +57,8 @@ use crate::proto::confidence::flags::resolver::v1::resolve_with_sticky_response:
     MaterializationUpdate, ResolveResult,
 };
 use crate::proto::confidence::flags::resolver::v1::{
-    resolve_with_sticky_response, MaterializationContext, ResolveFlagsRequest,
-    ResolveFlagsResponse, ResolveWithStickyRequest, ResolveWithStickyResponse,
+    resolve_with_sticky_response, MaterializationMap, ResolveFlagsRequest, ResolveFlagsResponse,
+    ResolveWithStickyRequest, ResolveWithStickyResponse,
 };
 
 impl TryFrom<Vec<u8>> for ResolverStatePb {
@@ -463,7 +463,7 @@ impl ResolveWithStickyRequest {
         ResolveWithStickyRequest {
             resolve_request: Some(resolve_request),
             fail_fast_on_sticky: false,
-            materialization_context: Some(MaterializationContext::default()),
+            materializations_per_unit: BTreeMap::new(),
         }
     }
 }
@@ -519,7 +519,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         let mut has_missing_materializations = false;
 
         for flag in flags_to_resolve.clone() {
-            let resolve_result = self.resolve_flag(flag, request.materialization_context.clone());
+            let resolve_result = self.resolve_flag(flag, request.materializations_per_unit.clone());
             match resolve_result {
                 Ok(resolve_result) => resolve_results.push(resolve_result),
                 Err(err) => {
@@ -730,7 +730,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             .flags
             .get(flag_name)
             .ok_or(ResolveFlagError::err("flag not found"))
-            .and_then(|flag| self.resolve_flag(flag, None))
+            .and_then(|flag| self.resolve_flag(flag, BTreeMap::new()))
     }
 
     pub fn collect_missing_materializations(
@@ -802,7 +802,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn resolve_flag(
         &'a self,
         flag: &'a Flag,
-        sticky_context: Option<MaterializationContext>,
+        sticky_context: BTreeMap<String, MaterializationMap>,
     ) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
         let mut updates: Vec<MaterializationUpdate> = Vec::new();
         let mut resolved_value = ResolvedValue::new(flag);
@@ -848,11 +848,13 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
             let mut materialization_matched = false;
             if let Some(materialization_spec) = &rule.materialization_spec {
-                if let Some(context) = &sticky_context {
-                    let read_materialization = &materialization_spec.read_materialization;
-                    if !read_materialization.is_empty() {
-                        if let Some(info) = context.unit_materialization_info.get(&unit) {
-                            materialization_matched = if !info.unit_in_info {
+                let read_materialization = &materialization_spec.read_materialization;
+                if !read_materialization.is_empty() {
+                    if let Some(info) = sticky_context.get(&unit) {
+                        let info_from_context = info.info_map.get(read_materialization).clone();
+
+                        if let Some(ref info_data) = info_from_context {
+                            if !info_data.unit_in_info {
                                 if materialization_spec
                                     .mode
                                     .as_ref()
@@ -862,55 +864,59 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                                     // Materialization must match but unit is not in materialization
                                     continue;
                                 }
-                                false
+                                materialization_matched = false;
                             } else if materialization_spec
                                 .mode
                                 .as_ref()
                                 .map(|mode| mode.segment_targeting_can_be_ignored)
                                 .unwrap_or(false)
                             {
-                                true
+                                materialization_matched = true;
                             } else {
-                                self.segment_match(segment, &unit)?
-                            };
-                            if materialization_matched {
-                                if let Some(variant_name) = info.rule_to_variant.get(&rule.name) {
-                                    if let Some(assignment) =
-                                        spec.assignments.iter().find(|assignment| {
-                                            if let Some(rule::assignment::Assignment::Variant(
-                                                ref variant_assignment,
-                                            )) = &assignment.assignment
-                                            {
-                                                variant_assignment.variant == *variant_name
-                                            } else {
-                                                false
-                                            }
-                                        })
-                                    {
-                                        let variant = flag
-                                            .variants
-                                            .iter()
-                                            .find(|v| v.name == *variant_name)
-                                            .or_fail()?;
-                                        return Ok(FlagResolveResult {
-                                            resolved_value: resolved_value.with_variant_match(
-                                                rule,
-                                                segment,
-                                                variant,
-                                                &assignment.assignment_id,
-                                                &unit,
-                                            ),
-                                            updates: vec![],
-                                        });
-                                    }
-                                }
+                                materialization_matched = self.segment_match(segment, &unit)?;
                             }
                         } else {
-                            materialization_matched = false;
-                        };
-                    }
-                } else {
-                    return Err(ResolveFlagError::missing_materializations());
+                            return Err(ResolveFlagError::missing_materializations());
+                        }
+
+                        if materialization_matched {
+                            if let Some(variant_name) = info_from_context
+                                .as_ref()
+                                .and_then(|info| info.rule_to_variant.get(&rule.name))
+                            {
+                                if let Some(assignment) =
+                                    spec.assignments.iter().find(|assignment| {
+                                        if let Some(rule::assignment::Assignment::Variant(
+                                            ref variant_assignment,
+                                        )) = &assignment.assignment
+                                        {
+                                            variant_assignment.variant == *variant_name
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                {
+                                    let variant = flag
+                                        .variants
+                                        .iter()
+                                        .find(|v| v.name == *variant_name)
+                                        .or_fail()?;
+                                    return Ok(FlagResolveResult {
+                                        resolved_value: resolved_value.with_variant_match(
+                                            rule,
+                                            segment,
+                                            variant,
+                                            &assignment.assignment_id,
+                                            &unit,
+                                        ),
+                                        updates: vec![],
+                                    });
+                                }
+                            }
+                        }
+                    } else {
+                        return Err(ResolveFlagError::missing_materializations());
+                    };
                 }
             }
 
@@ -1069,7 +1075,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         // check bitset
         let Some(bitset) = self.state.bitsets.get(&segment.name) else {
             return Ok(true);
-        }; // todo: whould this match or not?
+        }; // todo: would this match or not?
         let salted_unit = self.client.account.salt_unit(unit)?;
         let unit_hash = bucket(hash(&salted_unit), BUCKETS);
         Ok(bitset[unit_hash])
@@ -1498,7 +1504,7 @@ mod tests {
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
-            let resolve_result = resolver.resolve_flag(flag, None).unwrap();
+            let resolve_result = resolver.resolve_flag(flag, BTreeMap::new()).unwrap();
             let resolved_value = &resolve_result.resolved_value;
             let assignment_match = resolved_value.assignment_match.as_ref().unwrap();
 
@@ -1520,7 +1526,7 @@ mod tests {
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
             let assignment_match = resolver
-                .resolve_flag(flag, None)
+                .resolve_flag(flag, BTreeMap::new())
                 .unwrap()
                 .resolved_value
                 .assignment_match
@@ -1917,7 +1923,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver.resolve_flag(flag, None).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, BTreeMap::new()).unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(resolved_value.reason as i32, ResolveReason::Match as i32);
@@ -1944,7 +1950,7 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolve_result = resolver.resolve_flag(flag, None).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, BTreeMap::new()).unwrap();
         let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(
