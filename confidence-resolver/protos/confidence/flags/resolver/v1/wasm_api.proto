@@ -22,19 +22,20 @@ message ResolveWithStickyRequest {
   ResolveFlagsRequest resolve_request = 1;
 
   // Context about the materialization required for the resolve
-  MaterializationContext materialization_context = 7;
+  map<string, MaterializationMap> materializations_per_unit = 2;
 
   // if a materialization info is missing, we want tor return to the caller immediately
-  bool fail_fast_on_sticky = 8;
+  bool fail_fast_on_sticky = 3;
 }
 
-message MaterializationContext {
- map<string, MaterializationInfo> unit_materialization_info = 1;
+message MaterializationMap {
+  // materialization name to info
+  map<string, MaterializationInfo> info_map = 1;
 }
 
 message MaterializationInfo {
- bool unit_in_info = 1;
- map<string, string> rule_to_variant = 2;
+  bool unit_in_info = 1;
+  map<string, string> rule_to_variant = 2;
 }
 
 message LogMessage {
