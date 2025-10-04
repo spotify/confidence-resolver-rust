@@ -8,7 +8,11 @@ where
     Req: prost::Message + Default,
     Res: prost::Message,
 {
-    let request = message::consume_request::<Req>(ptr);
+    let request = if ptr.is_null() {
+        Req::default()
+    } else {
+        message::consume_request::<Req>(ptr)
+    };
     let result = handler(request);
     message::transfer_response(result)
 }

@@ -1,0 +1,103 @@
+import { BinaryWriter } from '@bufbuild/protobuf/wire';
+import { Request, Response, Void } from './proto/messages';
+import { Timestamp } from './proto/google/protobuf/timestamp';
+import { ResolveFlagsRequest, ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
+
+type Codec<T> = {
+  encode(message: T): BinaryWriter;
+  decode(input: Uint8Array): T;
+};
+
+export class WasmResolver {
+  private exports: any;
+  private imports: any;
+
+  private constructor() {
+    this.imports = {
+      wasm_msg: {
+        wasm_msg_host_current_time: () => {
+          const ptr = this.transferRequest({ seconds: Date.now(), nanos: 0 }, Timestamp);
+          return ptr;
+        },
+      },
+    };
+  }
+
+  resolveFlags(request: ResolveFlagsRequest): ResolveFlagsResponse {
+    const reqPtr = this.transferRequest(request, ResolveFlagsRequest);
+    const resPtr = this.exports.wasm_msg_guest_resolve(reqPtr);
+    return this.consumeResponse(resPtr, ResolveFlagsResponse);
+  }
+
+  setResolverState(request: SetResolverStateRequest): void {
+    const reqPtr = this.transferRequest(request, SetResolverStateRequest);
+    const resPtr = this.exports.wasm_msg_guest_set_resolver_state(reqPtr);
+    this.consumeResponse(resPtr, Void);
+  }
+
+  flushLogs():Uint8Array {
+    const resPtr = this.exports.wasm_msg_guest_flush_logs(0);
+    const {data, error} = this.consume(resPtr, Response);
+    if(error) {
+      throw new Error(error);
+    }
+    return data!;
+  }
+
+  private transferRequest<T>(value: T, codec: Codec<T>): number {
+    const data = codec.encode(value).finish();
+    return this.transfer({ data }, Request);
+  }
+
+  // private transferResponseSuccess<T>(value: T, codec: Codec<T>): number {
+  //   const data = codec.encode(value).finish();
+  //   return this.transfer({ data }, Response);
+  // }
+  // private transferResponseError<T>(error: string): number {
+  //   return this.transfer({ error }, Response);
+  // }
+
+  // private consumeRequest<T>(ptr: number, codec: Codec<T>): T {
+  //   const req: Request = this.consume(ptr, Request);
+  //   return codec.decode(req.data);
+  // }
+
+  private consumeResponse<T>(ptr: number, codec: Codec<T>): T {
+    const { data, error }: Response = this.consume(ptr, Response);
+    if (error) {
+      throw new Error(error);
+    }
+    return codec.decode(data!);
+  }
+
+  private transfer<T>(data: T, codec: Codec<T>): number {
+    const encoded = codec.encode(data).finish();
+    const ptr = this.exports.wasm_msg_alloc(encoded.length);
+    this.viewBuffer(ptr).set(encoded);
+    return ptr;
+  }
+
+  private consume<T>(ptr: number, codec: Codec<T>): T {
+    const data = this.viewBuffer(ptr);
+    const res = codec.decode(data);
+    this.free(ptr);
+    return res;
+  }
+
+  private viewBuffer(ptr: number): Uint8Array {
+    const size = new DataView(this.exports.memory.buffer).getUint32(ptr - 4, true);
+    const data = new Uint8Array(this.exports.memory.buffer, ptr, size - 4);
+    return data;
+  }
+
+  private free(ptr: number) {
+    this.exports.wasm_msg_free(ptr);
+  }
+
+  static async load(module: WebAssembly.Module): Promise<WasmResolver> {
+    const wasmResolver = new WasmResolver();
+    const instance = await WebAssembly.instantiate(module, wasmResolver.imports);
+    wasmResolver.exports = instance.exports;
+    return wasmResolver;
+  }
+}
