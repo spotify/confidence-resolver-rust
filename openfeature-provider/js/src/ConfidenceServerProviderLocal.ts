@@ -1,4 +1,4 @@
-import {
+import type {
   ErrorCode,
   EvaluationContext,
   JsonValue,
@@ -8,29 +8,21 @@ import {
   ResolutionDetails,
   ResolutionReason,
 } from '@openfeature/server-sdk';
-import { WasmResolver } from './WasmResolver';
 import { ResolveReason } from './proto/api';
-import { Fetch, withAuth, withRetry, withRouter, withTimeout } from './fetch';
+import { Fetch, FetchMiddleware, withAuth, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
+import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
+import { AccessToken, LocalResolver, ResolveStateUri } from './LocalResolver';
+import { logger } from './logger';
 
-const DEFAULT_STATE_INTERVAL = 30_000;
-const DEFAULT_FLUSH_INTERVAL = 10_000;
+export const DEFAULT_STATE_INTERVAL = 30_000;
+export const DEFAULT_FLUSH_INTERVAL = 10_000;
 export interface ProviderOptions {
   flagClientSecret:string,
   apiClientId:string,
   apiClientSecret:string,
+  initializeTimeout?:number,
   flushInterval?:number, 
-}
-
-interface AccessToken {
-  accessToken: string,
-  /// lifetime seconds
-  expiresIn: number
-}
-
-interface ResolveStateUri {
-  signedUri:string, 
-  expireTime:string,
-  account: string,
+  fetch?: typeof fetch,
 }
 
 /**
@@ -43,53 +35,93 @@ export class ConfidenceServerProviderLocal implements Provider {
     name: 'ConfidenceServerProviderLocal',
   };
   /** Current status of the provider. Can be READY, NOT_READY, ERROR, STALE and FATAL. */
-  status: ProviderStatus = ProviderStatus.NOT_READY;
+  status = 'NOT_READY' as ProviderStatus;
 
-  private fetch:Fetch;
-  private flushInterval?:NodeJS.Timeout; 
-  private stateInterval?:NodeJS.Timeout;
+  private readonly main = new AbortController();
+  private readonly fetch:Fetch;
+  private readonly flushInterval:number;
   private stateEtag:string | null = null;
   
 
-  constructor(private resolver:WasmResolver, private options:ProviderOptions) {
+  // TODO Maybe pass in a resolver factory, so that we can initialize it in initialize and transition to fatal if not.
+  constructor(private resolver:LocalResolver, private options:ProviderOptions) {
     // TODO better error handling
     // TODO validate options
-    const tokenProvider = async (fetch:Fetch):Promise<[string, Date]> => {
-      const { accessToken, expiresIn } = await this.fetchToken(fetch);
+    this.flushInterval = options.flushInterval ?? DEFAULT_FLUSH_INTERVAL;
+    const withConfidenceAuth = withAuth(async () => {
+      const { accessToken, expiresIn } = await this.fetchToken();
       return [accessToken, new Date(Date.now() + 1000*expiresIn)]
-    };
-    this.fetch = Fetch.create([
-      withAuth(tokenProvider),
-      withRouter({
-        '*/v1/flagLogs:write': [withTimeout(this.options.flushInterval ?? DEFAULT_FLUSH_INTERVAL)],
-        'https://storage.googleapis.com/*':[withTimeout(DEFAULT_STATE_INTERVAL)],
-        '*':[]
+    }, this.main.signal);
+
+    const withFastRetry = FetchMiddleware.compose(
+      withRetry({
+        maxAttempts: Infinity,
+        baseInterval: 300,
+        maxInterval: 5*TimeUnit.SECOND
       }),
-      withRetry(),
-      withTimeout(5000)
-    ])
+      withTimeout(5*TimeUnit.SECOND)
+    );
+
+    this.fetch = Fetch.create([
+      withRouter({
+        'https://iam.confidence.dev/v1/oauth/token': [
+          withFastRetry
+        ],
+        'https://storage.googleapis.com/*':[
+          withRetry({
+            maxAttempts:  Infinity,
+            baseInterval:  500,
+            maxInterval:   DEFAULT_STATE_INTERVAL,
+          }),
+          withStallTimeout(500)
+        ],
+        'https://flags.confidence.dev/*|https://resolver.confidence.dev/*':[
+          withConfidenceAuth,
+          withRouter({
+            '*/v1/resolverState:resolverStateUri':[
+              withFastRetry,    
+            ],
+            '*/v1/flagLogs:write':[
+              withRetry({
+                maxAttempts: 3,
+                baseInterval: 500,
+              }),
+              withTimeout(5*TimeUnit.SECOND)
+            ]
+          }),
+        ],
+        // non-configured requests
+        '*': [withResponse((url) => { throw new Error(`Unknown route ${url}`)})]
+      }),
+      withLogging()
+    ], options.fetch ?? fetch);
   }
 
   async initialize(context?: EvaluationContext): Promise<void> {
-    // TODO this fn can't throw or setProviderAndAwait will throw..
-    await this.updateState();
-    this.flushInterval = setInterval(() => this.flush(), this.options.flushInterval ?? DEFAULT_FLUSH_INTERVAL);
-    if(typeof this.flushInterval.unref === 'function') {
-      this.flushInterval.unref();
-    } 
-    this.stateInterval = setInterval(() => this.updateState(), DEFAULT_STATE_INTERVAL);
-    if(typeof this.stateInterval.unref === 'function') {
-      this.stateInterval.unref();
-    } 
-    this.status = ProviderStatus.READY;
+    // TODO validate options and switch to fatal.
+    const signal = this.main.signal;
+    const initialUpdateSignal = AbortSignal.any([signal, timeoutSignal(this.options.initializeTimeout ?? DEFAULT_STATE_INTERVAL)]); 
+    try {
+      // TODO set schedulers irrespective of failure
+      // TODO if 403 here, 
+      await this.updateState(initialUpdateSignal);
+      scheduleWithFixedInterval(signal => this.flush(signal), this.flushInterval, { maxConcurrent: 3, signal });
+      // TODO Better with fixed delay so we don't do a double fetch when we're behind. Alt, skip if in progress
+      scheduleWithFixedInterval(signal => this.updateState(signal), DEFAULT_STATE_INTERVAL, { signal });
+      this.status = 'READY' as ProviderStatus;
+    } catch(e:unknown) {
+      this.status = 'ERROR' as ProviderStatus;
+      // TODO should we swallow this?
+      throw e;
+    }
   }
 
   onClose(): Promise<void> {
-    clearInterval(this.flushInterval);
-    clearInterval(this.stateInterval);
+    this.main.abort();
     return this.flush();
   }
 
+  // TODO test unknown flagClientSecret
   evaluate<T>(flagKey: string, defaultValue: T, context: EvaluationContext): ResolutionDetails<T> {
     
     const [flagName, ...path] = flagKey.split('.')
@@ -103,7 +135,7 @@ export class ConfidenceServerProviderLocal implements Provider {
       return {
         value: defaultValue,
         reason: 'ERROR',
-        errorCode: ErrorCode.FLAG_NOT_FOUND
+        errorCode: 'FLAG_NOT_FOUND' as ErrorCode
       }
     }
     if(flag.reason != ResolveReason.RESOLVE_REASON_MATCH) {
@@ -118,7 +150,7 @@ export class ConfidenceServerProviderLocal implements Provider {
         return {
           value: defaultValue,
           reason: 'ERROR',
-          errorCode: ErrorCode.TYPE_MISMATCH
+          errorCode: 'TYPE_MISMATCH' as ErrorCode
         }
       }
       value = value[step];
@@ -127,7 +159,7 @@ export class ConfidenceServerProviderLocal implements Provider {
       return {
         value: defaultValue,
         reason: 'ERROR',
-        errorCode: ErrorCode.TYPE_MISMATCH
+        errorCode: 'TYPE_MISMATCH' as ErrorCode
       }
     }
     return {
@@ -137,13 +169,13 @@ export class ConfidenceServerProviderLocal implements Provider {
     };
   }
 
-  async updateState():Promise<void> {
-    const { signedUri, account } = await this.fetchResolveStateUri();
-    const req = new Request(signedUri);
+  async updateState(signal?:AbortSignal):Promise<void> {
+    const { signedUri, account } = await this.fetchResolveStateUri(signal);
+    const headers = new Headers()
     if(this.stateEtag) {
-      req.headers.set('If-None-Match', this.stateEtag);
+      headers.set('If-None-Match', this.stateEtag);
     }
-    const resp = await fetch(req);
+    const resp = await this.fetch(signedUri, { headers, signal });
     if(resp.status === 304) {
       // not changed
       return;
@@ -159,7 +191,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     })
   }
 
-  async flush():Promise<void> {
+  async flush(signal?:AbortSignal):Promise<void> {
     const writeFlagLogRequest = this.resolver.flushLogs();
     if(writeFlagLogRequest.length == 0) {
       // nothing to send
@@ -167,6 +199,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     }
     const resp = await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
       method: 'post',
+      signal,
       headers: {
         'Content-Type': 'application/x-protobuf',
       },
@@ -174,16 +207,16 @@ export class ConfidenceServerProviderLocal implements Provider {
     });
   }
 
-  private async fetchResolveStateUri():Promise<ResolveStateUri> {
-    const resp = await this.fetch('https://flags.confidence.dev/v1/resolverState:resolverStateUri');
+  private async fetchResolveStateUri(signal?: AbortSignal):Promise<ResolveStateUri> {
+    const resp = await this.fetch('https://flags.confidence.dev/v1/resolverState:resolverStateUri', { signal });
     if(!resp.ok) {
       throw new Error('Failed to get resolve state url');
     }
     return resp.json();
   }
 
-  private async fetchToken(unAuthFetch:Fetch):Promise<AccessToken> {
-    const resp = await unAuthFetch('https://iam.confidence.dev/v1/oauth/token', {
+  private async fetchToken():Promise<AccessToken> {
+    const resp = await this.fetch('https://iam.confidence.dev/v1/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

@@ -3,8 +3,6 @@ import { OpenFeature } from '@openfeature/server-sdk';
 import { ConfidenceServerProviderLocal } from './ConfidenceServerProviderLocal';
 import { readFileSync } from 'node:fs';
 import { WasmResolver } from './WasmResolver';
-// import log from 'loglevel';
-// log.setLevel("debug");
 
 const {
   CONFIDENCE_API_CLIENT_ID,

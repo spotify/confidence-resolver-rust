@@ -2,8 +2,13 @@ import { defineConfig } from 'tsdown'
 
 
 const base = defineConfig({
+  minify: 'dce-only',
   dts: {
     oxc: true,
+  },
+  define: {
+    __ASSERT__: 'false',
+    __TEST__: 'false',
   },
   external: ['@bufbuild/protobuf/wire'],
   // inputOptions: {

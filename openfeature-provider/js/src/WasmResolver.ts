@@ -2,13 +2,14 @@ import { BinaryWriter } from '@bufbuild/protobuf/wire';
 import { Request, Response, Void } from './proto/messages';
 import { Timestamp } from './proto/google/protobuf/timestamp';
 import { ResolveFlagsRequest, ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
+import { LocalResolver } from './LocalResolver';
 
 type Codec<T> = {
   encode(message: T): BinaryWriter;
   decode(input: Uint8Array): T;
 };
 
-export class WasmResolver {
+export class WasmResolver implements LocalResolver {
   private exports: any;
   private imports: any;
 

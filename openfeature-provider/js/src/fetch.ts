@@ -1,4 +1,7 @@
-import log from "loglevel";
+import { logger as rootLogger, Logger } from "./logger";
+import { portableSetTimeout, abortableSleep, abortablePromise } from "./util";
+
+const logger = rootLogger.getLogger('fetch');
 
 export type Fetch = (url:string, init?: RequestInit) => Promise<Response>;
 
@@ -11,115 +14,161 @@ export namespace Fetch {
 
 export type FetchMiddleware = (next:Fetch) => Fetch;
 
+export namespace FetchMiddleware {
+
+  export function compose(outer:FetchMiddleware, inner:FetchMiddleware):FetchMiddleware {
+    return next => outer(inner(next))
+  }
+}
+
 export function withTimeout(timeoutMs:number) : FetchMiddleware {
-  return next => (url, { signal, ...init } = {}) => {
-    
-    const timeoutSignal = AbortSignal.timeout(timeoutMs);
-    if(signal) {
-      signal = AbortSignal.any([signal, timeoutSignal])
-    } else {
-      signal = timeoutSignal;
+  return next => (url, init = {}) => {
+    const signal = timeoutSignal(timeoutMs, init.signal);
+    return next(url, { ...init, signal });
+  }
+}
+
+export function withStallTimeout(stallTimeoutMs:number) : FetchMiddleware {
+  return next => async (url, init = {}) => {
+    const ac = new AbortController();
+    const signal = init.signal ? AbortSignal.any([ac.signal, init.signal]) : ac.signal;
+    const abort = () => { 
+      ac.abort(new Error(`This operation timed out after not receiving data for ${stallTimeoutMs}ms`)); 
     }
-    return next(url, { signal, ...init });
+    let timeoutId = portableSetTimeout(abort, stallTimeoutMs);
+
+    
+    const resp = await next(url, { ...init, signal });
+    clearTimeout(timeoutId);
+    if(resp.body) {
+      timeoutId = portableSetTimeout(abort, stallTimeoutMs);
+
+      const touch = () => {
+        clearTimeout(timeoutId);
+        timeoutId = portableSetTimeout(abort, stallTimeoutMs);
+      }
+      const [body, copy] = resp.body.tee();
+      consumeReadableStream(copy, touch);
+
+      return new Response(body, {
+        status: resp.status,
+        statusText: resp.statusText,
+        headers: resp.headers,
+      });
+    }
+    return resp;
   }
 }
 
 export function withRetry(opts?:{
   maxAttempts?: number;
-  baseDelayMs?: number;
-  maxDelayMs?: number;
+  baseInterval?: number;
+  maxInterval?: number;
+  abortAtInterval?: boolean,
   backoff?: number; 
   jitter?: number; 
 }) : FetchMiddleware {
   const maxAttempts     = opts?.maxAttempts ?? 6;
-  const baseDelayMs     = opts?.baseDelayMs ?? 250;
-  const maxDelayMs      = opts?.maxDelayMs ?? 30_000;
+  const baseInterval     = opts?.baseInterval ?? 250;
+  const maxInterval      = opts?.maxInterval ?? 30_000;
   const backoff         = opts?.backoff ?? 2;
-  const jitter          = opts?.jitter ?? 0.1;
+  const jitter          = opts?.jitter ?? (__TEST__ ? 0 : 0.1);
   
-  const logger = log.getLogger('withRetry');
-
   return next => async (url, { body, signal, ...init} = {}) => {
     const cloneBody = await bodyRepeater(body);
-    let attempts = 0
+    let attempts = 0;
+    let deadline = 0;
 
-    const calculateDelay = ():number => {
+    const calculateDeadline = ():number => {
       const jitterFactor = 1 + 2 * Math.random() * jitter - jitter;
-      return jitterFactor * Math.min(maxDelayMs, baseDelayMs * Math.pow(backoff, attempts - 1));
+      const delay = jitterFactor * Math.min(maxInterval, baseInterval * Math.pow(backoff, attempts));
+      return Date.now() + delay;
     }
     const onSuccess = async (resp:Response) => {
-      attempts++;
       const { status, statusText } = resp;
       if(status !== 408 && status !== 429 && status < 500 || attempts >= maxAttempts) {
         return resp;
       }
       logger.debug('withRetry %s failed attempt %d with %d %s', url, attempts - 1, status, statusText);
-      const serverDelay = parseRetryAfter(resp.headers.get('Retry-After'), baseDelayMs, maxDelayMs);
+      const serverDelay = parseRetryAfter(resp.headers.get('Retry-After'), baseInterval, maxInterval);
 
-      await abortableSleep(serverDelay ?? calculateDelay(), signal);
+      await abortableSleep(serverDelay ?? (deadline - Date.now()), signal);
       return doTry();
     }
     const onError = async (error:unknown) => {
-      attempts++;
       logger.debug('withRetry %s failed attempt %d with %s', url, attempts - 1, error);
       if(signal?.aborted || attempts >= maxAttempts) {
         throw error;
       }
-      await abortableSleep(calculateDelay(), signal);
+      await abortableSleep(deadline - Date.now(), signal);
       return doTry();
     }
-    const doTry = ():Promise<Response> => next(url, { body: cloneBody(), signal, ...init}).then(onSuccess, onError);
+    const doTry = ():Promise<Response> => {
+      let attemptSignal = signal;
+      deadline = calculateDeadline();
+      attempts++;
+      if(opts?.abortAtInterval) {
+        attemptSignal = timeoutSignal(deadline - Date.now(), signal);
+      }
+      return next(url, { body: cloneBody(), signal:attemptSignal, ...init}).then(onSuccess, onError)
+    };
     
-    return doTry().finally(() => {
-      logger.debug('withRetry %s finished on attempt %d', url, attempts)
-    });
+    return doTry();
   }
 }
 
-export function withAuth(tokenProvider: (fetch:Fetch) => Promise<[token:string, expiry?:Date]>): FetchMiddleware {
-  const logger = log.getLogger('withAuth');
+export function withAuth(tokenProvider: () => Promise<[token:string, expiry?:Date]>, signal?:AbortSignal): FetchMiddleware {
 
-  return next => {
-    
-    let renewTimeout = 0;
-    let current:Promise<string> | null = null;
-    
-    const renewToken = () => {
-      logger.debug("withAuth renewing token");
-      clearTimeout(renewTimeout);
-      current = tokenProvider(next).then(([token, expiry]) => {
-        logger.debug("withAuth renew success %s", expiry && (expiry.valueOf() - Date.now()));
-        if(expiry) {
-          const ttl = expiry.valueOf() - Date.now();
-          renewTimeout = setCanonicalTimeout(renewToken, 0.8*ttl);
-        }
-        return token;
-      });
+  let renewTimeout = 0;
+  let current:Promise<string> | null = null;
+
+  signal?.addEventListener('abort', () => {
+    clearTimeout(renewTimeout);
+  })
+  
+  const renewToken = () => {
+    logger.debug("withAuth renewing token");
+    clearTimeout(renewTimeout);
+    current = tokenProvider().then(([token, expiry]) => {
+      logger.debug("withAuth renew success %s", expiry && (expiry.valueOf() - Date.now()));
+      if(expiry) {
+        const ttl = expiry.valueOf() - Date.now();
+        renewTimeout = portableSetTimeout(renewToken, 0.8*ttl);
+      }
+      return token;
+    }).catch(e => {
+      current = null;
+      throw e;
+    });
+  }
+
+  const fetchWithToken = async (fetch:Fetch, url:string, init:RequestInit) => {
+    const token = await abortablePromise(current!, init.signal);
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${token}`);
+    return fetch(url, { ...init, headers })
+  }
+
+  return next => async (url, init = {}) => {
+    const bodyClone = await bodyRepeater(init.body);
+    if(!current) {
+      renewToken();
     }
-
-    return async (url, { headers:headersInit, ...init } = {}) => {
-      if(!current) {
+    const currentBeforeFetch = current;
+    let resp = await fetchWithToken(next, url, { ...init, body: bodyClone() });
+    if(resp.status === 401) {
+      // there might be a race of multiple simultaneous 401
+      if(current === currentBeforeFetch) {
         renewToken();
       }
-      const headers = new Headers(headersInit);
-      headers.set('Authorization', `Bearer ${await current}`);
-      const currentBeforeFetch = current;
-      let resp = await next(url, { headers, ...init });
-      if(resp.status === 401) {
-        // there might be a race of multiple simultaneous 401
-        if(current === currentBeforeFetch) {
-          renewToken();
-        }
-        headers.set('Authorization', `Bearer ${await current}`);
-        resp = await next(url, { headers, ...init });
-      }
-      return resp;
+      // do one quick retry on 401
+      resp = await fetchWithToken(next, url, { ...init, body: bodyClone() });
     }
+    return resp;
   }
 }
 
 export function withRouter(routes:Record<string, FetchMiddleware[]>):FetchMiddleware {
-  const logger = log.getLogger('withRouter');
   // Simplified DSL over full URL string:
   // - Anchored regex when pattern starts with ^ and ends with $
   // - '*' alone => match all
@@ -134,6 +183,10 @@ export function withRouter(routes:Record<string, FetchMiddleware[]>):FetchMiddle
     }
     if(pattern === '*') {
       return _ => true;
+    }
+    if(pattern.includes('|')) {
+      const predicates = pattern.split('|').map(compile);
+      return url => predicates.some(pred => pred(url))
     }
     if(pattern.startsWith('*') && hasOnlyOneStar(pattern)) {
       const suffix = pattern.slice(1);
@@ -165,58 +218,37 @@ export function withRouter(routes:Record<string, FetchMiddleware[]>):FetchMiddle
     return async (url, init = {}) => {
       const match = table.find(([pred]) => pred(url));
       if(!match) {
-        logger.info('withRouter no route matched %s', url);
-        return new Response(null, { status: 404 });
+        logger.info('withRouter no route matched %s, falling through', url);
+        return next(url, init);
       } 
       return match[1](url, init);
     }
   }
 }
 
-async function bodyRepeater<T extends BodyInit>(body:BodyInit | null | undefined): Promise<() => T> {
+export function withResponse(factory:(url:string, init?:RequestInit) => Promise<Response>): FetchMiddleware {
+  return _next => factory;
+}
+
+const fetchLogger = logger;
+export function withLogging(logger:Logger = fetchLogger):FetchMiddleware {
+  return next => async (url, init) => {
+    const start = Date.now();
+    const resp = await next(url, init);
+    const duration = Date.now() - start;
+    logger.info('%s %s (%i) %dms', (init?.method ?? 'get').toUpperCase(), url.split('?', 1)[0], resp.status, duration);
+    return resp;
+  }
+}
+
+async function bodyRepeater<T extends BodyInit | null | undefined>(body:T): Promise<() => T> {
   if(body instanceof ReadableStream) {
+    // TODO this case could be made a little more efficient by body.tee, 
+    // but we don't use ReadableStreams, so low prio
     const blob = await new Response(body).blob();
     return () => blob.stream() as T
   }
-  return () => body as T;
-}
-
-function abortableSleep(millis:number, signal?:AbortSignal | null):Promise<void> {
-  return new Promise((resolve, reject) => {
-    let timeout:NodeJS.Timeout;
-    const onTimeout = () => {
-      cleanup();
-      resolve();
-    }
-    const onAbort = () => {
-      cleanup();
-      reject(signal?.reason);
-    }
-    const cleanup = () => {
-      clearTimeout(timeout);
-      signal?.removeEventListener('abort', onAbort);
-    }
-
-    if(signal) {
-      if(signal.aborted) {
-        reject(signal.reason);
-        return;
-      }
-      signal.addEventListener('abort', onAbort);
-    }
-    timeout = setTimeout(onTimeout, millis);
-    if(typeof timeout.unref === 'function') {
-      timeout.unref();
-    }
-  })
-}
-
-function setCanonicalTimeout(callb:() => void, millis:number):number {
-  let timeout = setTimeout(callb, millis);
-  if(typeof timeout === 'object' && timeout !== null && typeof timeout.unref === 'function') {
-    timeout.unref();
-  }
-  return Number(timeout);
+  return () => body;
 }
 
 function parseRetryAfter(retryAfterValue:string | null, min = 0, max = Number.MAX_SAFE_INTEGER):number | undefined {
@@ -230,4 +262,21 @@ function parseRetryAfter(retryAfterValue:string | null, min = 0, max = Number.MA
     }
   }
   return undefined;
+}
+
+async function consumeReadableStream(stream:ReadableStream, onData:(chunk:Uint8Array<ArrayBuffer>) => void, onEnd?:(err?:unknown) => void):Promise<void> {
+  try {
+    for await(const chunk of stream) {
+      onData(chunk);
+    }
+    onEnd?.();
+  } catch(e:unknown) {
+    onEnd?.(e);
+  }
+}
+
+function timeoutSignal(delay:number, signal?:AbortSignal | null):AbortSignal {
+  const ac = new AbortController();
+  portableSetTimeout(() => ac.abort(new Error(`Operation timed out after ${delay}ms`)), delay);
+  return signal ? AbortSignal.any([signal, ac.signal]) : ac.signal;
 }

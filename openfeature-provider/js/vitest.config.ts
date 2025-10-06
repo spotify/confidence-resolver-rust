@@ -4,6 +4,10 @@ import { existsSync, readFileSync } from 'fs';
 
 
 export default defineConfig({
+  define: {
+    __TEST__:'true',
+    __ASSERT__:'true',
+  },
   test: {
     environment: 'node',
     globals: false,
