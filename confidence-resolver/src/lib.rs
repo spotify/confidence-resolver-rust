@@ -6,11 +6,11 @@
     // clippy::integer_arithmetic
 ))]
 
-use core::marker::PhantomData;
-use std::collections::{HashMap, HashSet};
-
 use bitvec::prelude as bv;
+use core::marker::PhantomData;
 use fastmurmur3::murmur3_x64_128;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::format;
 
 use bytes::Bytes;
 
@@ -53,6 +53,13 @@ use flags_types::Expression;
 use gzip::decompress_gz;
 
 use crate::err::{ErrorCode, OrFailExt};
+use crate::proto::confidence::flags::resolver::v1::resolve_with_sticky_response::{
+    MaterializationUpdate, ResolveResult,
+};
+use crate::proto::confidence::flags::resolver::v1::{
+    resolve_with_sticky_response, MaterializationMap, ResolveFlagsRequest, ResolveFlagsResponse,
+    ResolveWithStickyRequest, ResolveWithStickyResponse,
+};
 
 impl TryFrom<Vec<u8>> for ResolverStatePb {
     type Error = ErrorCode;
@@ -207,7 +214,7 @@ pub struct EvaluationContext {
     pub context: Struct,
 }
 pub struct FlagToApply {
-    pub assigned_flag: flags_resolver::resolve_token_v1::AssignedFlag,
+    pub assigned_flag: AssignedFlag,
     pub skew_adjusted_applied_time: Timestamp,
 }
 
@@ -218,6 +225,10 @@ pub trait Host {
     fn random_alphanumeric(len: usize) -> String {
         use rand::distr::{Alphanumeric, SampleString};
         Alphanumeric.sample_string(&mut rand::rng(), len)
+    }
+
+    fn log(_: &str) {
+        // noop
     }
 
     #[cfg(not(feature = "std"))]
@@ -389,6 +400,74 @@ pub struct AccountResolver<'a, H: Host> {
     host: PhantomData<H>,
 }
 
+#[derive(Debug)]
+pub enum ResolveFlagError {
+    Message(String),
+    MissingMaterializations(),
+}
+
+impl ResolveFlagError {
+    fn message(&self) -> String {
+        match self {
+            ResolveFlagError::Message(msg) => msg.clone(),
+            ResolveFlagError::MissingMaterializations() => "Missing materializations".to_string(),
+        }
+    }
+
+    pub fn err(message: &str) -> ResolveFlagError {
+        ResolveFlagError::Message(message.to_string())
+    }
+
+    pub fn missing_materializations() -> ResolveFlagError {
+        ResolveFlagError::MissingMaterializations()
+    }
+}
+
+impl From<ResolveFlagError> for String {
+    fn from(value: ResolveFlagError) -> Self {
+        value.message().to_string()
+    }
+}
+
+impl From<ErrorCode> for ResolveFlagError {
+    fn from(value: ErrorCode) -> Self {
+        ResolveFlagError::err(format!("error code {}", &value.to_string()).as_str())
+    }
+}
+
+impl ResolveWithStickyResponse {
+    fn with_success(response: ResolveFlagsResponse, updates: Vec<MaterializationUpdate>) -> Self {
+        ResolveWithStickyResponse {
+            resolve_result: Some(ResolveResult::Success(
+                resolve_with_sticky_response::Success {
+                    response: Some(response),
+                    updates,
+                },
+            )),
+        }
+    }
+
+    fn with_missing_materializations(
+        items: Vec<resolve_with_sticky_response::MissingMaterializationItem>,
+    ) -> Self {
+        ResolveWithStickyResponse {
+            resolve_result: Some(ResolveResult::MissingMaterializations(
+                resolve_with_sticky_response::MissingMaterializations { items },
+            )),
+        }
+    }
+}
+
+impl ResolveWithStickyRequest {
+    fn without_sticky(resolve_request: ResolveFlagsRequest) -> ResolveWithStickyRequest {
+        ResolveWithStickyRequest {
+            resolve_request: Some(resolve_request),
+            fail_fast_on_sticky: false,
+            materializations_per_unit: BTreeMap::new(),
+        }
+    }
+}
+
 impl<'a, H: Host> AccountResolver<'a, H> {
     pub fn new(
         client: &'a Client,
@@ -405,13 +484,14 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         }
     }
 
-    pub fn resolve_flags(
+    pub fn resolve_flags_sticky(
         &self,
-        request: &flags_resolver::ResolveFlagsRequest,
-    ) -> Result<flags_resolver::ResolveFlagsResponse, String> {
+        request: &flags_resolver::ResolveWithStickyRequest,
+    ) -> Result<ResolveWithStickyResponse, String> {
         let timestamp = H::current_time();
 
-        let flag_names = &request.flags;
+        let resolve_request = &request.resolve_request.clone().or_fail()?;
+        let flag_names = resolve_request.flags.clone();
         let flags_to_resolve = self
             .state
             .flags
@@ -434,24 +514,65 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             }
         }
 
-        let resolved_values = flags_to_resolve
+        let mut resolve_results = Vec::with_capacity(flags_to_resolve.len());
+
+        let mut has_missing_materializations = false;
+
+        for flag in flags_to_resolve.clone() {
+            let resolve_result = self.resolve_flag(flag, request.materializations_per_unit.clone());
+            match resolve_result {
+                Ok(resolve_result) => resolve_results.push(resolve_result),
+                Err(err) => {
+                    return match err {
+                        ResolveFlagError::Message(msg) => Err(msg.to_string()),
+                        ResolveFlagError::MissingMaterializations() => {
+                            // we want to fallback on online resolver, return early
+                            if request.fail_fast_on_sticky {
+                                Ok(ResolveWithStickyResponse::with_missing_materializations(
+                                    vec![],
+                                ))
+                            } else {
+                                has_missing_materializations = true;
+                                break;
+                            }
+                        }
+                    };
+                }
+            }
+        }
+
+        if has_missing_materializations {
+            let result = self.collect_missing_materializations(flags_to_resolve);
+            if let Ok(missing) = result {
+                return Ok(ResolveWithStickyResponse::with_missing_materializations(
+                    missing,
+                ));
+            } else {
+                return Err("Could not collect missing materializations".to_string());
+            }
+        }
+
+        let resolved_values: Vec<ResolvedValue> = resolve_results
             .iter()
-            .map(|flag| {
-                self.resolve_flag(flag)
-                    .map_err(|e| format!("{}: {}", flag.name, e))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|r| r.resolved_value.clone())
+            .collect();
 
         let resolve_id = H::random_alphanumeric(32);
         let mut response = flags_resolver::ResolveFlagsResponse {
             resolve_id: resolve_id.clone(),
             ..Default::default()
         };
+        let mut updates: Vec<MaterializationUpdate> = vec![];
         for resolved_value in &resolved_values {
             response.resolved_flags.push(resolved_value.into());
         }
 
-        if request.apply {
+        // Collect all materialization updates from all resolve results
+        for resolve_result in &resolve_results {
+            updates.extend(resolve_result.updates.clone());
+        }
+
+        if resolve_request.apply {
             let flags_to_apply: Vec<FlagToApply> = resolved_values
                 .iter()
                 .filter(|v| v.should_apply)
@@ -466,7 +587,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 &self.evaluation_context.context,
                 flags_to_apply.as_slice(),
                 self.client,
-                &request.sdk,
+                &resolve_request.sdk.clone(),
             );
         } else {
             // create resolve token
@@ -490,7 +611,8 @@ impl<'a, H: Host> AccountResolver<'a, H> {
 
             let encrypted_token = self
                 .encrypt_resolve_token(&resolve_token)
-                .map_err(|_| "Failed to encrypt resolve token".to_string())?;
+                .map_err(|_| "Failed to encrypt resolve token".to_string())
+                .or_fail()?;
 
             response.resolve_token = encrypted_token;
         }
@@ -498,12 +620,43 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         H::log_resolve(
             &resolve_id,
             &self.evaluation_context.context,
-            resolved_values.as_slice(),
+            &resolved_values,
             self.client,
-            &request.sdk,
+            &resolve_request.sdk.clone(),
         );
 
-        Ok(response)
+        Ok(ResolveWithStickyResponse::with_success(response, updates))
+    }
+
+    pub fn resolve_flags(
+        &self,
+        request: &flags_resolver::ResolveFlagsRequest,
+    ) -> Result<flags_resolver::ResolveFlagsResponse, String> {
+        let response = self.resolve_flags_sticky(&ResolveWithStickyRequest::without_sticky(
+            flags_resolver::ResolveFlagsRequest {
+                flags: request.flags.clone(),
+                sdk: request.sdk.clone(),
+                evaluation_context: request.evaluation_context.clone(),
+                client_secret: request.client_secret.clone(),
+                apply: request.apply,
+            },
+        ));
+
+        match response {
+            Ok(v) => match v.resolve_result {
+                None => Err("failed to resolve flags".to_string()),
+                Some(r) => match r {
+                    ResolveResult::Success(flags_response) => match flags_response.response {
+                        Some(flags_response) => Ok(flags_response),
+                        None => Err("failed to resolve flags".to_string()),
+                    },
+                    ResolveResult::MissingMaterializations(_) => {
+                        Err("sticky assignments is not supported".to_string())
+                    }
+                },
+            },
+            Err(e) => Err(e),
+        }
     }
 
     pub fn apply_flags(&self, request: &flags_resolver::ApplyFlagsRequest) -> Result<(), String> {
@@ -569,19 +722,96 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             _ => Err("TargetingKeyError".to_string()),
         }
     }
-    pub fn resolve_flag_name(&'a self, flag_name: &str) -> Result<ResolvedValue<'a>, String> {
+    pub fn resolve_flag_name(
+        &'a self,
+        flag_name: &str,
+    ) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
         self.state
             .flags
             .get(flag_name)
-            .ok_or("flag not found".to_string())
-            .and_then(|flag| self.resolve_flag(flag))
+            .ok_or(ResolveFlagError::err("flag not found"))
+            .and_then(|flag| self.resolve_flag(flag, BTreeMap::new()))
     }
 
-    pub fn resolve_flag(&'a self, flag: &'a Flag) -> Result<ResolvedValue<'a>, String> {
+    pub fn collect_missing_materializations(
+        &'a self,
+        flags: Vec<&'a Flag>,
+    ) -> Result<Vec<resolve_with_sticky_response::MissingMaterializationItem>, String> {
+        let mut missing_materializations: Vec<
+            resolve_with_sticky_response::MissingMaterializationItem,
+        > = Vec::new();
+        for flag in flags {
+            let result = self.collect_missing_materializations_for_flag(flag);
+            if let Ok(items) = result {
+                missing_materializations.extend(items);
+            } else {
+                return Err(format!(
+                    "Could not collect missing materializations for flag {}",
+                    flag.name
+                ));
+            }
+        }
+        Ok(missing_materializations)
+    }
+
+    fn collect_missing_materializations_for_flag(
+        &'a self,
+        flag: &'a Flag,
+    ) -> Result<Vec<resolve_with_sticky_response::MissingMaterializationItem>, String> {
+        let mut missing_materializations: Vec<
+            resolve_with_sticky_response::MissingMaterializationItem,
+        > = Vec::new();
+
+        if flag.state == flags_admin::flag::State::Archived as i32 {
+            return Ok(vec![]);
+        }
+
+        for rule in &flag.rules {
+            if !rule.enabled {
+                continue;
+            }
+
+            if let Some(materialization_spec) = &rule.materialization_spec {
+                let rule_name = &rule.name.as_str();
+                let read_materialization = materialization_spec.read_materialization.as_str();
+                if !read_materialization.is_empty() {
+                    let targeting_key = if !rule.targeting_key_selector.is_empty() {
+                        rule.targeting_key_selector.as_str()
+                    } else {
+                        TARGETING_KEY
+                    };
+                    let unit: String = match self.get_targeting_key(targeting_key) {
+                        Ok(Some(u)) => u,
+                        Ok(None) => continue,
+                        Err(_) => return Err("Targeting key error".to_string()),
+                    };
+                    missing_materializations.push(
+                        resolve_with_sticky_response::MissingMaterializationItem {
+                            unit,
+                            rule: rule_name.to_string(),
+                            read_materialization: read_materialization.to_string(),
+                        },
+                    );
+                    continue;
+                }
+            }
+        }
+        Ok(missing_materializations)
+    }
+
+    pub fn resolve_flag(
+        &'a self,
+        flag: &'a Flag,
+        sticky_context: BTreeMap<String, MaterializationMap>,
+    ) -> Result<FlagResolveResult<'a>, ResolveFlagError> {
+        let mut updates: Vec<MaterializationUpdate> = Vec::new();
         let mut resolved_value = ResolvedValue::new(flag);
 
         if flag.state == flags_admin::flag::State::Archived as i32 {
-            return Ok(resolved_value.error(ResolveReason::FlagArchived));
+            return Ok(FlagResolveResult {
+                resolved_value: resolved_value.error(ResolveReason::FlagArchived),
+                updates: vec![],
+            });
         }
 
         for rule in &flag.rules {
@@ -604,17 +834,96 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             let unit: String = match self.get_targeting_key(targeting_key) {
                 Ok(Some(u)) => u,
                 Ok(None) => continue,
-                Err(_) => return Ok(resolved_value.error(ResolveReason::TargetingKeyError)),
+                Err(_) => {
+                    return Ok(FlagResolveResult {
+                        resolved_value: resolved_value.error(ResolveReason::TargetingKeyError),
+                        updates: vec![],
+                    })
+                }
             };
-
-            if !self.segment_match(segment, &unit)? {
-                // ResolveReason::SEGMENT_NOT_MATCH
-                continue;
-            }
 
             let Some(spec) = &rule.assignment_spec else {
                 continue;
             };
+
+            let mut materialization_matched = false;
+            if let Some(materialization_spec) = &rule.materialization_spec {
+                let read_materialization = &materialization_spec.read_materialization;
+                if !read_materialization.is_empty() {
+                    if let Some(info) = sticky_context.get(&unit) {
+                        let info_from_context = info.info_map.get(read_materialization).clone();
+
+                        if let Some(ref info_data) = info_from_context {
+                            if !info_data.unit_in_info {
+                                if materialization_spec
+                                    .mode
+                                    .as_ref()
+                                    .map(|mode| mode.materialization_must_match)
+                                    .unwrap_or(false)
+                                {
+                                    // Materialization must match but unit is not in materialization
+                                    continue;
+                                }
+                                materialization_matched = false;
+                            } else if materialization_spec
+                                .mode
+                                .as_ref()
+                                .map(|mode| mode.segment_targeting_can_be_ignored)
+                                .unwrap_or(false)
+                            {
+                                materialization_matched = true;
+                            } else {
+                                materialization_matched = self.segment_match(segment, &unit)?;
+                            }
+                        } else {
+                            return Err(ResolveFlagError::missing_materializations());
+                        }
+
+                        if materialization_matched {
+                            if let Some(variant_name) = info_from_context
+                                .as_ref()
+                                .and_then(|info| info.rule_to_variant.get(&rule.name))
+                            {
+                                if let Some(assignment) =
+                                    spec.assignments.iter().find(|assignment| {
+                                        if let Some(rule::assignment::Assignment::Variant(
+                                            ref variant_assignment,
+                                        )) = &assignment.assignment
+                                        {
+                                            variant_assignment.variant == *variant_name
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                {
+                                    let variant = flag
+                                        .variants
+                                        .iter()
+                                        .find(|v| v.name == *variant_name)
+                                        .or_fail()?;
+                                    return Ok(FlagResolveResult {
+                                        resolved_value: resolved_value.with_variant_match(
+                                            rule,
+                                            segment,
+                                            variant,
+                                            &assignment.assignment_id,
+                                            &unit,
+                                        ),
+                                        updates: vec![],
+                                    });
+                                }
+                            }
+                        }
+                    } else {
+                        return Err(ResolveFlagError::missing_materializations());
+                    };
+                }
+            }
+
+            if !materialization_matched && !self.segment_match(segment, &unit)? {
+                // ResolveReason::SEGMENT_NOT_MATCH
+                continue;
+            }
             let bucket_count = spec.bucket_count;
             let variant_salt = segment_name.split("/").nth(1).or_fail()?;
             let key = format!("{}|{}", variant_salt, unit);
@@ -627,10 +936,34 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                     .any(|range| range.lower <= bucket && bucket < range.upper)
             });
 
+            let has_write_spec = rule
+                .materialization_spec
+                .as_ref()
+                .map(|materialization_spec| &materialization_spec.write_materialization);
+
             if let Some(assignment) = matched_assignment {
                 let Some(a) = &assignment.assignment else {
                     continue;
                 };
+
+                // Extract variant name from assignment if it's a variant assignment
+                let variant_name = match a {
+                    rule::assignment::Assignment::Variant(ref variant_assignment) => {
+                        variant_assignment.variant.clone()
+                    }
+                    _ => "".to_string(),
+                };
+
+                // write the materialization info if write spec exists
+                if let Some(write_spec) = has_write_spec {
+                    updates.push(MaterializationUpdate {
+                        write_materialization: write_spec.to_string(),
+                        unit: unit.to_string(),
+                        rule: rule.clone().name,
+                        variant: variant_name,
+                    })
+                }
+
                 match a {
                     rule::assignment::Assignment::Fallthrough(_) => {
                         resolved_value.attribute_fallthrough_rule(
@@ -641,12 +974,15 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                         continue;
                     }
                     rule::assignment::Assignment::ClientDefault(_) => {
-                        return Ok(resolved_value.with_client_default_match(
-                            rule,
-                            segment,
-                            &assignment.assignment_id,
-                            &unit,
-                        ))
+                        return Ok(FlagResolveResult {
+                            resolved_value: resolved_value.with_client_default_match(
+                                rule,
+                                segment,
+                                &assignment.assignment_id,
+                                &unit,
+                            ),
+                            updates,
+                        })
                     }
                     rule::assignment::Assignment::Variant(
                         rule::assignment::VariantAssignment {
@@ -659,13 +995,16 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                             .find(|variant| variant.name == *variant_name)
                             .or_fail()?;
 
-                        return Ok(resolved_value.with_variant_match(
-                            rule,
-                            segment,
-                            variant,
-                            &assignment.assignment_id,
-                            &unit,
-                        ));
+                        return Ok(FlagResolveResult {
+                            resolved_value: resolved_value.with_variant_match(
+                                rule,
+                                segment,
+                                variant,
+                                &assignment.assignment_id,
+                                &unit,
+                            ),
+                            updates,
+                        });
                     }
                 };
             }
@@ -677,10 +1016,13 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             resolved_value.should_apply = !resolved_value.fallthrough_rules.is_empty();
         }
 
-        Ok(resolved_value)
+        Ok(FlagResolveResult {
+            resolved_value,
+            updates,
+        })
     }
 
-    /// Get an attribute value from the [EvaluationContext] struct, adressed by a path specification.
+    /// Get an attribute value from the [EvaluationContext] struct, addressed by a path specification.
     /// If the struct is `{user:{name:"roug",id:42}}`, then getting the `"user.name"` field will return
     /// the value `"roug"`.
     pub fn get_attribute_value(&self, field_path: &str) -> &Value {
@@ -733,7 +1075,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         // check bitset
         let Some(bitset) = self.state.bitsets.get(&segment.name) else {
             return Ok(true);
-        }; // todo: whould this match or not?
+        }; // todo: would this match or not?
         let salted_unit = self.client.account.salt_unit(unit)?;
         let unit_hash = bucket(hash(&salted_unit), BUCKETS);
         Ok(bitset[unit_hash])
@@ -848,13 +1190,19 @@ fn list_wrapper(value: &targeting::value::Value) -> targeting::ListValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedValue<'a> {
     pub flag: &'a Flag,
     pub reason: ResolveReason,
     pub assignment_match: Option<AssignmentMatch<'a>>,
     pub fallthrough_rules: Vec<FallthroughRule<'a>>,
     pub should_apply: bool,
+}
+
+#[derive(Debug)]
+pub struct FlagResolveResult<'a> {
+    pub resolved_value: ResolvedValue<'a>,
+    pub updates: Vec<MaterializationUpdate>,
 }
 
 impl<'a> ResolvedValue<'a> {
@@ -936,7 +1284,7 @@ impl<'a> From<&ResolvedValue<'a>> for flags_resolver::ResolvedFlag {
     fn from(value: &ResolvedValue<'a>) -> Self {
         let mut resolved_flag = flags_resolver::ResolvedFlag {
             flag: value.flag.name.clone(),
-            reason: value.reason.clone() as i32,
+            reason: value.reason as i32,
             should_apply: value.should_apply,
             ..Default::default()
         };
@@ -965,7 +1313,7 @@ impl<'a> From<&ResolvedValue<'a>> for flags_resolver::resolve_token_v1::Assigned
     fn from(value: &ResolvedValue<'a>) -> Self {
         let mut assigned_flag = flags_resolver::resolve_token_v1::AssignedFlag {
             flag: value.flag.name.clone(),
-            reason: value.reason.clone() as i32,
+            reason: value.reason as i32,
             fallthrough_assignments: value
                 .fallthrough_rules
                 .iter()
@@ -1000,7 +1348,7 @@ impl<'a> From<&ResolvedValue<'a>> for flags_resolver::resolve_token_v1::Assigned
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AssignmentMatch<'a> {
     pub rule: &'a Rule,
     pub segment: &'a Segment,
@@ -1017,7 +1365,7 @@ pub struct FallthroughRule<'a> {
 }
 
 // note that the ordinal values are set to match the corresponding protobuf enum
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolveReason {
     // The flag was successfully resolved because one rule matched.
     Match = 1,
@@ -1156,8 +1504,9 @@ mod tests {
                 .get_resolver_with_json_context(SECRET, context_json, &ENCRYPTION_KEY)
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
-            let resolved_value = resolver.resolve_flag(flag).unwrap();
-            let assignment_match = resolved_value.assignment_match.unwrap();
+            let resolve_result = resolver.resolve_flag(flag, BTreeMap::new()).unwrap();
+            let resolved_value = &resolve_result.resolved_value;
+            let assignment_match = resolved_value.assignment_match.as_ref().unwrap();
 
             assert_eq!(
                 assignment_match.rule.name,
@@ -1177,8 +1526,9 @@ mod tests {
                 .unwrap();
             let flag = resolver.state.flags.get("flags/tutorial-feature").unwrap();
             let assignment_match = resolver
-                .resolve_flag(flag)
+                .resolve_flag(flag, BTreeMap::new())
                 .unwrap()
+                .resolved_value
                 .assignment_match
                 .unwrap();
 
@@ -1573,10 +1923,11 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolved_value = resolver.resolve_flag(flag).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, BTreeMap::new()).unwrap();
+        let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(resolved_value.reason as i32, ResolveReason::Match as i32);
-        let assignment_match = resolved_value.assignment_match.unwrap();
+        let assignment_match = resolved_value.assignment_match.as_ref().unwrap();
         assert_eq!(assignment_match.targeting_key, "26");
     }
 
@@ -1599,7 +1950,8 @@ mod tests {
             .flags
             .get("flags/fallthrough-test-2")
             .unwrap();
-        let resolved_value = resolver.resolve_flag(flag).unwrap();
+        let resolve_result = resolver.resolve_flag(flag, BTreeMap::new()).unwrap();
+        let resolved_value = &resolve_result.resolved_value;
 
         assert_eq!(
             resolved_value.reason as i32,

@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::format;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
@@ -6,10 +7,9 @@ use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use prost::Message;
 
-// #[global_allocator]
-// static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-use confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest;
+use confidence_resolver::proto::confidence::flags::resolver::v1::{
+    LogMessage, ResolveWithStickyRequest, WriteFlagLogsRequest,
+};
 use confidence_resolver::resolve_logger::ResolveLogger;
 use rand::distr::Alphanumeric;
 use rand::distr::SampleString;
@@ -29,7 +29,7 @@ use confidence_resolver::{
     proto::{
         confidence::flags::admin::v1::ResolverState as ResolverStatePb,
         confidence::flags::resolver::v1::{
-            ResolveFlagsRequest, ResolveFlagsResponse, ResolvedFlag, Sdk,
+            ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyResponse, ResolvedFlag, Sdk,
         },
         google::{Struct, Timestamp},
     },
@@ -122,6 +122,17 @@ fn converted_client(client: &Client) -> crate::proto::Client {
 struct WasmHost;
 
 impl Host for WasmHost {
+    fn random_alphanumeric(len: usize) -> String {
+        RNG.with_borrow_mut(|rng| Alphanumeric.sample_string(rng, len))
+    }
+
+    fn log(message: &str) {
+        log_message(LogMessage {
+            message: message.to_string(),
+        })
+        .unwrap();
+    }
+
     fn current_time() -> Timestamp {
         current_time(Void {}).unwrap()
     }
@@ -133,7 +144,7 @@ impl Host for WasmHost {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        let _ = LOGGER.log_resolve(
+        LOGGER.log_resolve(
             resolve_id,
             evaluation_context,
             &client.client_credential_name,
@@ -148,7 +159,7 @@ impl Host for WasmHost {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        let _ = LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
+        LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
     }
 
     fn encrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
@@ -157,10 +168,6 @@ impl Host for WasmHost {
 
     fn decrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
         Ok(token_data.to_vec())
-    }
-
-    fn random_alphanumeric(len: usize) -> String {
-        RNG.with_borrow_mut(|rng| Alphanumeric.sample_string(rng, len))
     }
 }
 
@@ -184,6 +191,14 @@ wasm_msg_guest! {
         Ok(VOID)
     }
 
+    fn resolve_with_sticky(request: ResolveWithStickyRequest) -> WasmResult<ResolveWithStickyResponse> {
+        let resolver_state = get_resolver_state()?;
+        let resolve_request = &request.resolve_request.clone().unwrap();
+        let evaluation_context = resolve_request.evaluation_context.clone().unwrap();
+        let resolver = resolver_state.get_resolver::<WasmHost>(resolve_request.client_secret.as_str(), evaluation_context, &ENCRYPTION_KEY)?;
+        resolver.resolve_flags_sticky(&request).into()
+    }
+
     fn resolve(request: ResolveFlagsRequest) -> WasmResult<ResolveFlagsResponse> {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
@@ -194,16 +209,18 @@ wasm_msg_guest! {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY).unwrap();
-        let resolved_value = resolver.resolve_flag_name(&request.name)?;
-        Ok((&resolved_value).into())
+        let resolve_result = resolver.resolve_flag_name(&request.name)?;
+        Ok((&resolve_result.resolved_value).into())
     }
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
-        LOGGER.checkpoint().map_err(|e| e.into())
+        let response = LOGGER.checkpoint();
+        Ok(response)
     }
 
 }
 
 // Declare the add function as a host function
 wasm_msg_host! {
+    fn log_message(message: LogMessage) -> WasmResult<Void>;
     fn current_time(request: Void) -> WasmResult<Timestamp>;
 }

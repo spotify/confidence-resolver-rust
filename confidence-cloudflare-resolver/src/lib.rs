@@ -33,7 +33,7 @@ static FLAGS_LOGS_QUEUE: OnceLock<Queue> = OnceLock::new();
 static CONFIDENCE_CLIENT_ID: OnceLock<String> = OnceLock::new();
 static CONFIDENCE_CLIENT_SECRET: OnceLock<String> = OnceLock::new();
 
-static FLAG_LOGGER: Lazy<Logger> = Lazy::new(|| Logger::new());
+static FLAG_LOGGER: Lazy<Logger> = Lazy::new(Logger::new);
 
 static RESOLVER_STATE: Lazy<ResolverState> = Lazy::new(|| {
     ResolverState::from_proto(STATE_JSON.to_owned().try_into().unwrap(), ACCOUNT_ID).unwrap()
@@ -192,9 +192,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
                             &Bytes::from(STANDARD.decode(ENCRYPTION_KEY_BASE64).unwrap()),
                         ) {
                             Ok(resolver) => match resolver.apply_flags(&apply_flag_req) {
-                                Ok(()) => {
-                                    return Response::from_json(&ApplyFlagsResponse::default());
-                                }
+                                Ok(()) => Response::from_json(&ApplyFlagsResponse::default()),
                                 Err(msg) => {
                                     Response::error(msg, 500)?.with_cors_headers(&allowed_origin)
                                 }
