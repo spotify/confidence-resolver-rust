@@ -12,7 +12,6 @@ import { ResolveReason } from './proto/api';
 import { Fetch, FetchMiddleware, withAuth, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
 import { AccessToken, LocalResolver, ResolveStateUri } from './LocalResolver';
-import { logger } from './logger';
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
@@ -141,7 +140,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     if(flag.reason != ResolveReason.RESOLVE_REASON_MATCH) {
       return {
         value: defaultValue,
-        reason: ConfidenceServerProviderLocal.convertReson(flag.reason),
+        reason: ConfidenceServerProviderLocal.convertReason(flag.reason),
       }
     }
     let value:unknown = flag.value;
@@ -155,7 +154,7 @@ export class ConfidenceServerProviderLocal implements Provider {
       }
       value = value[step];
     }
-    if(!valueMatchesSchema(value, defaultValue)) {
+    if(!isAssignableTo(value, defaultValue)) {
       return {
         value: defaultValue,
         reason: 'ERROR',
@@ -197,7 +196,7 @@ export class ConfidenceServerProviderLocal implements Provider {
       // nothing to send
       return;
     }
-    const resp = await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
+    await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
       method: 'post',
       signal,
       headers: {
@@ -233,7 +232,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     return resp.json();
   }
 
-  private static convertReson(reason:ResolveReason):ResolutionReason {
+  private static convertReason(reason:ResolveReason):ResolutionReason {
     switch(reason) {
       case ResolveReason.RESOLVE_REASON_ERROR:
         return 'ERROR';
@@ -296,18 +295,18 @@ function hasKey<K extends string>(obj:object, key:K): obj is { [P in K]: unknown
   return key in obj;
 }
 
-function valueMatchesSchema<T>(value:unknown, schema:T): value is T {
+function isAssignableTo<T>(value:unknown, schema:T): value is T {
   if(typeof schema !== typeof value) return false;
   if(typeof value === 'object' && typeof schema === 'object') {
     if(schema === null) return value === null;
     if(Array.isArray(schema)) {
       if(!Array.isArray(value)) return false;
       if(schema.length == 0) return true;
-      return value.every(item => valueMatchesSchema(item, schema[0]));
+      return value.every(item => isAssignableTo(item, schema[0]));
     }
     for(const [key, schemaValue] of Object.entries(schema)) {
       if(!hasKey(value!, key)) return false;
-      if(!valueMatchesSchema(value[key], schemaValue)) return false;
+      if(!isAssignableTo(value[key], schemaValue)) return false;
     }
   }
   return true;

@@ -50,19 +50,6 @@ export class WasmResolver implements LocalResolver {
     return this.transfer({ data }, Request);
   }
 
-  // private transferResponseSuccess<T>(value: T, codec: Codec<T>): number {
-  //   const data = codec.encode(value).finish();
-  //   return this.transfer({ data }, Response);
-  // }
-  // private transferResponseError<T>(error: string): number {
-  //   return this.transfer({ error }, Response);
-  // }
-
-  // private consumeRequest<T>(ptr: number, codec: Codec<T>): T {
-  //   const req: Request = this.consume(ptr, Request);
-  //   return codec.decode(req.data);
-  // }
-
   private consumeResponse<T>(ptr: number, codec: Codec<T>): T {
     const { data, error }: Response = this.consume(ptr, Response);
     if (error) {
