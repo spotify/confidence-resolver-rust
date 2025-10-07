@@ -41,7 +41,7 @@
         </dependency>
         <dependency>
             <groupId>com.dylibso.chicory</groupId>
-            <artifactId>compiler</artifactId>
+            <artifactId>annotations</artifactId>
         </dependency>
     </dependencies>
 
@@ -88,11 +88,36 @@
                 <version>2.16.2</version>
             </plugin>
             <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>templating-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>filtering-java-templates</id>
+                        <goals>
+                            <goal>filter-sources</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPathsUseDepMgmt>true</annotationProcessorPathsUseDepMgmt>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>com.dylibso.chicory</groupId>
+                            <artifactId>annotations-processor</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>com.dylibso.chicory</groupId>
                 <artifactId>chicory-compiler-maven-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>wast2json</id>
+                        <id>confidence-resolver</id>
                         <goals>
                             <goal>compile</goal>
                         </goals>

@@ -1,6 +1,6 @@
 package com.spotify.confidence.wasmresolvepoc;
 
-import com.dylibso.chicory.compiler.MachineFactoryCompiler;
+import com.dylibso.chicory.annotations.WasmModuleInterface;
 import com.dylibso.chicory.runtime.ExportFunction;
 import com.dylibso.chicory.runtime.ImportFunction;
 import com.dylibso.chicory.runtime.ImportValues;
@@ -25,45 +25,19 @@ import rust_guest.Types;
 import java.util.List;
 import java.util.function.Function;
 
-public class ResolverApi {
+@WasmModuleInterface(WasmResource.absoluteFile)
+public class ResolverApi implements ResolverApi_ModuleImports, ResolverApi_WasmMsg {
 
   private static final FunctionType HOST_FN_TYPE = FunctionType.of(List.of(ValType.I32), List.of(ValType.I32));
   private final Instance instance;
-
-  // interop
-  private final ExportFunction wasmMsgAlloc;
-  private final ExportFunction wasmMsgFree;
-
-  // api
-  private final ExportFunction wasmMsgGuestSetResolverState;
-  private final ExportFunction wasmMsgGuestResolve;
-  private final ExportFunction wasmMsgGuestResolveSimple;
+  private final ResolverApi_ModuleExports exports;
 
   public ResolverApi() {
-
     instance = Instance.builder(ConfidenceResolver.load())
-            .withImportValues(ImportValues.builder()
-                    .addFunction(createImportFunction("current_time", Messages.Void::parseFrom, this::currentTime))
-                    .addFunction(createImportFunction("log_resolve", Types.LogResolveRequest::parseFrom, this::logResolve))
-                    .addFunction(createImportFunction("log_assign", Types.LogAssignRequest::parseFrom, this::logAssign))
-                    .addFunction(new ImportFunction("wasm_msg", "wasm_msg_current_thread_id", FunctionType.of(List.of(), List.of(ValType.I32)), (instance1, args) -> new long[]{0}))
-                    .build())
+            .withImportValues(this.toImportValues())
             .withMachineFactory(ConfidenceResolver::create)
             .build();
-    wasmMsgAlloc = instance.export("wasm_msg_alloc");
-    wasmMsgFree = instance.export("wasm_msg_free");
-    wasmMsgGuestSetResolverState = instance.export("wasm_msg_guest_set_resolver_state");
-    wasmMsgGuestResolve = instance.export("wasm_msg_guest_resolve");
-    wasmMsgGuestResolveSimple = instance.export("wasm_msg_guest_resolve_simple");
-  }
-
-  private GeneratedMessage logAssign(Types.LogAssignRequest logAssignRequest) {
-    System.out.println("logAssign");
-    return Messages.Void.getDefaultInstance();
-  }
-
-  private GeneratedMessage logResolve(Types.LogResolveRequest logResolveRequest) {
-    return Messages.Void.getDefaultInstance();
+    exports = new ResolverApi_ModuleExports(instance);
   }
 
   private Timestamp currentTime(Messages.Void unused) {
@@ -75,19 +49,19 @@ public class ResolverApi {
             .setData(state.toByteString())
             .build().toByteArray();
     int addr = transfer(request);
-    int respPtr = (int) wasmMsgGuestSetResolverState.apply(addr)[0];
+    int respPtr = exports.wasmMsgGuestSetResolverState(addr);
     consumeResponse(respPtr, Messages.Void::parseFrom);
   }
 
   public ResolveFlagsResponse resolve(ResolveFlagsRequest request) {
     int reqPtr = transferRequest(request);
-    int respPtr = (int) wasmMsgGuestResolve.apply(reqPtr)[0];
+    int respPtr = exports.wasmMsgGuestResolve(reqPtr);
     return consumeResponse(respPtr, ResolveFlagsResponse::parseFrom);
   }
 
   public ResolvedFlag resolve_simple(ResolveSimpleRequest request) {
     int reqPtr = transferRequest(request);
-    int respPtr = (int) wasmMsgGuestResolveSimple.apply(reqPtr)[0];
+    int respPtr = exports.wasmMsgGuestResolveSimple(reqPtr);
     return consumeResponse(respPtr, ResolvedFlag::parseFrom);
   }
 
@@ -138,27 +112,29 @@ public class ResolverApi {
     final Memory mem = instance.memory();
     final int len = (int) (mem.readU32(addr - 4) - 4L);
     final byte[] data = mem.readBytes(addr, len);
-    wasmMsgFree.apply(addr);
+    exports.wasmMsgFree(addr);
     return data;
   }
 
   private int transfer(byte[] data) {
     final Memory mem = instance.memory();
-    int addr = (int) wasmMsgAlloc.apply(data.length)[0];
+    int addr = exports.wasmMsgAlloc(data.length);
     mem.write(addr, data);
     return addr;
   }
 
-  private <T extends GeneratedMessage> ImportFunction createImportFunction(String name, ParserFn<T> reqCodec, Function<T, GeneratedMessage> impl) {
-    return new ImportFunction("wasm_msg", "wasm_msg_host_" + name, HOST_FN_TYPE, (instance1, args) -> {
-        try {
-            final T message = consumeRequest((int) args[0], reqCodec);
-            final GeneratedMessage response = impl.apply(message);
-            return new long[]{transferResponseSuccess(response)};
-        } catch (Exception e) {
-            return new long[]{transferResponseError(e.getMessage())};
-        }
-    });
+  @Override
+  public ResolverApi_WasmMsg wasmMsg() {
+    return this;
+  }
+
+  @Override
+  public int wasmMsgHostCurrentTime(int arg0) {
+    try {
+      return transferResponseSuccess(currentTime(Messages.Void.getDefaultInstance()));
+    } catch (Exception e) {
+      return transferResponseError(e.getMessage());
+    }
   }
 
   private interface ParserFn<T> {
