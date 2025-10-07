@@ -2,5 +2,5 @@
 
 target/
 wasm/rust_guest.wasm
-
+wasm/confidence_resolver.wasm
 

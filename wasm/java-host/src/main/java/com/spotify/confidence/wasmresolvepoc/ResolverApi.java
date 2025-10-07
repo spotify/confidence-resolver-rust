@@ -39,16 +39,16 @@ public class ResolverApi {
   private final ExportFunction wasmMsgGuestResolve;
   private final ExportFunction wasmMsgGuestResolveSimple;
 
-  public ResolverApi(WasmModule module) {
+  public ResolverApi() {
 
-    instance = Instance.builder(module)
+    instance = Instance.builder(ConfidenceResolver.load())
             .withImportValues(ImportValues.builder()
                     .addFunction(createImportFunction("current_time", Messages.Void::parseFrom, this::currentTime))
                     .addFunction(createImportFunction("log_resolve", Types.LogResolveRequest::parseFrom, this::logResolve))
                     .addFunction(createImportFunction("log_assign", Types.LogAssignRequest::parseFrom, this::logAssign))
                     .addFunction(new ImportFunction("wasm_msg", "wasm_msg_current_thread_id", FunctionType.of(List.of(), List.of(ValType.I32)), (instance1, args) -> new long[]{0}))
                     .build())
-            .withMachineFactory(MachineFactoryCompiler::compile)
+            .withMachineFactory(ConfidenceResolver::create)
             .build();
     wasmMsgAlloc = instance.export("wasm_msg_alloc");
     wasmMsgFree = instance.export("wasm_msg_free");
