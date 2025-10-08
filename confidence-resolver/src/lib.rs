@@ -3,7 +3,7 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::indexing_slicing,
-    // clippy::integer_arithmetic
+    clippy::arithmetic_side_effects
 ))]
 
 use bitvec::prelude as bv;
