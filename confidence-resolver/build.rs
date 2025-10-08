@@ -3,6 +3,9 @@ use std::io::Result;
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
+    // Suppress all clippy lints in generated proto code
+    const ALLOW_ATTR: &str = "#[allow(clippy::all, clippy::arithmetic_side_effects, clippy::panic, clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]";
+
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("protos");
     let proto_files = vec![
         root.join("confidence/flags/admin/v1/types.proto"),
@@ -22,8 +25,7 @@ fn main() -> Result<()> {
 
     let mut config = prost_build::Config::new();
 
-    // Suppress arithmetic_side_effects lint in all generated proto code
-    config.type_attribute(".", "#[allow(clippy::arithmetic_side_effects)]");
+    config.type_attribute(".", ALLOW_ATTR);
 
     [
         "confidence.flags.admin.v1.ClientResolveInfo.EvaluationContextSchemaInstance",
@@ -75,28 +77,22 @@ fn main() -> Result<()> {
                 ".google.type",
             ])?;
 
-        // Suppress arithmetic_side_effects lint in generated serde files
+        // Suppress all clippy lints in generated serde files
         let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
         for entry in std::fs::read_dir(&out_dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "rs")
-                && path.file_name().is_some_and(|n| n.to_str().unwrap().contains(".serde.rs")) {
+                && path.file_name().is_some_and(|n| n.to_str().unwrap().contains(".serde.rs"))
+            {
                 let content = std::fs::read_to_string(&path)?;
-                // Add allow attribute before each impl block
                 let mut new_content = content
-                    .replace(
-                        "\nimpl ",
-                        "\n#[allow(clippy::arithmetic_side_effects)]\nimpl "
-                    )
-                    .replace(
-                        "\nimpl<",
-                        "\n#[allow(clippy::arithmetic_side_effects)]\nimpl<"
-                    );
+                    .replace("\nimpl ", &format!("\n{}\nimpl ", ALLOW_ATTR))
+                    .replace("\nimpl<", &format!("\n{}\nimpl<", ALLOW_ATTR));
 
-                // Also handle first impl if it's at the start of file
+                // Handle first impl if it's at the start of file
                 if new_content.starts_with("impl ") || new_content.starts_with("impl<") {
-                    new_content = format!("#[allow(clippy::arithmetic_side_effects)]\n{}", new_content);
+                    new_content = format!("{}\n{}", ALLOW_ATTR, new_content);
                 }
 
                 std::fs::write(&path, new_content)?;
