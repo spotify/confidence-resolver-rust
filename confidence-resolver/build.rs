@@ -84,13 +84,21 @@ fn main() -> Result<()> {
                 && path.file_name().is_some_and(|n| n.to_str().unwrap().contains(".serde.rs")) {
                 let content = std::fs::read_to_string(&path)?;
                 // Add allow attribute before each impl block
-                let new_content = content.replace(
-                    "\nimpl ",
-                    "\n#[allow(clippy::arithmetic_side_effects)]\nimpl "
-                ).replace(
-                    "\nimpl<",
-                    "\n#[allow(clippy::arithmetic_side_effects)]\nimpl<"
-                );
+                let mut new_content = content
+                    .replace(
+                        "\nimpl ",
+                        "\n#[allow(clippy::arithmetic_side_effects)]\nimpl "
+                    )
+                    .replace(
+                        "\nimpl<",
+                        "\n#[allow(clippy::arithmetic_side_effects)]\nimpl<"
+                    );
+
+                // Also handle first impl if it's at the start of file
+                if new_content.starts_with("impl ") || new_content.starts_with("impl<") {
+                    new_content = format!("#[allow(clippy::arithmetic_side_effects)]\n{}", new_content);
+                }
+
                 std::fs::write(&path, new_content)?;
             }
         }
