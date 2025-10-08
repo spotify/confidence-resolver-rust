@@ -83,7 +83,9 @@ fn main() -> Result<()> {
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "rs")
-                && path.file_name().is_some_and(|n| n.to_str().unwrap().contains(".serde.rs"))
+                && path
+                    .file_name()
+                    .is_some_and(|n| n.to_str().unwrap().contains(".serde.rs"))
             {
                 let content = std::fs::read_to_string(&path)?;
                 let mut new_content = content
