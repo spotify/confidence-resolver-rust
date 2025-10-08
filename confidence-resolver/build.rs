@@ -22,6 +22,9 @@ fn main() -> Result<()> {
 
     let mut config = prost_build::Config::new();
 
+    // Suppress arithmetic_side_effects lint in all generated proto code
+    config.type_attribute(".", "#[allow(clippy::arithmetic_side_effects)]");
+
     [
         "confidence.flags.admin.v1.ClientResolveInfo.EvaluationContextSchemaInstance",
         "confidence.flags.admin.v1.ContextFieldSemanticType",
@@ -71,6 +74,26 @@ fn main() -> Result<()> {
                 ".confidence.iam.v1",
                 ".google.type",
             ])?;
+
+        // Suppress arithmetic_side_effects lint in generated serde files
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        for entry in std::fs::read_dir(&out_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "rs")
+                && path.file_name().is_some_and(|n| n.to_str().unwrap().contains(".serde.rs")) {
+                let content = std::fs::read_to_string(&path)?;
+                // Add allow attribute before each impl block
+                let new_content = content.replace(
+                    "\nimpl ",
+                    "\n#[allow(clippy::arithmetic_side_effects)]\nimpl "
+                ).replace(
+                    "\nimpl<",
+                    "\n#[allow(clippy::arithmetic_side_effects)]\nimpl<"
+                );
+                std::fs::write(&path, new_content)?;
+            }
+        }
     }
 
     Ok(())
