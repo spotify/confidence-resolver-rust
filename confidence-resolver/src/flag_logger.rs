@@ -34,6 +34,12 @@ pub struct Logger {
     flag_log_requests: Mutex<Vec<FlagLogQueueRequest>>,
 }
 
+impl Default for Logger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Logger {
     pub fn new() -> Logger {
         Logger {

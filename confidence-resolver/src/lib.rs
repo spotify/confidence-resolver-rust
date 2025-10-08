@@ -10,7 +10,6 @@ use bitvec::prelude as bv;
 use core::marker::PhantomData;
 use fastmurmur3::murmur3_x64_128;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::format;
 
 use bytes::Bytes;
 
@@ -851,9 +850,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 let read_materialization = &materialization_spec.read_materialization;
                 if !read_materialization.is_empty() {
                     if let Some(info) = sticky_context.get(&unit) {
-                        let info_from_context = info.info_map.get(read_materialization).clone();
+                        let info_from_context = info.info_map.get(read_materialization);
 
-                        if let Some(ref info_data) = info_from_context {
+                        if let Some(info_data) = info_from_context {
                             if !info_data.unit_in_info {
                                 if materialization_spec
                                     .mode
