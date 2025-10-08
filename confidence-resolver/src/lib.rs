@@ -687,7 +687,8 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             };
             let apply_time = to_date_time_utc(apply_time).or_fail()?;
             let skew = send_time.signed_duration_since(apply_time);
-            let skew_adjusted_applied_time = datetime_to_timestamp(&(receive_time - skew));
+            let adjusted_time = receive_time.checked_sub_signed(skew).or_fail()?;
+            let skew_adjusted_applied_time = datetime_to_timestamp(&adjusted_time);
             assigned_flags.push(FlagToApply {
                 assigned_flag: assigned_flag.clone(),
                 skew_adjusted_applied_time,
