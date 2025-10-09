@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 use crate::{
-    err::{Fallible, OrFailExt},
     schema_util::{DerivedClientSchema, SchemaFromEvaluationContext},
     FlagToApply,
 };
@@ -34,6 +33,12 @@ mod pb {
 #[derive(Debug)]
 pub struct ResolveLogger {
     state: ArcSwap<RwLock<Option<ResolveInfoState>>>,
+}
+
+impl Default for ResolveLogger {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ResolveLogger {

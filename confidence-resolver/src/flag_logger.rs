@@ -34,6 +34,12 @@ pub struct Logger {
     flag_log_requests: Mutex<Vec<FlagLogQueueRequest>>,
 }
 
+impl Default for Logger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Logger {
     pub fn new() -> Logger {
         Logger {
@@ -400,7 +406,8 @@ fn update_rule_variant_info(
         let resolve_count = match flag_info.rule_resolve_info.get(&rule_info.rule) {
             Some(i) => i.count,
             None => 0,
-        } + rule_info.count;
+        }
+        .saturating_add(rule_info.count);
 
         // assignment id to count
         let current_assignments: &HashMap<String, i64> =
@@ -415,7 +422,8 @@ fn update_rule_variant_info(
             let count = match current_assignments.get(&aa.assignment_id) {
                 None => 0,
                 Some(a) => *a,
-            } + aa.count;
+            }
+            .saturating_add(aa.count);
             new_assignment_count.insert(aa.clone().assignment_id, count);
         }
         flag_info.rule_resolve_info.insert(
@@ -431,7 +439,8 @@ fn update_rule_variant_info(
         let count = match flag_info.variant_resolve_info.get(&variant_info.variant) {
             None => 0,
             Some(v) => *v,
-        } + variant_info.count;
+        }
+        .saturating_add(variant_info.count);
         flag_info
             .variant_resolve_info
             .insert(variant_info.variant.clone(), count);

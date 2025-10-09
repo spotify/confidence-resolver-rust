@@ -35,16 +35,16 @@ pub fn decompress_gz(buffer: &[u8]) -> Fallible<Vec<u8>> {
     if flags & FHCRC != 0 {
         fail!("crc not supported");
     }
-    let trailer_start = buffer.len() - 8;
-    let crc_bytes = buffer.get(trailer_start..trailer_start + 4).or_fail()?;
+    let trailer_start = buffer.len().checked_sub(8).or_fail()?;
+    let crc_end = trailer_start.checked_add(4).or_fail()?;
+    let isize_end = trailer_start.checked_add(8).or_fail()?;
+
+    let crc_bytes = buffer.get(trailer_start..crc_end).or_fail()?;
     let crc = u32::from_le_bytes(crc_bytes.try_into().or_fail()?);
-    let isize = u32::from_le_bytes(
-        buffer
-            .get(trailer_start + 4..trailer_start + 8)
-            .or_fail()?
-            .try_into()
-            .or_fail()?,
-    );
+
+    let isize_bytes = buffer.get(crc_end..isize_end).or_fail()?;
+    let isize = u32::from_le_bytes(isize_bytes.try_into().or_fail()?);
+
     let compressed_bytes = buffer.get(10..trailer_start).or_fail()?;
     let data = decompress_to_vec(compressed_bytes).or_fail()?;
     if isize != data.len() as u32 {

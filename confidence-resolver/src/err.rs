@@ -55,7 +55,7 @@ impl ErrorCode {
 
         // emit 8 sextets (MSB first)
         core::array::from_fn(|i| {
-            let shift = 42 - i * 6;
+            let shift = 42usize.wrapping_sub(i.wrapping_mul(6usize));
             let sextet = ((v >> shift) & 0x3F) as u8;
             b64u6(sextet)
         })
@@ -162,7 +162,7 @@ impl core::fmt::Display for ErrorCode {
     }
 }
 
-#[allow(clippy::indexing_slicing)]
+#[allow(clippy::indexing_slicing, clippy::arithmetic_side_effects)]
 const fn fnv1a64<const N: usize>(parts: [&[u8]; N]) -> u64 {
     const FNV64_INIT: u64 = 0xCBF2_9CE4_8422_2325;
     const FNV64_PRIME: u64 = 0x1000_0000_01B3;
@@ -183,6 +183,7 @@ const fn fnv1a64<const N: usize>(parts: [&[u8]; N]) -> u64 {
 }
 
 #[inline]
+#[allow(clippy::arithmetic_side_effects)]
 fn b64u6(x: u8) -> u8 {
     match x {
         0..=25 => b'A' + x,

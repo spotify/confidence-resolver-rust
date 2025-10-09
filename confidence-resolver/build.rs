@@ -3,6 +3,9 @@ use std::io::Result;
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
+    // Suppress all clippy lints in generated proto code
+    const ALLOW_ATTR: &str = "#[allow(clippy::all, clippy::arithmetic_side_effects, clippy::panic, clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]";
+
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("protos");
     let proto_files = vec![
         root.join("confidence/flags/admin/v1/types.proto"),
@@ -21,6 +24,8 @@ fn main() -> Result<()> {
     let descriptor_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("proto_descriptor.bin");
 
     let mut config = prost_build::Config::new();
+
+    config.type_attribute(".", ALLOW_ATTR);
 
     [
         "confidence.flags.admin.v1.ClientResolveInfo.EvaluationContextSchemaInstance",
@@ -71,6 +76,30 @@ fn main() -> Result<()> {
                 ".confidence.iam.v1",
                 ".google.type",
             ])?;
+
+        // Suppress all clippy lints in generated serde files
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        for entry in std::fs::read_dir(&out_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "rs")
+                && path
+                    .file_name()
+                    .is_some_and(|n| n.to_str().unwrap().contains(".serde.rs"))
+            {
+                let content = std::fs::read_to_string(&path)?;
+                let mut new_content = content
+                    .replace("\nimpl ", &format!("\n{}\nimpl ", ALLOW_ATTR))
+                    .replace("\nimpl<", &format!("\n{}\nimpl<", ALLOW_ATTR));
+
+                // Handle first impl if it's at the start of file
+                if new_content.starts_with("impl ") || new_content.starts_with("impl<") {
+                    new_content = format!("{}\n{}", ALLOW_ATTR, new_content);
+                }
+
+                std::fs::write(&path, new_content)?;
+            }
+        }
     }
 
     Ok(())

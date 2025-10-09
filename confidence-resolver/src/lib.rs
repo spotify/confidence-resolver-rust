@@ -1,16 +1,18 @@
-#![cfg_attr(not(test), deny(
-    clippy::panic,
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::indexing_slicing,
-    // clippy::integer_arithmetic
-))]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::panic,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects
+    )
+)]
 
 use bitvec::prelude as bv;
 use core::marker::PhantomData;
 use fastmurmur3::murmur3_x64_128;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::format;
 
 use bytes::Bytes;
 
@@ -688,7 +690,8 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             };
             let apply_time = to_date_time_utc(apply_time).or_fail()?;
             let skew = send_time.signed_duration_since(apply_time);
-            let skew_adjusted_applied_time = datetime_to_timestamp(&(receive_time - skew));
+            let adjusted_time = receive_time.checked_sub_signed(skew).or_fail()?;
+            let skew_adjusted_applied_time = datetime_to_timestamp(&adjusted_time);
             assigned_flags.push(FlagToApply {
                 assigned_flag: assigned_flag.clone(),
                 skew_adjusted_applied_time,
@@ -851,9 +854,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                 let read_materialization = &materialization_spec.read_materialization;
                 if !read_materialization.is_empty() {
                     if let Some(info) = sticky_context.get(&unit) {
-                        let info_from_context = info.info_map.get(read_materialization).clone();
+                        let info_from_context = info.info_map.get(read_materialization);
 
-                        if let Some(ref info_data) = info_from_context {
+                        if let Some(info_data) = info_from_context {
                             if !info_data.unit_in_info {
                                 if materialization_spec
                                     .mode
@@ -927,7 +930,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             let bucket_count = spec.bucket_count;
             let variant_salt = segment_name.split("/").nth(1).or_fail()?;
             let key = format!("{}|{}", variant_salt, unit);
-            let bucket = bucket(hash(&key), bucket_count as u64) as i32;
+            let bucket = bucket(hash(&key), bucket_count as u64)? as i32;
 
             let matched_assignment = spec.assignments.iter().find(|assignment| {
                 assignment
@@ -1077,7 +1080,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             return Ok(true);
         }; // todo: would this match or not?
         let salted_unit = self.client.account.salt_unit(unit)?;
-        let unit_hash = bucket(hash(&salted_unit), BUCKETS);
+        let unit_hash = bucket(hash(&salted_unit), BUCKETS)?;
         Ok(bitset[unit_hash])
     }
 
@@ -1381,12 +1384,16 @@ pub fn hash(key: &str) -> u128 {
     murmur3_x64_128(key.as_bytes(), 0)
 }
 
-pub fn bucket(hash: u128, buckets: u64) -> usize {
+#[allow(clippy::arithmetic_side_effects)] // buckets != 0 checked above
+pub fn bucket(hash: u128, buckets: u64) -> Fallible<usize> {
+    if buckets == 0 {
+        fail!(":bucket.zero_buckets");
+    }
     // convert u128 to u64 to match what we do in the java resolver
     let hash_long: u64 = hash as u64;
 
     // don't ask me why
-    ((hash_long >> 4) % buckets) as usize
+    Ok(((hash_long >> 4) % buckets) as usize)
 }
 
 #[cfg(test)]
@@ -1477,8 +1484,17 @@ mod tests {
         let account = Account {
             name: "accounts/confidence-test".to_string(),
         };
-        let bucket = bucket(hash(&account.salt_unit("roug").unwrap()), BUCKETS);
+        let bucket = bucket(hash(&account.salt_unit("roug").unwrap()), BUCKETS).unwrap();
         assert_eq!(bucket, 567493); // test matching bucketing result from the java randomizer
+    }
+
+    #[test]
+    fn test_bucket_zero() {
+        let account = Account {
+            name: "accounts/confidence-test".to_string(),
+        };
+        let result = bucket(hash(&account.salt_unit("roug").unwrap()), 0);
+        assert!(result.is_err()); // bucket count of 0 should return error
     }
 
     #[test]
