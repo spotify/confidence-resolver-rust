@@ -175,9 +175,9 @@ const fn fnv1a64<const N: usize>(parts: [&[u8]; N]) -> u64 {
         while j < b.len() {
             h ^= b[j] as u64;
             h = h.wrapping_mul(FNV64_PRIME);
-            j = j.wrapping_add(1);
+            j += 1;
         }
-        i = i.wrapping_add(1);
+        i += 1;
     }
     h
 }
@@ -186,9 +186,9 @@ const fn fnv1a64<const N: usize>(parts: [&[u8]; N]) -> u64 {
 #[allow(clippy::arithmetic_side_effects)]
 fn b64u6(x: u8) -> u8 {
     match x {
-        0..=25 => b'A'.wrapping_add(x),
-        26..=51 => b'a'.wrapping_add(x.wrapping_sub(26)),
-        52..=61 => b'0'.wrapping_add(x.wrapping_sub(52)),
+        0..=25 => b'A' + x,
+        26..=51 => b'a' + (x - 26),
+        52..=61 => b'0' + (x - 52),
         62 => b'-',
         _ => b'_', // 63
     }
