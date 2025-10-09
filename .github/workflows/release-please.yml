@@ -36,17 +36,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract confidence_resolver version and tag
         id: extract_version
@@ -55,15 +58,21 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "TAG_NAME=confidence_resolver-v$VERSION" >> $GITHUB_ENV
 
-      - name: Build WASM artifact
-        run: make wasm/confidence_resolver.wasm
+      - name: Build and extract WASM artifact
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: wasm-rust-guest.artifact
+          outputs: type=local,dest=./artifacts
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
+          # Note: No cache-to - releases only consume cache, don't update it
 
       - name: Upload WASM to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            wasm/confidence_resolver.wasm
+            artifacts/confidence_resolver.wasm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
