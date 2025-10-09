@@ -11,11 +11,43 @@
 # Rust build artifacts
 /target
 **/target
+artifacts/
+
+# WASM artifacts (will be built in Docker)
+wasm/*.wasm
+*.wasm
 
 # Node modules
 /node_modules
 **/node_modules
 
+# Python
+__pycache__/
+*.pyc
+.venv/
+**/.venv/
+
+# Java
+*.class
+
 # Local runtime data
-/data/
-**/data/
+# Note: Root /data/ is included (needed by confidence-cloudflare-resolver)
+# Exclude data dirs in subdirectories only
+wasm/*/data/
+confidence-resolver/data/
+
+# Logs
+*.log
+*.out
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

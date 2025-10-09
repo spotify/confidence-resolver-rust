@@ -14,31 +14,30 @@ The Confidence Flag Resolver implemented in Rust, plus example hosts and a Cloud
 
 ## Prerequisites
 
-- Rust (stable) and the `wasm32-unknown-unknown` target
-- For examples: Go, Node.js + Yarn, Python 3, Java + Maven
-- Optional: Cloudflare Wrangler if you plan to deploy the Worker
+**Option 1: Docker only**
+- Docker - Everything runs in containers, no other tools needed
 
-Install the WASM target:
+**Option 2: Local development**
+- Rust toolchain (automatically installed via `rust-toolchain.toml`)
+- For host examples: Go, Node.js + Yarn, Python 3, Java + Maven
+
+## Quick Start
 
 ```bash
-rustup target add wasm32-unknown-unknown
-```
+# With Docker (reproducible, no setup needed)
+docker build .                    # Build, test, lint everything
+make                              # Same, using Makefile
 
-## Common tasks
+# With local tools (fast iteration)
+make test                         # Run tests
+make lint                         # Run linting
+make build                        # Build WASM
 
-- Build all targets:
-```bash
-make build
-```
-
-- Test core resolver:
-```bash
-make test
-```
-
-- Lint all crates:
-```bash
-make lint
+# Run host examples
+make run-node
+make run-java
+make run-go
+make run-python
 ```
 
 ## Running the example hosts
