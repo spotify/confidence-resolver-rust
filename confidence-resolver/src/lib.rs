@@ -930,7 +930,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             let bucket_count = spec.bucket_count;
             let variant_salt = segment_name.split("/").nth(1).or_fail()?;
             let key = format!("{}|{}", variant_salt, unit);
-            let bucket = bucket(hash(&key), bucket_count as u64).or_fail()? as i32;
+            let bucket = bucket(hash(&key), bucket_count as u64)? as i32;
 
             let matched_assignment = spec.assignments.iter().find(|assignment| {
                 assignment
@@ -1080,7 +1080,7 @@ impl<'a, H: Host> AccountResolver<'a, H> {
             return Ok(true);
         }; // todo: would this match or not?
         let salted_unit = self.client.account.salt_unit(unit)?;
-        let unit_hash = bucket(hash(&salted_unit), BUCKETS).or_fail()?;
+        let unit_hash = bucket(hash(&salted_unit), BUCKETS)?;
         Ok(bitset[unit_hash])
     }
 
@@ -1384,12 +1384,16 @@ pub fn hash(key: &str) -> u128 {
     murmur3_x64_128(key.as_bytes(), 0)
 }
 
-pub fn bucket(hash: u128, buckets: u64) -> Option<usize> {
+#[allow(clippy::arithmetic_side_effects)] // buckets != 0 checked above
+pub fn bucket(hash: u128, buckets: u64) -> Fallible<usize> {
+    if buckets == 0 {
+        fail!(":bucket.zero_buckets");
+    }
     // convert u128 to u64 to match what we do in the java resolver
     let hash_long: u64 = hash as u64;
 
     // don't ask me why
-    (hash_long >> 4).checked_rem(buckets).map(|r| r as usize)
+    Ok(((hash_long >> 4) % buckets) as usize)
 }
 
 #[cfg(test)]
@@ -1490,7 +1494,7 @@ mod tests {
             name: "accounts/confidence-test".to_string(),
         };
         let result = bucket(hash(&account.salt_unit("roug").unwrap()), 0);
-        assert_eq!(result, None); // bucket count of 0 should return None
+        assert!(result.is_err()); // bucket count of 0 should return error
     }
 
     #[test]
