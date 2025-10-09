@@ -29,7 +29,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and test everything
+      - name: Build and test everything (PR)
+        if: github.event_name != 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: all
+          push: false
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
+
+      - name: Build and test everything (Push - updates cache)
+        if: github.event_name == 'push'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -40,8 +50,8 @@ jobs:
 
       - name: Extract artifacts
         run: |
-          mkdir -p artifacts
-          docker build --target=all --output=type=local,dest=./artifacts .
+          mkdir artifacts
+          docker build --target=wasm-rust-guest.artifact --output=type=local,dest=./artifacts .
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
