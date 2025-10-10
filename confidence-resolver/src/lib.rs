@@ -1081,6 +1081,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
         }; // todo: would this match or not?
         let salted_unit = self.client.account.salt_unit(unit)?;
         let unit_hash = bucket(hash(&salted_unit), BUCKETS)?;
+        if unit_hash >= bitset.len() {
+            return Ok(false);
+        }
         Ok(bitset[unit_hash])
     }
 
