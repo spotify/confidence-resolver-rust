@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.4.0...confidence_resolver-v0.5.0) (2025-10-10)
+
+
+### Features
+
+* js local resolver ([#32](https://github.com/spotify/confidence-resolver-rust/issues/32)) ([58893d6](https://github.com/spotify/confidence-resolver-rust/commit/58893d6610b56b5aa6a6250db9e9bb1af506497f))
+
+
+### Bug Fixes
+
+* handle arithmetic panics ([#45](https://github.com/spotify/confidence-resolver-rust/issues/45)) ([83912c9](https://github.com/spotify/confidence-resolver-rust/commit/83912c9d93665b01a4cc1e9cd8e520fd94f2e21a))
+* handle arithmetic panics ([#45](https://github.com/spotify/confidence-resolver-rust/issues/45)) ([6713c28](https://github.com/spotify/confidence-resolver-rust/commit/6713c28196b351db9ba22eb87ca7b83ef4a25ff3))
+* return false out of range ([#47](https://github.com/spotify/confidence-resolver-rust/issues/47)) ([0a91568](https://github.com/spotify/confidence-resolver-rust/commit/0a915688d115df760692879c5e93f62c54a09d56))
+
 ## [0.4.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.3.1...confidence_resolver-v0.4.0) (2025-10-03)
 
 

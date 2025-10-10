@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/spotify/confidence-resolver-rust/compare/wasm-msg-v0.1.0...wasm-msg-v0.2.0) (2025-10-10)
+
+
+### Features
+
+* js local resolver ([#32](https://github.com/spotify/confidence-resolver-rust/issues/32)) ([58893d6](https://github.com/spotify/confidence-resolver-rust/commit/58893d6610b56b5aa6a6250db9e9bb1af506497f))
+
 ## 0.1.0 (2025-09-03)
 
 
