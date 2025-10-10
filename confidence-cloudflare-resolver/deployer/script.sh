@@ -73,7 +73,7 @@ if test -z "$CONFIDENCE_RESOLVER_STATE_URL"; then
         fi
 
         # HTTP using REST transcoding
-        local url="https://flags.confidence.dev/v1/resolverState:resolverStateUri"
+        local url="https://resolver.confidence.dev/v1/resolverState:resolverStateUri"
         local resp
         resp=$(curl -s -w "%{http_code}" -H "Authorization: Bearer ${token}" "${url}")
         local http_status="${resp: -3}"
@@ -84,11 +84,11 @@ if test -z "$CONFIDENCE_RESOLVER_STATE_URL"; then
             signed_uri=$(printf "%s" "$body" | jq -r '.signedUri // .signed_uri // empty')
             if [ -n "$signed_uri" ]; then
                 CONFIDENCE_RESOLVER_STATE_URL="$signed_uri"
-                echo "⤵️ Retrieved resolver state URL from flags.confidence.dev"
+                echo "⤵️ Retrieved resolver state URL from resolver.confidence.dev"
                 return 0
             fi
         else
-            echo "⚠️ Failed to fetch resolver state URL from flags.confidence.dev: HTTP ${http_status}" >&2
+            echo "⚠️ Failed to fetch resolver state URL from resolver.confidence.dev: HTTP ${http_status}" >&2
         fi
         return 1
     }
