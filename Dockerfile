@@ -3,7 +3,7 @@
 # ==============================================================================
 # Base image with Rust toolchain (Alpine - more reliable than Debian)
 # ==============================================================================
-FROM rust:1.83-alpine AS rust-base
+FROM rust:1.89-alpine AS rust-base
 
 # Install system dependencies
 # - protoc/protobuf-dev: Required for prost-build (proto compilation in build.rs)
@@ -11,7 +11,8 @@ FROM rust:1.83-alpine AS rust-base
 RUN apk add --no-cache \
     protobuf-dev \
     protoc \
-    musl-dev
+    musl-dev \
+    make
 
 WORKDIR /workspace
 
@@ -54,9 +55,6 @@ RUN mkdir -p confidence-resolver/src && \
     mkdir -p wasm/rust-guest/src && \
     echo "pub fn dummy() {}" > wasm/rust-guest/src/lib.rs
 
-# Install make for running Makefile commands
-RUN apk add --no-cache make
-
 # Build dependencies (this layer will be cached)
 RUN cargo build --release -p confidence_resolver
 
@@ -70,9 +68,6 @@ RUN cargo build -p rust-guest --target wasm32-unknown-unknown --profile wasm
 # Test & Lint Base - Copy source for testing/linting (native builds)
 # ==============================================================================
 FROM rust-base AS rust-test-base
-
-# Install make
-RUN apk add --no-cache make
 
 # Copy the dependency cache from deps stage
 COPY --from=rust-deps /usr/local/cargo /usr/local/cargo
@@ -126,9 +121,6 @@ RUN make lint
 # ==============================================================================
 FROM rust-base AS wasm-deps
 
-# Install make
-RUN apk add --no-cache make
-
 # Copy the dependency cache from deps stage
 COPY --from=rust-deps /usr/local/cargo /usr/local/cargo
 COPY --from=rust-deps /workspace/target /workspace/target
@@ -147,19 +139,18 @@ COPY data/ ./data/
 # Touch files to ensure rebuild
 RUN find . -type f -name "*.rs" -exec touch {} +
 
-# Build WASM using Makefile
-WORKDIR /workspace/wasm/rust-guest
-RUN make build
-
 # ==============================================================================
 # Build wasm/rust-guest WASM
 # ==============================================================================
 FROM wasm-deps AS wasm-rust-guest.build
 
+WORKDIR /workspace/wasm/rust-guest
+RUN make build
+
 # Change back to workspace root to find the target directory
 WORKDIR /workspace
 
-# Build is already done in wasm-deps, just verify
+# Verify build artifact
 RUN ls -lh target/wasm32-unknown-unknown/wasm/rust_guest.wasm && \
     echo "WASM size: $(du -h target/wasm32-unknown-unknown/wasm/rust_guest.wasm | cut -f1)"
 
@@ -192,15 +183,12 @@ RUN make lint
 FROM node:20-alpine AS node-host-base
 
 # Install protoc for proto generation
-RUN apk add --no-cache protobuf-dev protoc
+RUN apk add --no-cache protobuf-dev protoc make
 
 WORKDIR /app
 
 # Enable Corepack for Yarn
 RUN corepack enable
-
-# Install make
-RUN apk add --no-cache make
 
 # Copy package files for dependency caching
 COPY wasm/node-host/package.json wasm/node-host/yarn.lock wasm/node-host/.yarnrc.yml ./
@@ -221,13 +209,6 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../confidence_res
 
 # Copy resolver state
 COPY wasm/resolver_state.pb ../resolver_state.pb
-
-# ==============================================================================
-# Node.js Host Runner - Run the Node.js example
-# ==============================================================================
-FROM node-host-base AS node-host-run
-
-CMD ["yarn", "start"]
 
 # ==============================================================================
 # Test Node.js Host (integration test)
@@ -267,13 +248,6 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../confidence_res
 
 # Copy resolver state
 COPY wasm/resolver_state.pb ../resolver_state.pb
-
-# ==============================================================================
-# Java Host Runner - Run the Java example
-# ==============================================================================
-FROM java-host-base AS java-host-run
-
-CMD ["mvn", "-q", "exec:java"]
 
 # ==============================================================================
 # Test Java Host (integration test)
@@ -318,13 +292,6 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../confidence_res
 COPY wasm/resolver_state.pb ../resolver_state.pb
 
 # ==============================================================================
-# Go Host Runner - Run the Go example
-# ==============================================================================
-FROM go-host-base AS go-host-run
-
-CMD ["go", "run", "."]
-
-# ==============================================================================
 # Test Go Host (integration test)
 # ==============================================================================
 FROM go-host-base AS go-host.test
@@ -361,13 +328,6 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../confidence_res
 
 # Copy resolver state
 COPY wasm/resolver_state.pb ../resolver_state.pb
-
-# ==============================================================================
-# Python Host Runner - Run the Python example
-# ==============================================================================
-FROM python-host-base AS python-host-run
-
-CMD ["make", "run"]
 
 # ==============================================================================
 # Test Python Host (integration test)

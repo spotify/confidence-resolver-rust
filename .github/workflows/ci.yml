@@ -53,13 +53,6 @@ jobs:
           mkdir artifacts
           docker build --target=wasm-rust-guest.artifact --output=type=local,dest=./artifacts .
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: artifacts/
-          retention-days: 7
-
       - name: Show build summary
         run: |
           echo "## Build Artifacts" >> $GITHUB_STEP_SUMMARY
