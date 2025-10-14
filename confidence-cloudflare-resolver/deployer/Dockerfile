@@ -8,8 +8,8 @@ RUN rustup toolchain install 1.86.0 && \
 WORKDIR /workspace
 
 RUN apt-get update && \
-    apt install -y protobuf-compiler jq curl && \
-    protoc --version && jq --version && curl --version
+    apt install -y protobuf-compiler jq curl git && \
+    protoc --version && jq --version && curl --version && git --version
 
 # Install cargo-chef to leverage Docker layer caching of Rust deps
 RUN cargo install cargo-chef --locked
@@ -20,6 +20,8 @@ WORKDIR /workspace
 # Copy the full repo to compute the recipe. This stage is not cached across
 # source changes, but downstream cook stage will be, based on the recipe only.
 COPY . .
+
+RUN if [ -d .git ]; then git describe --tags --exact-match 2>/dev/null > /workspace/.release_tag || true; fi
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Cacher stage: build dependency layers only (cached unless Cargo.toml changes) ---

@@ -147,17 +147,21 @@ fi
 
 
 DEPLOYER_VERSION=""
-if [ -n "${COMMIT_SHA:-}" ]; then
-    DEPLOYER_VERSION="$(printf '%s' "$COMMIT_SHA" | tr -d '\n' | cut -c1-12)"
-    echo "🐙 Deployer version (env): ${DEPLOYER_VERSION}"
-elif [ -d .git ] && command -v git >/dev/null 2>&1; then
-    if DEPLOYER_VERSION=$(git rev-parse --short=12 HEAD 2>/dev/null); then
-        echo "🐙 Deployer version (commit): ${DEPLOYER_VERSION}"
+if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+    # Prefer tags that match the deployer release format confidence-cloudflare-resolver: vX.Y.Z
+    if DEPLOYER_VERSION=$(git describe --tags 2>/dev/null); then
+        echo "🏷️ Deployer version (tag): ${DEPLOYER_VERSION}"
     else
-        echo "ℹ️ No git metadata available; skipping deployer version evaluation"
+        echo "ℹ️ Unable to resolve deployer tag"
     fi
 else
-    echo "ℹ️ Deployer version not set (no COMMIT_SHA or git metadata)"
+    if [ -s "/workspace/.release_tag" ]; then
+        if DEPLOYER_VERSION=$(cat /workspace/.release_tag | tr -d '\n'); then
+            echo "🏷️ Deployer version (baked tag): ${DEPLOYER_VERSION}"
+        fi
+    else
+        echo "ℹ️ Baked deployer tag not found"
+    fi
 fi
 
 
@@ -166,7 +170,7 @@ if [ -n "$PREV_DEPLOYER_VERSION" ] && [ -n "$DEPLOYER_VERSION" ] && [ "$PREV_DEP
     echo "☑️ Deployer version changed ($PREV_DEPLOYER_VERSION -> $DEPLOYER_VERSION); forcing state download and redeploy"
     FORCE_DEPLOY=1
 fi
-
+ 
 if [ -n "$PREV_ETAG" ]; then
     if [ -z "$FORCE_DEPLOY" ]; then
         EXTRA_HEADER+=("-H" "If-None-Match: $PREV_ETAG")
