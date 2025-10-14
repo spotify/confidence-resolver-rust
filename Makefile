@@ -16,12 +16,14 @@ test:
 	$(MAKE) -C confidence-resolver test
 	$(MAKE) -C wasm-msg test
 	$(MAKE) -C openfeature-provider/js test
+	$(MAKE) -C openfeature-provider/java test
 
 integration-test:
 	$(MAKE) -C wasm/node-host run
 	$(MAKE) -C wasm/java-host run
 	$(MAKE) -C wasm/go-host run
 	$(MAKE) -C wasm/python-host run
+	$(MAKE) -C wasm/java-host run
 
 
 lint:
@@ -33,6 +35,7 @@ lint:
 
 build: wasm/confidence_resolver.wasm
 	$(MAKE) -C openfeature-provider/js build
+	$(MAKE) -C openfeature-provider/java build
 
 all: lint test build
 	@echo "✅ All checks passed!"
@@ -44,5 +47,6 @@ clean:
 	$(MAKE) -C wasm/go-host clean
 	$(MAKE) -C wasm/python-host clean
 	$(MAKE) -C openfeature-provider/js clean
+	$(MAKE) -C openfeature-provider/java clean
 
 .DEFAULT_GOAL := all
