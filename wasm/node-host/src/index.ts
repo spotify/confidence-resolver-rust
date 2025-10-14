@@ -70,8 +70,5 @@ api.set_resolver_state({
     }
   }
   console.log(`tutorial-feature verified: reason=RESOLVE_REASON_MATCH variant=${rf.variant} title=${titleVal}`);
-
-  const buf = api.flush_logs(new Uint8Array(0));
-  fs.writeFileSync('events.bin', buf);
 }
 // Done: single flag verified above

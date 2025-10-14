@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::fmt::format;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
@@ -71,7 +70,7 @@ impl<'a> Into<proto::ResolvedValue> for &ResolvedValue<'a> {
                 name: self.flag.name.clone(),
             }),
             reason: convert_reason(self.reason.clone()),
-            assignment_match: match (&self.assignment_match) {
+            assignment_match: match &self.assignment_match {
                 None => None,
                 Some(am) => Some(proto::AssignmentMatch {
                     matched_rule: Some(proto::MatchedRule {
@@ -109,16 +108,6 @@ fn convert_reason(reason: ResolveReason) -> i32 {
     }
 }
 
-fn converted_client(client: &Client) -> crate::proto::Client {
-    proto::Client {
-        client_name: client.client_name.clone(),
-        account: Some(proto::Account {
-            name: client.account.name.clone(),
-        }),
-        client_credential_name: client.client_credential_name.clone(),
-    }
-}
-
 struct WasmHost;
 
 impl Host for WasmHost {
@@ -142,7 +131,7 @@ impl Host for WasmHost {
         evaluation_context: &Struct,
         values: &[ResolvedValue<'_>],
         client: &Client,
-        sdk: &Option<Sdk>,
+        _sdk: &Option<Sdk>,
     ) {
         LOGGER.log_resolve(
             resolve_id,
