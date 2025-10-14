@@ -7,7 +7,6 @@ pub use paste::paste;
 pub mod memory;
 pub mod message;
 pub mod sync;
-pub mod tls;
 
 pub use sync::WasmResult;
 

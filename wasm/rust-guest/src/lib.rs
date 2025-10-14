@@ -14,7 +14,6 @@ use rand::distr::Alphanumeric;
 use rand::distr::SampleString;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
-use wasm_msg;
 use wasm_msg::wasm_msg_guest;
 use wasm_msg::wasm_msg_host;
 use wasm_msg::WasmResult;
@@ -28,23 +27,26 @@ use confidence_resolver::{
     proto::{
         confidence::flags::admin::v1::ResolverState as ResolverStatePb,
         confidence::flags::resolver::v1::{
-            ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyResponse, ResolvedFlag, Sdk,
+            ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyResponse, Sdk,
         },
         google::{Struct, Timestamp},
     },
     Client, FlagToApply, Host, ResolveReason, ResolvedValue, ResolverState,
 };
-use proto::{ResolveSimpleRequest, Void};
+use proto::Void;
 
-impl Into<proto::FallthroughAssignment>
-    for confidence_resolver::proto::confidence::flags::resolver::v1::events::FallthroughAssignment
+impl
+    From<confidence_resolver::proto::confidence::flags::resolver::v1::events::FallthroughAssignment>
+    for proto::FallthroughAssignment
 {
-    fn into(self) -> proto::FallthroughAssignment {
+    fn from(
+        val: confidence_resolver::proto::confidence::flags::resolver::v1::events::FallthroughAssignment,
+    ) -> Self {
         proto::FallthroughAssignment {
-            rule: self.rule,
-            assignment_id: self.assignment_id,
-            targeting_key: self.targeting_key,
-            targeting_key_selector: self.targeting_key_selector,
+            rule: val.rule,
+            assignment_id: val.assignment_id,
+            targeting_key: val.targeting_key,
+            targeting_key_selector: val.targeting_key_selector,
         }
     }
 }
@@ -63,16 +65,17 @@ thread_local! {
     });
 }
 
-impl<'a> Into<proto::ResolvedValue> for &ResolvedValue<'a> {
-    fn into(self) -> proto::ResolvedValue {
+impl<'a> From<&ResolvedValue<'a>> for proto::ResolvedValue {
+    fn from(val: &ResolvedValue<'a>) -> Self {
         proto::ResolvedValue {
             flag: Some(proto::Flag {
-                name: self.flag.name.clone(),
+                name: val.flag.name.clone(),
             }),
-            reason: convert_reason(self.reason.clone()),
-            assignment_match: match &self.assignment_match {
-                None => None,
-                Some(am) => Some(proto::AssignmentMatch {
+            reason: convert_reason(val.reason),
+            assignment_match: val
+                .assignment_match
+                .as_ref()
+                .map(|am| proto::AssignmentMatch {
                     matched_rule: Some(proto::MatchedRule {
                         name: am.rule.clone().name,
                     }),
@@ -84,8 +87,7 @@ impl<'a> Into<proto::ResolvedValue> for &ResolvedValue<'a> {
                     }),
                     assignment_id: am.assignment_id.to_string(),
                 }),
-            },
-            fallthrough_rules: self
+            fallthrough_rules: val
                 .fallthrough_rules
                 .iter()
                 .map(|fr| proto::FallthroughRule {
@@ -185,21 +187,14 @@ wasm_msg_guest! {
         let resolve_request = &request.resolve_request.clone().unwrap();
         let evaluation_context = resolve_request.evaluation_context.clone().unwrap();
         let resolver = resolver_state.get_resolver::<WasmHost>(resolve_request.client_secret.as_str(), evaluation_context, &ENCRYPTION_KEY)?;
-        resolver.resolve_flags_sticky(&request).into()
+        resolver.resolve_flags_sticky(&request)
     }
 
     fn resolve(request: ResolveFlagsRequest) -> WasmResult<ResolveFlagsResponse> {
         let resolver_state = get_resolver_state()?;
         let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
-        resolver.resolve_flags(&request).into()
-    }
-    fn resolve_simple(request: ResolveSimpleRequest) -> WasmResult<ResolvedFlag> {
-        let resolver_state = get_resolver_state()?;
-        let evaluation_context = request.evaluation_context.as_ref().cloned().unwrap_or_default();
-        let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY).unwrap();
-        let resolve_result = resolver.resolve_flag_name(&request.name)?;
-        Ok((&resolve_result.resolved_value).into())
+        resolver.resolve_flags(&request)
     }
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
         let response = LOGGER.checkpoint();

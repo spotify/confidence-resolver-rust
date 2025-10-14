@@ -38,18 +38,6 @@ class ResolverApi:
     def _register_host_functions(self):
         """Register host functions that can be called from WASM"""
 
-        def log_resolve(ptr: int) -> int:
-            # Ignore payload; return Void
-            response = messages_pb2.Response()
-            response.data = messages_pb2.Void().SerializeToString()
-            return self._transfer_response(response)
-
-        def log_assign(ptr: int) -> int:
-            # Ignore payload; return Void
-            response = messages_pb2.Response()
-            response.data = messages_pb2.Void().SerializeToString()
-            return self._transfer_response(response)
-
         def current_time(ptr: int) -> int:
             """Host function to return current timestamp"""
             try:
@@ -75,20 +63,11 @@ class ResolverApi:
         # Create function type: takes one i32 parameter, returns one i32
         func_type = FuncType([ValType.i32()], [ValType.i32()])
         host_func_time = Func(self.store, func_type, current_time)
-        host_func_log_resolve = Func(self.store, func_type, log_resolve)
-        host_func_log_assign = Func(self.store, func_type, log_assign)
 
         linker = Linker(self.store.engine)
 
         # Define the import with module and name
         linker.define(self.store, "wasm_msg", "wasm_msg_host_current_time", host_func_time)
-        linker.define(self.store, "wasm_msg", "wasm_msg_host_log_resolve", host_func_log_resolve)
-        linker.define(self.store, "wasm_msg", "wasm_msg_host_log_assign", host_func_log_assign)
-
-        # Optional: current thread id function
-        def current_thread_id() -> int:
-            return 0
-        linker.define(self.store, "wasm_msg", "wasm_msg_current_thread_id", Func(self.store, FuncType([], [ValType.i32()]), current_thread_id))
 
         # Instantiate the module with imports
         self.instance = linker.instantiate(self.store, self.module)
