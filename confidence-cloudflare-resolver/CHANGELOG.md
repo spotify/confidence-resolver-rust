@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.6](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.5...confidence-cloudflare-resolver-v0.2.6) (2025-10-14)
+
+
+### Bug Fixes
+
+* Fix deployer version check, use tag instead of commit ([#55](https://github.com/spotify/confidence-resolver-rust/issues/55)) ([d15123b](https://github.com/spotify/confidence-resolver-rust/commit/d15123b63e2b29566b52ad8d09173e40be38dd6d))
+* fix queue waiting ([#57](https://github.com/spotify/confidence-resolver-rust/issues/57)) ([b0da391](https://github.com/spotify/confidence-resolver-rust/commit/b0da3916f3179ab31ecea8196d106b303b5589d6))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * confidence_resolver bumped from 0.5.0 to 0.5.1
+
 ## [0.2.5](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.4...confidence-cloudflare-resolver-v0.2.5) (2025-10-14)
 
 

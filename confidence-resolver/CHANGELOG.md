@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.5.0...confidence_resolver-v0.5.1) (2025-10-14)
+
+
+### Bug Fixes
+
+* fix queue waiting ([#57](https://github.com/spotify/confidence-resolver-rust/issues/57)) ([b0da391](https://github.com/spotify/confidence-resolver-rust/commit/b0da3916f3179ab31ecea8196d106b303b5589d6))
+
 ## [0.5.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.4.0...confidence_resolver-v0.5.0) (2025-10-10)
 
 
