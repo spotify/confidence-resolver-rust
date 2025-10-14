@@ -19,9 +19,7 @@ public class Main {
     private final ResolverApi resolverApi;
 
     public Main() {
-        Path wasmModulePath = Path.of("../confidence_resolver.wasm");
-        WasmModule module = Parser.parse(wasmModulePath);
-        resolverApi = new ResolverApi(module);
+        resolverApi = new ResolverApi();
 
     }
 
