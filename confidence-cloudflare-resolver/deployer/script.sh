@@ -149,12 +149,12 @@ fi
 DEPLOYER_VERSION=""
 if [ -n "${COMMIT_SHA:-}" ]; then
     DEPLOYER_VERSION="$(printf '%s' "$COMMIT_SHA" | tr -d '\n' | cut -c1-12)"
-    echo "🔖 Deployer version (env): ${DEPLOYER_VERSION}"
+    echo "🐙 Deployer version (env): ${DEPLOYER_VERSION}"
 elif [ -d .git ] && command -v git >/dev/null 2>&1; then
     if DEPLOYER_VERSION=$(git rev-parse --short=12 HEAD 2>/dev/null); then
         echo "🐙 Deployer version (commit): ${DEPLOYER_VERSION}"
     else
-        echo "ℹ️ No git metadata available; skipping deployer version"
+        echo "ℹ️ No git metadata available; skipping deployer version evaluation"
     fi
 else
     echo "ℹ️ Deployer version not set (no COMMIT_SHA or git metadata)"
