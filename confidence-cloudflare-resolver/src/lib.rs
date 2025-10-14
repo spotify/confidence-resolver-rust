@@ -75,10 +75,12 @@ fn set_client_creds(env: &Env) {
     if let Ok(var) = env.var("CONFIDENCE_CLIENT_ID") {
         let _ = CONFIDENCE_CLIENT_ID.set(var.to_string());
     } else {
+        console_log!("no confidence client id provided");
     }
     if let Ok(var) = env.var("CONFIDENCE_CLIENT_SECRET") {
         let _ = CONFIDENCE_CLIENT_SECRET.set(var.to_string());
     } else {
+        console_log!("no confidence client secret provided");
     }
 }
 
@@ -88,7 +90,9 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
         Ok(queue) => {
             let _ = FLAGS_LOGS_QUEUE.set(queue);
         }
-        Err(_e) => {}
+        Err(_e) => {
+            console_log!("flag_logs_queue binding is missing; logging disabled");
+        }
     }
 
     set_client_creds(&env);
