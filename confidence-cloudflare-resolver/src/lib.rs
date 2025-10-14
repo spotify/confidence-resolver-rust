@@ -1,4 +1,5 @@
 use confidence_resolver::{
+    flag_logger,
     proto::{confidence, google::Struct},
     FlagToApply, Host, ResolvedValue, ResolverState,
 };
@@ -10,30 +11,26 @@ use bytes::Bytes;
 use serde_json::from_slice;
 use serde_json::json;
 
-use confidence::flags::resolver::v1::{
-    events::FlagAssigned, ApplyFlagsRequest, ApplyFlagsResponse, ResolveFlagsRequest,
-};
+use confidence::flags::resolver::v1::{ApplyFlagsRequest, ApplyFlagsResponse, ResolveFlagsRequest};
+
+static LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
 
 use confidence_resolver::Client;
 use once_cell::sync::Lazy;
-
-use confidence_resolver::flag_logger::{FlagLogQueueRequest, FlagLogger, Logger};
 
 const ACCOUNT_ID: &str = include_str!("../../data/account_id");
 const STATE_JSON: &[u8] = include_bytes!("../../data/resolver_state_current.pb");
 const ENCRYPTION_KEY_BASE64: &str = include_str!("../../data/encryption_key");
 
-use confidence::flags::admin::v1::{ClientResolveInfo, FlagResolveInfo};
 use confidence::flags::resolver::v1::Sdk;
-use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest;
+use confidence_resolver::resolve_logger::ResolveLogger;
+use std::sync::{LazyLock, OnceLock};
 
 static FLAGS_LOGS_QUEUE: OnceLock<Queue> = OnceLock::new();
 
 static CONFIDENCE_CLIENT_ID: OnceLock<String> = OnceLock::new();
 static CONFIDENCE_CLIENT_SECRET: OnceLock<String> = OnceLock::new();
-
-static FLAG_LOGGER: Lazy<Logger> = Lazy::new(Logger::new);
 
 static RESOLVER_STATE: Lazy<ResolverState> = Lazy::new(|| {
     ResolverState::from_proto(STATE_JSON.to_owned().try_into().unwrap(), ACCOUNT_ID).unwrap()
@@ -55,7 +52,12 @@ impl Host for H {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        FLAG_LOGGER.log_resolve(resolve_id, evaluation_context, values, client, sdk);
+        LOGGER.log_resolve(
+            resolve_id,
+            evaluation_context,
+            client.client_credential_name.as_str(),
+            values,
+        );
     }
 
     fn log_assign(
@@ -65,7 +67,7 @@ impl Host for H {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        FLAG_LOGGER.log_assign(resolve_id, evaluation_context, assigned_flags, client, sdk);
+        LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
     }
 }
 
@@ -83,7 +85,7 @@ fn set_client_creds(env: &Env) {
 }
 
 #[event(fetch)]
-pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
     match env.queue("flag_logs_queue") {
         Ok(queue) => {
             let _ = FLAGS_LOGS_QUEUE.set(queue);
@@ -209,19 +211,13 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .run(req, env)
         .await;
 
-    wasm_bindgen_futures::spawn_local(async move {
-        let aggregated = FLAG_LOGGER.pop_flag_log_batch();
-        if !(aggregated.flag_assigned.is_empty()
-            && aggregated.flag_resolve_info.is_empty()
-            && aggregated.client_resolve_info.is_empty())
-        {
-            if let Ok(converted) = serde_json::to_string(&aggregated) {
-                FLAGS_LOGS_QUEUE
-                    .get()
-                    .unwrap()
-                    .send(converted)
-                    .await
-                    .unwrap();
+    // Use ctx.waitUntil to run logging after response is returned
+    ctx.wait_until(async move {
+        let aggregated: confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest
+            = LOGGER.checkpoint();
+        if let Ok(converted) = serde_json::to_string(&aggregated) {
+            if let Some(queue) = FLAGS_LOGS_QUEUE.get() {
+                let _ = queue.send(converted).await;
             }
         }
     });
@@ -238,20 +234,22 @@ pub async fn consume_flag_logs_queue(
     set_client_creds(&env);
 
     if let Ok(messages) = message_batch.messages() {
-        let logs: Vec<FlagLogQueueRequest> = messages
+        let logs: Vec<WriteFlagLogsRequest> = messages
             .iter()
             .map(|m| m.body().clone())
-            .map(|s| serde_json::from_str::<FlagLogQueueRequest>(s.as_str()).unwrap())
+            .map(|s| serde_json::from_str::<confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest>(s.as_str()).unwrap())
+            .map(|v| WriteFlagLogsRequest {
+                telemetry_data: None,
+                flag_resolve_info: v.flag_resolve_info,
+                flag_assigned: v.flag_assigned,
+                client_resolve_info: v.client_resolve_info,
+            })
             .collect();
-        let req = Logger::aggregate_batch(logs);
+        let req = flag_logger::aggregate_batch(logs);
         send_flags_logs(
             CONFIDENCE_CLIENT_ID.get().unwrap().as_str(),
             CONFIDENCE_CLIENT_SECRET.get().unwrap().as_str(),
-            WriteFlagLogsRequest {
-                client_resolve_info: req.client_resolve_info,
-                flag_assigned: req.flag_assigned,
-                flag_resolve_info: req.flag_resolve_info,
-            },
+            req,
         )
         .await?;
     }
@@ -262,13 +260,6 @@ fn get_token(client_id: &str, client_secret: &str) -> String {
     let combined = format!("{}:{}", client_id, client_secret);
     let encoded = STANDARD.encode(combined.as_bytes());
     format!("Basic {}", encoded)
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct WriteFlagLogsRequest {
-    flag_assigned: Vec<FlagAssigned>,
-    client_resolve_info: Vec<ClientResolveInfo>,
-    flag_resolve_info: Vec<FlagResolveInfo>,
 }
 
 async fn send_flags_logs(

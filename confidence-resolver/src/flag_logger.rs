@@ -11,16 +11,16 @@ use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::{
     AppliedFlag, AssignmentInfo, DefaultAssignment,
 };
 use crate::proto::confidence::flags::resolver::v1::events::{ClientInfo, FlagAssigned};
-use crate::proto::confidence::flags::resolver::v1::Sdk;
+use crate::proto::confidence::flags::resolver::v1::{Sdk, WriteFlagLogsRequest};
 use crate::schema_util::SchemaFromEvaluationContext;
 use crate::Client;
 use crate::Struct;
 use crate::{FlagToApply, ResolvedValue};
-use std::collections::{BTreeMap, HashMap, HashSet};
-
 #[cfg(feature = "json")]
 use serde::{Deserialize, Serialize};
 use spin::Mutex;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::io::Write;
 
 #[cfg(not(feature = "json"))]
 #[derive(Clone, Debug)]
@@ -31,7 +31,7 @@ pub struct FlagLogQueueRequest {
 }
 
 pub struct Logger {
-    flag_log_requests: Mutex<Vec<FlagLogQueueRequest>>,
+    flag_log_requests: Mutex<Vec<WriteFlagLogsRequest>>,
 }
 
 impl Default for Logger {
@@ -48,226 +48,100 @@ impl Logger {
     }
 }
 
-impl FlagLogger for Logger {
-    fn log_resolve(
-        &self,
-        resolve_id: &str,
-        evaluation_context: &Struct,
-        values: &[ResolvedValue<'_>],
-        client: &Client,
-        sdk: &Option<Sdk>,
-    ) {
-        let req =
-            convert_to_write_resolve_request(resolve_id, evaluation_context, values, client, sdk);
-        let mut vec = self.flag_log_requests.lock();
-        vec.push(req);
-    }
+pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLogsRequest {
+    // map of client credential to derived schema
+    let mut schema_map: HashMap<String, SchemaItem> = HashMap::new();
+    // map of flag to flag resolve info
+    let mut flag_resolve_map: HashMap<String, VariantRuleResolveInfo> = HashMap::new();
+    let mut flag_assigned: Vec<FlagAssigned> = vec![];
 
-    fn log_assign(
-        &self,
-        resolve_id: &str,
-        evaluation_context: &Struct,
-        assigned_flags: &[FlagToApply],
-        client: &Client,
-        sdk: &Option<Sdk>,
-    ) {
-        let req = convert_to_write_assign_request(
-            resolve_id,
-            evaluation_context,
-            assigned_flags,
-            client,
-            sdk,
-        );
-        let mut vec = self.flag_log_requests.lock();
-        vec.push(req);
-    }
-
-    fn pop_flag_log_batch(&self) -> FlagLogQueueRequest {
-        let mut vec = self.flag_log_requests.lock();
-        Self::aggregate_batch(vec.split_off(0))
-    }
-    fn aggregate_batch(message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest {
-        // map of client credential to derived schema
-        let mut schema_map: HashMap<String, SchemaItem> = HashMap::new();
-        // map of flag to flag resolve info
-        let mut flag_resolve_map: HashMap<String, VariantRuleResolveInfo> = HashMap::new();
-        let mut flag_assigned: Vec<FlagAssigned> = vec![];
-
-        for flag_logs_message in message_batch {
-            for c in &flag_logs_message.client_resolve_info {
-                if let Some(set) = schema_map.get_mut(&c.client_credential) {
-                    for schema in &c.schema {
-                        set.schemas.insert(schema.clone());
-                    }
-                } else {
-                    let mut set = HashSet::new();
-                    for schema in &c.schema {
-                        set.insert(schema.clone());
-                    }
-                    schema_map.insert(
-                        c.client_credential.clone(),
-                        SchemaItem {
-                            client: c.client.clone(),
-                            schemas: set.clone(),
-                        },
-                    );
+    for flag_logs_message in message_batch {
+        for c in &flag_logs_message.client_resolve_info {
+            if let Some(set) = schema_map.get_mut(&c.client_credential) {
+                for schema in &c.schema {
+                    set.schemas.insert(schema.clone());
                 }
-            }
-
-            for f in &flag_logs_message.flag_resolve_info {
-                let flag_info = flag_resolve_map
-                    .entry(f.flag.clone())
-                    .or_insert_with(VariantRuleResolveInfo::new);
-                update_rule_variant_info(flag_info, f);
-            }
-            for fa in &flag_logs_message.flag_assigned {
-                flag_assigned.push(fa.clone());
+            } else {
+                let mut set = HashSet::new();
+                for schema in &c.schema {
+                    set.insert(schema.clone());
+                }
+                schema_map.insert(
+                    c.client_credential.clone(),
+                    SchemaItem {
+                        client: c.client.clone(),
+                        schemas: set.clone(),
+                    },
+                );
             }
         }
 
-        let mut client_resolve_info: Vec<ClientResolveInfo> = vec![];
-        for (client_credentials, schema_item) in schema_map {
-            client_resolve_info.push(ClientResolveInfo {
-                client_credential: client_credentials,
-                client: schema_item.client,
-                schema: schema_item.schemas.into_iter().collect(),
+        for f in &flag_logs_message.flag_resolve_info {
+            let flag_info = flag_resolve_map
+                .entry(f.flag.clone())
+                .or_insert_with(VariantRuleResolveInfo::new);
+            update_rule_variant_info(flag_info, f);
+        }
+        for fa in &flag_logs_message.flag_assigned {
+            flag_assigned.push(fa.clone());
+        }
+    }
+
+    let mut client_resolve_info: Vec<ClientResolveInfo> = vec![];
+    for (client_credentials, schema_item) in schema_map {
+        client_resolve_info.push(ClientResolveInfo {
+            client_credential: client_credentials,
+            client: schema_item.client,
+            schema: schema_item.schemas.into_iter().collect(),
+        })
+    }
+
+    let mut flag_resolve_info: Vec<FlagResolveInfo> = vec![];
+
+    for (flag, resolve_info) in flag_resolve_map {
+        let variant_resolve_info = resolve_info
+            .variant_resolve_info
+            .iter()
+            .map(|r| VariantResolveInfo {
+                variant: r.0.clone(),
+                count: *r.1,
             })
+            .collect();
+
+        let mut rule_resolve_info: Vec<RuleResolveInfo> = vec![];
+
+        for (rule, info) in resolve_info.rule_resolve_info {
+            rule_resolve_info.push(RuleResolveInfo {
+                rule,
+                count: info.count,
+                assignment_resolve_info: info
+                    .assignment_count
+                    .iter()
+                    .map(|(assignment_id, count)| AssignmentResolveInfo {
+                        count: *count,
+                        assignment_id: assignment_id.clone(),
+                    })
+                    .collect(),
+            });
         }
 
-        let mut flag_resolve_info: Vec<FlagResolveInfo> = vec![];
+        flag_resolve_info.push(FlagResolveInfo {
+            flag,
+            variant_resolve_info,
+            rule_resolve_info,
+        })
+    }
 
-        for (flag, resolve_info) in flag_resolve_map {
-            let variant_resolve_info = resolve_info
-                .variant_resolve_info
-                .iter()
-                .map(|r| VariantResolveInfo {
-                    variant: r.0.clone(),
-                    count: *r.1,
-                })
-                .collect();
-
-            let mut rule_resolve_info: Vec<RuleResolveInfo> = vec![];
-
-            for (rule, info) in resolve_info.rule_resolve_info {
-                rule_resolve_info.push(RuleResolveInfo {
-                    rule,
-                    count: info.count,
-                    assignment_resolve_info: info
-                        .assignment_count
-                        .iter()
-                        .map(|(assignment_id, count)| AssignmentResolveInfo {
-                            count: *count,
-                            assignment_id: assignment_id.clone(),
-                        })
-                        .collect(),
-                });
-            }
-
-            flag_resolve_info.push(FlagResolveInfo {
-                flag,
-                variant_resolve_info,
-                rule_resolve_info,
-            })
-        }
-
-        FlagLogQueueRequest {
-            flag_assigned,
-            flag_resolve_info,
-            client_resolve_info,
-        }
+    WriteFlagLogsRequest {
+        telemetry_data: None,
+        flag_assigned,
+        flag_resolve_info,
+        client_resolve_info,
     }
 }
 
 pub trait FlagLogger {
-    fn log_resolve(
-        &self,
-        resolve_id: &str,
-        evaluation_context: &Struct,
-        values: &[ResolvedValue<'_>],
-        client: &Client,
-        sdk: &Option<Sdk>,
-    );
-
-    fn log_assign(
-        &self,
-        resolve_id: &str,
-        evaluation_context: &Struct,
-        assigned_flags: &[FlagToApply],
-        client: &Client,
-        sdk: &Option<Sdk>,
-    );
-
-    fn pop_flag_log_batch(&self) -> FlagLogQueueRequest;
-    fn aggregate_batch(message_batch: Vec<FlagLogQueueRequest>) -> FlagLogQueueRequest;
-}
-
-#[cfg(feature = "json")]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FlagLogQueueRequest {
-    pub flag_assigned: Vec<FlagAssigned>,
-    pub client_resolve_info: Vec<ClientResolveInfo>,
-    pub flag_resolve_info: Vec<FlagResolveInfo>,
-}
-
-fn convert_to_write_assign_request(
-    resolve_id: &str,
-    _evaluation_context: &Struct,
-    assigned_flags: &[FlagToApply],
-    client: &Client,
-    sdk: &Option<Sdk>,
-) -> FlagLogQueueRequest {
-    let client_info = ClientInfo {
-        client: client.client_name.to_string(),
-        client_credential: client.client_credential_name.to_string(),
-        sdk: sdk.clone(),
-    };
-
-    let assigns: Vec<FlagAssigned> = assigned_flags
-        .iter()
-        // .map(|flag_to_apply| flag_to_apply.assigned_flag)
-        .map(|flag_to_apply| {
-            let FlagToApply {
-                assigned_flag,
-                skew_adjusted_applied_time,
-            } = flag_to_apply;
-            // Create the `AppliedFlag` instance
-            let applied_flag = AppliedFlag {
-                flag: assigned_flag.flag.clone(),
-                targeting_key: assigned_flag.targeting_key.clone(),
-                targeting_key_selector: assigned_flag.targeting_key_selector.clone(),
-                assignment_id: assigned_flag.assignment_id.to_string(),
-                rule: assigned_flag.rule.clone(),
-                fallthrough_assignments: assigned_flag.fallthrough_assignments.clone(),
-                apply_time: Some(skew_adjusted_applied_time.clone()),
-                assignment: if !assigned_flag.variant.is_empty() {
-                    // Populate the `AssignmentInfo` if the variant is not empty
-                    let assignment_info = AssignmentInfo {
-                        segment: assigned_flag.segment.clone(),
-                        variant: assigned_flag.variant.clone(),
-                    };
-                    Some(Assignment::AssignmentInfo(assignment_info))
-                } else {
-                    // Populate the `DefaultAssignment` otherwise
-                    let default_assignment = DefaultAssignment {
-                        reason: to_default_assignment(assigned_flag.reason()),
-                    };
-                    Some(Assignment::DefaultAssignment(default_assignment))
-                },
-            };
-            // Create the `FlagAssigned` instance
-            FlagAssigned {
-                client_info: Some(client_info.clone()),
-                resolve_id: ToString::to_string(resolve_id),
-                flags: vec![applied_flag], // Add the `AppliedFlag` to the repeated `flags` field
-            }
-        })
-        .collect();
-
-    FlagLogQueueRequest {
-        flag_assigned: assigns,
-        client_resolve_info: vec![],
-        flag_resolve_info: vec![],
-    }
+    fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLogsRequest;
 }
 
 fn to_default_assignment(
@@ -286,87 +160,6 @@ fn to_default_assignment(
         }
         _ => DefaultAssignmentReason::Unspecified,
     } as i32;
-}
-
-fn convert_to_write_resolve_request(
-    _resolve_id: &str,
-    evaluation_context: &Struct,
-    values: &[ResolvedValue],
-    client: &Client,
-    _sdk: &Option<Sdk>,
-) -> FlagLogQueueRequest {
-    // Create client resolve info
-    let derived_schema = SchemaFromEvaluationContext::get_schema(evaluation_context);
-    let schema: BTreeMap<String, i32> = derived_schema
-        .fields
-        .into_iter()
-        .map(|(k, v)| (k, v as i32))
-        .collect();
-    let semantic_types: BTreeMap<String, ContextFieldSemanticType> =
-        derived_schema.semantic_types.into_iter().collect();
-    let schema_instance = EvaluationContextSchemaInstance {
-        schema: schema.clone(),
-        semantic_types: semantic_types.clone(),
-    };
-
-    let client_resolve_info = ClientResolveInfo {
-        client: client.client_name.clone(),
-        client_credential: client.client_credential_name.clone(),
-        schema: vec![schema_instance],
-    };
-
-    // Create flag resolve info for each resolved value
-    let flag_resolve_info: Vec<FlagResolveInfo> = values
-        .iter()
-        .map(|resolved_value| {
-            let mut rules: Vec<RuleResolveInfo> = vec![];
-            for fr in &resolved_value.fallthrough_rules {
-                rules.push(RuleResolveInfo {
-                    rule: fr.rule.name.clone(),
-                    count: 1,
-                    assignment_resolve_info: vec![AssignmentResolveInfo {
-                        count: 1,
-                        assignment_id: fr.assignment_id.clone(),
-                    }],
-                })
-            }
-            rules.push(RuleResolveInfo {
-                rule: resolved_value
-                    .assignment_match
-                    .as_ref()
-                    .map(|am| am.rule.name.clone())
-                    .unwrap_or_default(),
-                count: 1, // Individual resolve count
-                assignment_resolve_info: vec![AssignmentResolveInfo {
-                    assignment_id: resolved_value
-                        .assignment_match
-                        .as_ref()
-                        .map(|am| am.assignment_id.to_string())
-                        .unwrap_or_default(),
-                    count: 1, // Individual resolve count
-                }],
-            });
-            FlagResolveInfo {
-                flag: resolved_value.flag.name.clone(),
-                variant_resolve_info: vec![VariantResolveInfo {
-                    variant: resolved_value
-                        .assignment_match
-                        .as_ref()
-                        .and_then(|am| am.variant.as_ref())
-                        .map(|v| v.name.clone())
-                        .unwrap_or_default(),
-                    count: 1, // Individual resolve count
-                }],
-                rule_resolve_info: rules,
-            }
-        })
-        .collect();
-
-    FlagLogQueueRequest {
-        flag_assigned: vec![],
-        client_resolve_info: vec![client_resolve_info],
-        flag_resolve_info,
-    }
 }
 
 struct SchemaItem {
