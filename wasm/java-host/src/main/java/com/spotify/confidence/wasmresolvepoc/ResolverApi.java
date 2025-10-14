@@ -9,18 +9,14 @@ import com.dylibso.chicory.runtime.Memory;
 import com.dylibso.chicory.wasm.WasmModule;
 import com.dylibso.chicory.wasm.types.FunctionType;
 import com.dylibso.chicory.wasm.types.ValType;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.GeneratedMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Timestamp;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
-import com.spotify.confidence.flags.resolver.v1.ResolvedFlag;
 
 import rust_guest.Messages.SetResolverStateRequest;
 import rust_guest.Messages;
-import rust_guest.Messages.ResolveSimpleRequest;
-import rust_guest.Types;
 
 import java.util.List;
 import java.util.function.Function;
@@ -37,16 +33,12 @@ public class ResolverApi {
   // api
   private final ExportFunction wasmMsgGuestSetResolverState;
   private final ExportFunction wasmMsgGuestResolve;
-  private final ExportFunction wasmMsgGuestResolveSimple;
 
   public ResolverApi(WasmModule module) {
 
     instance = Instance.builder(module)
             .withImportValues(ImportValues.builder()
                     .addFunction(createImportFunction("current_time", Messages.Void::parseFrom, this::currentTime))
-                    .addFunction(createImportFunction("log_resolve", Types.LogResolveRequest::parseFrom, this::logResolve))
-                    .addFunction(createImportFunction("log_assign", Types.LogAssignRequest::parseFrom, this::logAssign))
-                    .addFunction(new ImportFunction("wasm_msg", "wasm_msg_current_thread_id", FunctionType.of(List.of(), List.of(ValType.I32)), (instance1, args) -> new long[]{0}))
                     .build())
             .withMachineFactory(MachineFactoryCompiler::compile)
             .build();
@@ -54,16 +46,6 @@ public class ResolverApi {
     wasmMsgFree = instance.export("wasm_msg_free");
     wasmMsgGuestSetResolverState = instance.export("wasm_msg_guest_set_resolver_state");
     wasmMsgGuestResolve = instance.export("wasm_msg_guest_resolve");
-    wasmMsgGuestResolveSimple = instance.export("wasm_msg_guest_resolve_simple");
-  }
-
-  private GeneratedMessage logAssign(Types.LogAssignRequest logAssignRequest) {
-    System.out.println("logAssign");
-    return Messages.Void.getDefaultInstance();
-  }
-
-  private GeneratedMessage logResolve(Types.LogResolveRequest logResolveRequest) {
-    return Messages.Void.getDefaultInstance();
   }
 
   private Timestamp currentTime(Messages.Void unused) {
@@ -83,12 +65,6 @@ public class ResolverApi {
     int reqPtr = transferRequest(request);
     int respPtr = (int) wasmMsgGuestResolve.apply(reqPtr)[0];
     return consumeResponse(respPtr, ResolveFlagsResponse::parseFrom);
-  }
-
-  public ResolvedFlag resolve_simple(ResolveSimpleRequest request) {
-    int reqPtr = transferRequest(request);
-    int respPtr = (int) wasmMsgGuestResolveSimple.apply(reqPtr)[0];
-    return consumeResponse(respPtr, ResolvedFlag::parseFrom);
   }
 
   private <T extends GeneratedMessage> T consumeResponse(int addr, ParserFn<T> codec) {

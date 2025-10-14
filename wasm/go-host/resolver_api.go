@@ -37,20 +37,6 @@ func NewResolverApi(ctx context.Context, runtime wazero.Runtime, wasmBytes []byt
 	_, err := runtime.NewHostModuleBuilder("wasm_msg").
 		NewFunctionBuilder().
 		WithFunc(func(ctx context.Context, mod api.Module, ptr uint32) uint32 {
-			// log_resolve: ignore payload, return Void
-			response := &messages.Response{Result: &messages.Response_Data{Data: mustMarshal(&messages.Void{})}}
-			return transferResponse(mod, response)
-		}).
-		Export("wasm_msg_host_log_resolve").
-		NewFunctionBuilder().
-		WithFunc(func(ctx context.Context, mod api.Module, ptr uint32) uint32 {
-			// log_assign: ignore payload, return Void
-			response := &messages.Response{Result: &messages.Response_Data{Data: mustMarshal(&messages.Void{})}}
-			return transferResponse(mod, response)
-		}).
-		Export("wasm_msg_host_log_assign").
-		NewFunctionBuilder().
-		WithFunc(func(ctx context.Context, mod api.Module, ptr uint32) uint32 {
 			// Return current timestamp
 			now := time.Now()
 			timestamp := timestamppb.New(now)
@@ -65,11 +51,6 @@ func NewResolverApi(ctx context.Context, runtime wazero.Runtime, wasmBytes []byt
 			return transferResponse(mod, response)
 		}).
 		Export("wasm_msg_host_current_time").
-		NewFunctionBuilder().
-		WithFunc(func(ctx context.Context, mod api.Module) uint32 {
-			return 0
-		}).
-		Export("wasm_msg_current_thread_id").
 		Instantiate(ctx)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to register host functions: %v", err))
@@ -92,9 +73,8 @@ func NewResolverApi(ctx context.Context, runtime wazero.Runtime, wasmBytes []byt
 	wasmMsgFree := instance.ExportedFunction("wasm_msg_free")
 	wasmMsgGuestSetResolverState := instance.ExportedFunction("wasm_msg_guest_set_resolver_state")
 	wasmMsgGuestResolve := instance.ExportedFunction("wasm_msg_guest_resolve")
-	wasmMsgGuestResolveSimple := instance.ExportedFunction("wasm_msg_guest_resolve_simple")
 
-	if wasmMsgAlloc == nil || wasmMsgFree == nil || wasmMsgGuestSetResolverState == nil || wasmMsgGuestResolve == nil || wasmMsgGuestResolveSimple == nil {
+	if wasmMsgAlloc == nil || wasmMsgFree == nil || wasmMsgGuestSetResolverState == nil || wasmMsgGuestResolve == nil {
 		panic("Required WASM exports not found")
 	}
 
@@ -106,7 +86,6 @@ func NewResolverApi(ctx context.Context, runtime wazero.Runtime, wasmBytes []byt
 		wasmMsgFree:                  wasmMsgFree,
 		wasmMsgGuestSetResolverState: wasmMsgGuestSetResolverState,
 		wasmMsgGuestResolve:          wasmMsgGuestResolve,
-		wasmMsgGuestResolveSimple:    wasmMsgGuestResolveSimple,
 	}
 }
 
@@ -161,26 +140,6 @@ func (r *ResolverApi) Resolve(request *resolver.ResolveFlagsRequest) (*resolver.
 	// Consume the response
 	respPtr := uint32(results[0])
 	response := &resolver.ResolveFlagsResponse{}
-	err = r.consumeResponse(respPtr, response)
-	if err != nil {
-		return nil, err
-	}
-
-	return response, nil
-}
-
-func (r *ResolverApi) ResolveSimple(request *messages.ResolveSimpleRequest) (*resolver.ResolvedFlag, error) {
-	ctx := context.Background()
-	reqPtr := r.transferRequest(request)
-
-	results, err := r.wasmMsgGuestResolveSimple.Call(ctx, uint64(reqPtr))
-	if err != nil {
-		return nil, fmt.Errorf("failed to call wasm_msg_guest_resolve_simple: %w", err)
-	}
-
-	respPtr := uint32(results[0])
-
-	response := &resolver.ResolvedFlag{}
 	err = r.consumeResponse(respPtr, response)
 	if err != nil {
 		return nil, err
