@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.4...confidence-cloudflare-resolver-v0.2.5) (2025-10-14)
+
+
+### Bug Fixes
+
+* worker-build install ([#52](https://github.com/spotify/confidence-resolver-rust/issues/52)) ([b2d9634](https://github.com/spotify/confidence-resolver-rust/commit/b2d9634f6051171ed65ba444131b13a1f27b9884))
+
 ## [0.2.4](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.3...confidence-cloudflare-resolver-v0.2.4) (2025-10-10)
 
 
