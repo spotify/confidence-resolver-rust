@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 use crate::{
-    err::{Fallible, OrFailExt},
     schema_util::{DerivedClientSchema, SchemaFromEvaluationContext},
     FlagToApply,
 };

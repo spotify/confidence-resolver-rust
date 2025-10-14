@@ -10,7 +10,6 @@ use bitvec::prelude as bv;
 use core::marker::PhantomData;
 use fastmurmur3::murmur3_x64_128;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::format;
 
 use bytes::Bytes;
 
