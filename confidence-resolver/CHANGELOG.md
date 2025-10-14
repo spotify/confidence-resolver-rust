@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.5.1...confidence_resolver-v0.5.2) (2025-10-14)
+
+
+### Bug Fixes
+
+* fix materialization default ([#59](https://github.com/spotify/confidence-resolver-rust/issues/59)) ([bdece6c](https://github.com/spotify/confidence-resolver-rust/commit/bdece6c5a4d53d6284056b6daaf9e8d17481db84))
+
 ## [0.5.1](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.5.0...confidence_resolver-v0.5.1) (2025-10-14)
 
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.7](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.6...confidence-cloudflare-resolver-v0.2.7) (2025-10-14)
+
+
+### Bug Fixes
+
+* fix materialization default ([#59](https://github.com/spotify/confidence-resolver-rust/issues/59)) ([bdece6c](https://github.com/spotify/confidence-resolver-rust/commit/bdece6c5a4d53d6284056b6daaf9e8d17481db84))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * confidence_resolver bumped from 0.5.1 to 0.5.2
+
 ## [0.2.6](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.5...confidence-cloudflare-resolver-v0.2.6) (2025-10-14)
 
 
