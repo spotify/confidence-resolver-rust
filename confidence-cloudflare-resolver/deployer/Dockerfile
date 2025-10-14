@@ -1,6 +1,8 @@
-FROM rust:1.82 AS rust-base
+FROM rust:1.86 AS rust-base
 
-RUN rustup update stable && rustup target add wasm32-unknown-unknown
+RUN rustup toolchain install 1.86.0 && \
+    rustup default 1.86.0 && \
+    rustup target add wasm32-unknown-unknown
 
 # Execute next commands in the directory /workspace
 WORKDIR /workspace
@@ -49,7 +51,9 @@ RUN node -v && npm -v
 RUN npm install -g wrangler@latest
 
 # Pre-install the Rust worker build tool so wrangler doesn't run cargo install at deploy-time
-RUN cargo install worker-build --locked || true
+ARG WORKER_BUILD_VERSION="0.1.11"
+ENV WORKER_BUILD_VERSION=${WORKER_BUILD_VERSION}
+RUN cargo install worker-build --locked --version ${WORKER_BUILD_VERSION}
 
 ENV PATH=/usr/local/bin:$PATH
 ENV PATH=/usr/local/cargo/bin:$PATH
