@@ -3,7 +3,7 @@
 # ==============================================================================
 # Base image with Rust toolchain (Alpine - more reliable than Debian)
 # ==============================================================================
-FROM rust:1.89-alpine AS rust-base
+FROM alpine:3.22 AS rust-base
 
 # Install system dependencies
 # - protoc/protobuf-dev: Required for prost-build (proto compilation in build.rs)
@@ -12,7 +12,19 @@ RUN apk add --no-cache \
     protobuf-dev \
     protoc \
     musl-dev \
-    make
+    make \
+    gcc \
+    curl \
+    ca-certificates
+
+# Install rustup into system-wide dirs so later stages can cache/copy them
+ENV CARGO_HOME=/usr/local/cargo \
+    RUSTUP_HOME=/usr/local/rustup \
+    PATH=/usr/local/cargo/bin:$PATH
+
+# Install rustup with no default toolchain; the toolchain file will drive installs
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --profile minimal --default-toolchain none
 
 WORKDIR /workspace
 
