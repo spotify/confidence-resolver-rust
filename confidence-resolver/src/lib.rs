@@ -465,6 +465,7 @@ impl ResolveWithStickyRequest {
         ResolveWithStickyRequest {
             resolve_request: Some(resolve_request),
             fail_fast_on_sticky: false,
+            not_process_sticky: true,
             materializations_per_unit: BTreeMap::new(),
         }
     }
@@ -528,6 +529,9 @@ impl<'a, H: Host> AccountResolver<'a, H> {
                     return match err {
                         ResolveFlagError::Message(msg) => Err(msg.to_string()),
                         ResolveFlagError::MissingMaterializations() => {
+                            if request.not_process_sticky {
+                                continue;
+                            }
                             // we want to fallback on online resolver, return early
                             if request.fail_fast_on_sticky {
                                 Ok(ResolveWithStickyResponse::with_missing_materializations(

@@ -34,4 +34,8 @@ The etag value is used to avoid re-deploy the worker if the state hasn't changed
 Additional optional variables:
 - CONFIDENCE_RESOLVER_STATE_URL: Point to a custom resolver state protobuf file;
 - CONFIDENCE_RESOLVER_ALLOWED_ORIGIN: Configure allowed origins in the wrangler used to deploy the resolver;
-- FORCE_DEPLOY: Re-deploy the resolver worker, regardless if the state is detected as changed or not. 
+- FORCE_DEPLOY: Re-deploy the resolver worker, regardless if the state is detected as changed or not.
+
+# Sticky Assignments
+Sticky assignments are currently not supported with the CloudFlare resolver.
+If a flag with sticky assignment rules is encountered, it is ignored by the resolver and the evaluation will return a "flag not found".
