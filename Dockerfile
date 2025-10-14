@@ -83,12 +83,12 @@ COPY wasm/proto/ ./wasm/proto/
 
 # Touch files to ensure rebuild (dependencies are cached)
 RUN find . -type f -name "*.rs" -exec touch {} +
+ENV IN_DOCKER_BUILD=1
 
 # ==============================================================================
 # Test confidence-resolver
 # ==============================================================================
 FROM rust-test-base AS confidence-resolver.test
-
 WORKDIR /workspace/confidence-resolver
 RUN make test
 
@@ -96,7 +96,6 @@ RUN make test
 # Test wasm-msg (when tests exist)
 # ==============================================================================
 FROM rust-test-base AS wasm-msg.test
-
 WORKDIR /workspace/wasm-msg
 RUN make test
 
@@ -138,6 +137,7 @@ COPY data/ ./data/
 
 # Touch files to ensure rebuild
 RUN find . -type f -name "*.rs" -exec touch {} +
+ENV IN_DOCKER_BUILD=1
 
 # ==============================================================================
 # Build wasm/rust-guest WASM
@@ -198,6 +198,7 @@ COPY wasm/node-host/Makefile ./
 COPY wasm/proto ../proto/
 
 # Build using Makefile (installs deps + generates protos)
+ENV IN_DOCKER_BUILD=1
 RUN make build
 
 # Copy source code
@@ -214,8 +215,7 @@ COPY wasm/resolver_state.pb ../resolver_state.pb
 # Test Node.js Host (integration test)
 # ==============================================================================
 FROM node-host-base AS node-host.test
-
-RUN yarn start
+RUN make run
 
 # ==============================================================================
 # Java Host - Run Java host example
@@ -241,6 +241,7 @@ COPY wasm/proto ../proto/
 COPY wasm/java-host/src ./src/
 
 # Build using Makefile (compiles proto + builds JAR)
+ENV IN_DOCKER_BUILD=1
 RUN make build
 
 # Copy WASM module from wasm-rust-guest.artifact
@@ -253,8 +254,7 @@ COPY wasm/resolver_state.pb ../resolver_state.pb
 # Test Java Host (integration test)
 # ==============================================================================
 FROM java-host-base AS java-host.test
-
-RUN mvn -q exec:java
+RUN make run
 
 # ==============================================================================
 # Go Host - Run Go host example
@@ -283,6 +283,7 @@ COPY wasm/proto ../proto/
 COPY wasm/go-host/*.go wasm/go-host/*.sh ./
 
 # Build using Makefile (generates proto + builds)
+ENV IN_DOCKER_BUILD=1
 RUN make build
 
 # Copy WASM module
@@ -295,8 +296,7 @@ COPY wasm/resolver_state.pb ../resolver_state.pb
 # Test Go Host (integration test)
 # ==============================================================================
 FROM go-host-base AS go-host.test
-
-RUN go run .
+RUN make run
 
 # ==============================================================================
 # Python Host - Run Python host example
@@ -318,6 +318,7 @@ COPY wasm/python-host/generate_proto.py ./
 COPY wasm/proto ../proto/
 
 # Build using Makefile (creates venv + installs deps + generates proto)
+ENV IN_DOCKER_BUILD=1
 RUN make build
 
 # Copy source code
@@ -333,7 +334,6 @@ COPY wasm/resolver_state.pb ../resolver_state.pb
 # Test Python Host (integration test)
 # ==============================================================================
 FROM python-host-base AS python-host.test
-
 RUN make run
 
 # ==============================================================================
@@ -350,35 +350,35 @@ WORKDIR /app
 RUN corepack enable
 
 # Copy package files for dependency caching
-COPY openfeature-provider/js/package.json openfeature-provider/js/yarn.lock openfeature-provider/js/.yarnrc.yml ./
+COPY \
+    openfeature-provider/js/Makefile \
+    openfeature-provider/js/package.json \
+    openfeature-provider/js/yarn.lock \
+    openfeature-provider/js/.yarnrc.yml \
+    openfeature-provider/js/proto \
+    ./
+COPY openfeature-provider/js/proto ./proto
 
 # Install dependencies (this layer will be cached)
-RUN yarn install --frozen-lockfile
-
-# Copy proto files
-COPY openfeature-provider/js/proto ./proto/
-
-# Generate proto files
-RUN yarn proto:gen
+ENV IN_DOCKER_BUILD=1
+RUN make install
 
 # Copy source and config
 COPY openfeature-provider/js/src ./src/
 COPY openfeature-provider/js/tsconfig.json openfeature-provider/js/tsdown.config.ts openfeature-provider/js/vitest.config.ts ./
 COPY openfeature-provider/js/Makefile ./
 
-# Copy WASM module and resolver state (needed for tests)
-# Tests expect files at ../../../ relative to /app/src/
+# Copy WASM module
 COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../../../wasm/confidence_resolver.wasm
-COPY wasm/resolver_state.pb ../../../wasm/resolver_state.pb
 
-# Copy confidence-resolver protos (needed by some tests for proto parsing)
-COPY confidence-resolver/protos ../../../confidence-resolver/protos
 
 # ==============================================================================
 # Test OpenFeature Provider
 # ==============================================================================
 FROM openfeature-provider-js-base AS openfeature-provider-js.test
-
+# Copy confidence-resolver protos (needed by some tests for proto parsing)
+COPY confidence-resolver/protos ../../../confidence-resolver/protos
+COPY wasm/resolver_state.pb ../../../wasm/resolver_state.pb
 RUN make test
 
 # ==============================================================================
@@ -386,7 +386,7 @@ RUN make test
 # ==============================================================================
 FROM openfeature-provider-js-base AS openfeature-provider-js.build
 
-RUN yarn build
+RUN make build
 
 # ==============================================================================
 # All - Build and validate everything (default target)
