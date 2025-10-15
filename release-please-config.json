@@ -2,6 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "bump-minor-pre-major": true,
   "plugins": ["cargo-workspace"],
+  "separate-pull-requests": false,
   "packages": {
     "confidence-resolver": {
       "path": "confidence-resolver",
@@ -27,9 +28,14 @@
       "changelog-path": "CHANGELOG.md",
       "initial-version": "0.1.0"
     },
-    "openfeature-provider-local-java": {
+    "openfeature-provider/java": {
       "path": "openfeature-provider/java",
       "release-type": "java",
+      "changelog-path": "CHANGELOG.md"
+    },
+    "openfeature-provider/js": {
+      "path": "openfeature-provider/js",
+      "release-type": "node",
       "changelog-path": "CHANGELOG.md"
     }
   }

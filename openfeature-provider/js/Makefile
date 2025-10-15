@@ -23,6 +23,23 @@ build-wasm:
 $(BUILD_STAMP): | build-wasm
 endif
 
+$(WASM_ARTIFACT):
+	@mkdir -p $(dir $@)
+	@if [ -n "$$CONFIDENCE_RESOLVER_VERSION" ]; then \
+	  REPO="$$CONFIDENCE_RESOLVER_REPO"; \
+	  if [ -z "$$REPO" ]; then REPO="$$GITHUB_REPOSITORY"; fi; \
+	  if [ -z "$$REPO" ]; then REPO=$(shell git config --get remote.origin.url | sed -E 's#.*[:/]([^/]+/[^/]+?)(\\.git)?$#\\1#'); fi; \
+	  URL="https://github.com/$$REPO/releases/download/confidence_resolver-v$$CONFIDENCE_RESOLVER_VERSION/confidence_resolver.wasm"; \
+	  echo "Downloading WASM from $$URL"; \
+	  if [ -n "$$GITHUB_TOKEN" ]; then \
+	    curl -fsSL -H "Authorization: Bearer $$GITHUB_TOKEN" -o $@ "$$URL"; \
+	  else \
+	    curl -fsSL -o $@ "$$URL"; \
+	  fi; \
+	else \
+	  $(MAKE) -C $(ROOT) wasm/confidence_resolver.wasm; \
+	fi
+
 # Install dependencies only when package manifests change
 $(INSTALL_STAMP): package.json yarn.lock
 	yarn install --immutable

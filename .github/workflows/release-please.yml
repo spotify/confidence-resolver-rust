@@ -22,6 +22,35 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Pre-bump providers if resolver changed since last tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          LAST_TAG=$(git tag --list 'confidence_resolver-v*' | sort -V | tail -n1 || true)
+          CHANGED=true
+          if [ -n "${LAST_TAG:-}" ]; then
+            if git diff --quiet "${LAST_TAG}"..HEAD -- confidence-resolver; then
+              CHANGED=false
+            fi
+          fi
+          if [ "$CHANGED" = true ]; then
+            mkdir -p openfeature-provider/js openfeature-provider/java
+            SHA=$(git rev-parse --short HEAD)
+            echo "$SHA" > openfeature-provider/js/CONFIDENCE_RESOLVER_ADOPTED_SHA
+            echo "$SHA" > openfeature-provider/java/CONFIDENCE_RESOLVER_ADOPTED_SHA
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add openfeature-provider/js/CONFIDENCE_RESOLVER_ADOPTED_SHA openfeature-provider/java/CONFIDENCE_RESOLVER_ADOPTED_SHA
+            if git diff --cached --quiet; then
+              echo "No provider marker changes to commit"
+            else
+              git commit -m "fix: adopt latest confidence-resolver changes"
+              git push
+            fi
+          else
+            echo "confidence-resolver unchanged since last tag; skipping provider bump"
+          fi
+
       - name: Release Please (manifest)
         id: release
         uses: googleapis/release-please-action@v4
@@ -34,6 +63,8 @@ jobs:
     needs: release
     if: ${{ needs.release.outputs.releases_created == 'true' }}
     runs-on: ubuntu-latest
+    outputs:
+      resolver_version: ${{ steps.extract_version.outputs.resolver_version }}
     permissions:
       contents: write
       packages: read
@@ -57,6 +88,7 @@ jobs:
           VERSION=$(grep -m1 '^version\s*=\s*"' confidence-resolver/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "TAG_NAME=confidence_resolver-v$VERSION" >> $GITHUB_ENV
+          echo "resolver_version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build and extract WASM artifact
         uses: docker/build-push-action@v6
@@ -127,3 +159,47 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  providers-smoke-build:
+    needs: [release, publish-wasm]
+    if: ${{ needs.release.outputs.releases_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CONFIDENCE_RESOLVER_VERSION: ${{ needs.publish-wasm.outputs.resolver_version }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pin resolver version in JS package.json
+        run: |
+          jq ".confidenceResolverVersion=\"${{ needs.publish-wasm.outputs.resolver_version }}\"" openfeature-provider/js/package.json > openfeature-provider/js/package.json.tmp
+          mv openfeature-provider/js/package.json.tmp openfeature-provider/js/package.json
+
+      - name: Pin resolver version in Java pom.xml
+        run: |
+          sed -i.bak "s#<confidence.resolver.version>.*</confidence.resolver.version>#<confidence.resolver.version>${{ needs.publish-wasm.outputs.resolver_version }}</confidence.resolver.version>#" openfeature-provider/java/pom.xml
+          rm -f openfeature-provider/java/pom.xml.bak
+
+      - name: Commit resolver version pins
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add openfeature-provider/js/package.json openfeature-provider/java/pom.xml
+          if git diff --cached --quiet; then
+            echo "No resolver version pin changes"
+          else
+            git commit -m "fix: pin providers to confidence-resolver v${{ needs.publish-wasm.outputs.resolver_version }}"
+            git push
+          fi
+
+      - name: JS provider build (fetch released wasm)
+        run: make -C openfeature-provider/js build
+
+      - name: Java provider build (fetch released wasm)
+        run: make -C openfeature-provider/java build
+
