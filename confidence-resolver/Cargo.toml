@@ -15,7 +15,6 @@ std = ["chrono/clock", "rand/thread_rng", "rust-crypto-wasm"]
 json = ["serde", "serde_json", "pbjson", "pbjson-types"]
 
 [dependencies]
-spin = "0.10.0"
 fastmurmur3 = "0.2.0"
 bitvec = { version = "1.0.1", default-features = false, features = ["alloc"] }
 miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }

@@ -50,7 +50,7 @@ impl Host for H {
         evaluation_context: &Struct,
         values: &[ResolvedValue<'_>],
         client: &Client,
-        sdk: &Option<Sdk>,
+        _sdk: &Option<Sdk>,
     ) {
         LOGGER.log_resolve(
             resolve_id,

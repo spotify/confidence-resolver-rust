@@ -2,51 +2,10 @@ use crate::proto::confidence::flags::admin::v1::client_resolve_info::EvaluationC
 use crate::proto::confidence::flags::admin::v1::flag_resolve_info::{
     AssignmentResolveInfo, RuleResolveInfo, VariantResolveInfo,
 };
-use crate::proto::confidence::flags::admin::v1::{
-    ClientResolveInfo, ContextFieldSemanticType, FlagResolveInfo,
-};
-use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::applied_flag::Assignment;
-use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::default_assignment::DefaultAssignmentReason;
-use crate::proto::confidence::flags::resolver::v1::events::flag_assigned::{
-    AppliedFlag, AssignmentInfo, DefaultAssignment,
-};
-use crate::proto::confidence::flags::resolver::v1::events::{ClientInfo, FlagAssigned};
-use crate::proto::confidence::flags::resolver::v1::{Sdk, WriteFlagLogsRequest};
-use crate::schema_util::SchemaFromEvaluationContext;
-use crate::Client;
-use crate::Struct;
-use crate::{FlagToApply, ResolvedValue};
-#[cfg(feature = "json")]
-use serde::{Deserialize, Serialize};
-use spin::Mutex;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::io::Write;
-
-#[cfg(not(feature = "json"))]
-#[derive(Clone, Debug)]
-pub struct FlagLogQueueRequest {
-    pub flag_assigned: Vec<FlagAssigned>,
-    pub client_resolve_info: Vec<ClientResolveInfo>,
-    pub flag_resolve_info: Vec<FlagResolveInfo>,
-}
-
-pub struct Logger {
-    flag_log_requests: Mutex<Vec<WriteFlagLogsRequest>>,
-}
-
-impl Default for Logger {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Logger {
-    pub fn new() -> Logger {
-        Logger {
-            flag_log_requests: Mutex::new(Vec::new()),
-        }
-    }
-}
+use crate::proto::confidence::flags::admin::v1::{ClientResolveInfo, FlagResolveInfo};
+use crate::proto::confidence::flags::resolver::v1::events::FlagAssigned;
+use crate::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest;
+use std::collections::{HashMap, HashSet};
 
 pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLogsRequest {
     // map of client credential to derived schema
@@ -138,28 +97,6 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
         flag_resolve_info,
         client_resolve_info,
     }
-}
-
-pub trait FlagLogger {
-    fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLogsRequest;
-}
-
-fn to_default_assignment(
-    reason: crate::proto::confidence::flags::resolver::v1::ResolveReason,
-) -> i32 {
-    #[allow(clippy::needless_return)]
-    return match reason {
-        crate::proto::confidence::flags::resolver::v1::ResolveReason::NoSegmentMatch => {
-            DefaultAssignmentReason::NoSegmentMatch
-        }
-        crate::proto::confidence::flags::resolver::v1::ResolveReason::NoTreatmentMatch => {
-            DefaultAssignmentReason::NoTreatmentMatch
-        }
-        crate::proto::confidence::flags::resolver::v1::ResolveReason::FlagArchived => {
-            DefaultAssignmentReason::FlagArchived
-        }
-        _ => DefaultAssignmentReason::Unspecified,
-    } as i32;
 }
 
 struct SchemaItem {
