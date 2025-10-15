@@ -20,10 +20,10 @@ Add this dependency to your `pom.xml`:
 <dependency>
     <groupId>com.spotify.confidence</groupId>
     <artifactId>openfeature-provider-local</artifactId>
-    <version>0.6.1-SNAPSHOT</version>
+    <version>0.6.4</version>
 </dependency>
 ```
-<!---x-release-please-end-->
+<!-- x-release-please-end -->
 
 ## Quick Start
 
