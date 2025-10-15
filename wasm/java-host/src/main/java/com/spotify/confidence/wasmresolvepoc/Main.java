@@ -12,7 +12,7 @@ import com.spotify.confidence.flags.resolver.v1.ResolveReason;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import rust_guest.Messages.SetResolverStateRequest;
+import com.spotify.confidence.wasm.Messages.SetResolverStateRequest;
 
 public class Main {
 

@@ -6,6 +6,10 @@ option go_package = "github.com/spotify/confidence/wasm-resolve-poc/go-host/prot
 
 import "google/protobuf/struct.proto";
 
+option java_package = "com.spotify.confidence.wasm";
+option java_multiple_files = false;
+option java_outer_classname = "Messages";
+
 message Void {}
 
 message SetResolverStateRequest {

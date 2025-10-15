@@ -196,22 +196,6 @@
           <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
         </configuration>
         <executions>
-          <!-- Compile local provider protos (e.g., confidence/wasm/messages.proto) -->
-          <execution>
-            <id>compile-provider-protos</id>
-            <phase>generate-sources</phase>
-            <goals>
-              <goal>compile</goal>
-              <goal>compile-custom</goal>
-            </goals>
-            <configuration>
-              <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
-              <additionalProtoPathElements>
-                <additionalProtoPathElement>${project.basedir}/src/main/proto</additionalProtoPathElement>
-                <additionalProtoPathElement>/Users/fdema/Developer/github/confidence-resolver-rust/confidence-resolver/protos</additionalProtoPathElement>
-              </additionalProtoPathElements>
-            </configuration>
-          </execution>
           <!-- Compile the Confidence API protos from this repo to satisfy imports and stubs -->
           <execution>
             <id>compile-confidence-protos</id>
@@ -221,7 +205,7 @@
               <goal>compile-custom</goal>
             </goals>
             <configuration>
-              <protoSourceRoot>/Users/fdema/Developer/github/confidence-resolver-rust/confidence-resolver/protos</protoSourceRoot>
+              <protoSourceRoot>${project.basedir}/../../confidence-resolver/protos</protoSourceRoot>
               <includes>
                 <include>confidence/flags/resolver/v1/**/*.proto</include>
                 <include>confidence/flags/types/v1/**/*.proto</include>
@@ -233,15 +217,28 @@
                 <include>confidence/api/annotations.proto</include>
                 <include>confidence/events/v1/annotations.proto</include>
               </includes>
-              <additionalProtoPathElements>
-                <additionalProtoPathElement>${project.basedir}/src/main/proto</additionalProtoPathElement>
-              </additionalProtoPathElements>
+            </configuration>
+          </execution>
+          <!-- Generate WASM interop messages from the shared wasm/proto/messages.proto -->
+          <execution>
+            <id>compile-wasm-messages</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>compile</goal>
+              <goal>compile-custom</goal>
+            </goals>
+            <configuration>
+              <protoSourceRoot>${project.basedir}/../../wasm/proto</protoSourceRoot>
+              <includes>
+                <include>messages.proto</include>
+              </includes>
+              <clearOutputDirectory>false</clearOutputDirectory>
             </configuration>
           </execution>
         </executions>
       </plugin>
 
-      <!-- Ensure generated proto sources are added to the compile source path -->
+      <!-- Ensure generated sources are on the compile classpath -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
