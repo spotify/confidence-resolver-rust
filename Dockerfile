@@ -403,10 +403,14 @@ RUN make build
 # ==============================================================================
 # OpenFeature Provider (Java) - Build and test
 # ==============================================================================
-FROM eclipse-temurin:17-alpine AS openfeature-provider-java-base
+FROM eclipse-temurin:17-jdk AS openfeature-provider-java-base
 
-# Install Maven and protobuf
-RUN apk add --no-cache maven protobuf-dev protoc make
+# Install Maven and protobuf (Debian-based for glibc compatibility)
+RUN apt-get update && apt-get install -y \
+    maven \
+    protobuf-compiler \
+    make \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
