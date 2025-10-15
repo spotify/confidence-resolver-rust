@@ -26,6 +26,11 @@
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
       "initial-version": "0.1.0"
+    },
+    "openfeature-provider-local-java": {
+      "path": "openfeature-provider/java",
+      "release-type": "java",
+      "changelog-path": "CHANGELOG.md"
     }
   }
 }

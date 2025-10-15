@@ -15,8 +15,8 @@ import com.google.protobuf.Timestamp;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 
-import rust_guest.Messages.SetResolverStateRequest;
-import rust_guest.Messages;
+import com.spotify.confidence.wasm.Messages;
+import com.spotify.confidence.wasm.Messages.SetResolverStateRequest;
 
 import java.util.List;
 import java.util.function.Function;
