@@ -13,18 +13,22 @@ GEN_MESSAGES := target/generated-sources/protobuf/java/com/spotify/confidence/wa
 
 .PHONY: install build test clean
 
-# Always build wasm if not in docker
+# Always build/copy wasm when not in Docker; inside Docker we rely on COPY from Dockerfile
 ifneq ($(IN_DOCKER_BUILD),1)
 .PHONY: $(LOCAL_WASM)
-endif
 
 $(LOCAL_WASM):
 	$(MAKE) -C $(ROOT) wasm/confidence_resolver.wasm
 
-# Ensure local wasm is copied into resources to avoid maven download
 $(RESOURCES_WASM): $(LOCAL_WASM)
 	@mkdir -p $(dir $@)
 	cp $(LOCAL_WASM) $@
+else
+# In Docker, the WASM is already copied into src/main/resources by the Dockerfile
+$(RESOURCES_WASM):
+	@mkdir -p $(dir $@)
+	@test -f $@ || (echo "Missing $@ (expected via Docker COPY)"; exit 1)
+endif
 
 # A lightweight install target to prep resources
 $(INSTALL_STAMP): pom.xml $(RESOURCES_WASM)
