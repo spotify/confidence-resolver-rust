@@ -401,6 +401,50 @@ FROM openfeature-provider-js-base AS openfeature-provider-js.build
 RUN make build
 
 # ==============================================================================
+# OpenFeature Provider (Java) - Build and test
+# ==============================================================================
+FROM eclipse-temurin:17-alpine AS openfeature-provider-java-base
+
+# Install Maven and protobuf
+RUN apk add --no-cache maven protobuf-dev protoc make
+
+WORKDIR /app
+
+# Copy pom.xml for dependency caching
+COPY openfeature-provider/java/pom.xml ./
+COPY openfeature-provider/java/Makefile ./
+
+# Download dependencies (this layer will be cached)
+RUN mvn dependency:go-offline -q || true
+
+# Copy proto files (needed for protobuf generation)
+COPY confidence-resolver/protos ../../confidence-resolver/protos/
+COPY wasm/proto ../../wasm/proto/
+
+# Copy source code
+COPY openfeature-provider/java/src ./src/
+
+# Copy WASM module into resources
+COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ./src/main/resources/wasm/confidence_resolver.wasm
+
+# Set environment variable
+ENV IN_DOCKER_BUILD=1
+
+# ==============================================================================
+# Test OpenFeature Provider (Java)
+# ==============================================================================
+FROM openfeature-provider-java-base AS openfeature-provider-java.test
+
+RUN make test
+
+# ==============================================================================
+# Build OpenFeature Provider (Java)
+# ==============================================================================
+FROM openfeature-provider-java-base AS openfeature-provider-java.build
+
+RUN make build
+
+# ==============================================================================
 # All - Build and validate everything (default target)
 # ==============================================================================
 FROM scratch AS all
@@ -411,7 +455,8 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm /artifacts/wasm/
 # Force test stages to run by copying marker files
 COPY --from=confidence-resolver.test /workspace/Cargo.toml /markers/test-resolver
 COPY --from=wasm-msg.test /workspace/Cargo.toml /markers/test-wasm-msg
-COPY --from=openfeature-provider-js.test /app/package.json /markers/test-openfeature
+COPY --from=openfeature-provider-js.test /app/package.json /markers/test-openfeature-js
+COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeature-java
 
 # Force integration test stages to run (host examples)
 COPY --from=node-host.test /app/package.json /markers/integration-node
@@ -425,5 +470,6 @@ COPY --from=wasm-msg.lint /workspace/Cargo.toml /markers/lint-wasm-msg
 COPY --from=wasm-rust-guest.lint /workspace/Cargo.toml /markers/lint-guest
 
 # Force build stages to run
-COPY --from=openfeature-provider-js.build /app/dist/index.node.js /artifacts/openfeature/
+COPY --from=openfeature-provider-js.build /app/dist/index.node.js /artifacts/openfeature-js/
+COPY --from=openfeature-provider-java.build /app/target/*.jar /artifacts/openfeature-java/
 COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
