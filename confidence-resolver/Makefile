@@ -8,7 +8,7 @@ test:
 .PHONY: lint
 lint:
 	cargo fmt --check
-	cargo clippy --lib --release
+	cargo clippy --lib --release -- -D warnings
 
 .PHONY: clean
 clean:

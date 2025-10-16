@@ -68,13 +68,16 @@ RUN mkdir -p confidence-resolver/src && \
     echo "pub fn dummy() {}" > wasm/rust-guest/src/lib.rs
 
 # Build dependencies (this layer will be cached)
-RUN cargo build --release -p confidence_resolver
+RUN cargo build -p confidence_resolver --release 
 
 # Build test dependencies including dev-dependencies (this layer will be cached)
-RUN cargo test --release -p confidence_resolver --lib --no-run
+RUN cargo test -p confidence_resolver --lib --no-run --release 
 
 # Build WASM dependencies (this layer will be cached)
 RUN cargo build -p rust-guest --target wasm32-unknown-unknown --profile wasm
+
+# Build confidence-cloudflare-resolver dependencies (this layer will be cached)
+RUN RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo build --target wasm32-unknown-unknown --release
 
 # ==============================================================================
 # Test & Lint Base - Copy source for testing/linting (native builds)
@@ -429,7 +432,7 @@ COPY wasm/proto ../../wasm/proto/
 COPY openfeature-provider/java/src ./src/
 
 # Copy WASM module into resources
-COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ./src/main/resources/wasm/confidence_resolver.wasm
+COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../../../wasm/confidence_resolver.wasm
 
 # Set environment variable
 ENV IN_DOCKER_BUILD=1

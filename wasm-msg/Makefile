@@ -1,17 +1,16 @@
 # wasm-msg Makefile
 # Support library - linted, tested when tests exist
 
-.PHONY: test
+.PHONY: test lint clean
+
 test:
 	@echo "ℹ️  No tests yet for wasm-msg"
 	# When tests exist: cargo test --release --lib
 
-.PHONY: lint
 lint:
 	cargo fmt --check
-	cargo clippy --lib --release
+	cargo clippy --lib --release -- -D warnings
 
-.PHONY: clean
 clean:
 	cargo clean
 

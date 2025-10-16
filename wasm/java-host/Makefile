@@ -11,15 +11,15 @@ WASM_ARTIFACT := ../confidence_resolver.wasm
 
 # Always build wasm if not in docker
 ifneq ($(IN_DOCKER_BUILD),1)
-.PHONY: $(WASM_ARTIFACT)
+.PHONY: build-wasm
+build-wasm:
+	@$(MAKE) -C $(ROOT) wasm/confidence_resolver.wasm
+$(BUILD_STAMP): | build-wasm
 endif
-
-$(WASM_ARTIFACT):
-	$(MAKE) -C $(ROOT) wasm/confidence_resolver.wasm
 
 $(BUILD_STAMP): pom.xml $(SRC)
 	mvn -q package
-	touch $@
+	@touch $@
 
 build: $(BUILD_STAMP)
 
