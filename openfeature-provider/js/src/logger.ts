@@ -59,6 +59,7 @@ class LoggerImpl implements Logger {
 }
 
 export const logger = new LoggerImpl('cnfd');
+export const getLogger = logger.getLogger.bind(logger);
 
 
 async function loadDebug():Promise<Debug | null> {
