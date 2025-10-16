@@ -11,21 +11,16 @@ import type {
 import {
   ResolveReason
 } from './proto/api';
-import type {
-  MaterializationInfo,
-  MaterializationMap,
+import {
   ResolveFlagsRequest,
   ResolveFlagsResponse,
   ResolveWithStickyRequest,
-  ResolveWithStickyResponse_MaterializationUpdate,
-  ResolveWithStickyResponse_MissingMaterializationItem,
 } from './proto/api';
 import { Fetch, FetchMiddleware, withAuth, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
 import { AccessToken, LocalResolver, ResolveStateUri } from './LocalResolver';
 import type { MaterializationRepository } from './MaterializationRepository';
 import { handleMissingMaterializations, storeUpdates } from './materializationUtils';
-import { RemoteResolverFallback } from './RemoteResolverFallback';
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
@@ -55,7 +50,6 @@ export class ConfidenceServerProviderLocal implements Provider {
   private readonly fetch:Fetch;
   private readonly flushInterval:number;
   private readonly materializationRepository?: MaterializationRepository;
-  private readonly remoteResolverFallback: RemoteResolverFallback;
   private stateEtag:string | null = null;
 
 
@@ -65,7 +59,6 @@ export class ConfidenceServerProviderLocal implements Provider {
     // TODO validate options
     this.flushInterval = options.flushInterval ?? DEFAULT_FLUSH_INTERVAL;
     this.materializationRepository = options.materializationRepository;
-    this.remoteResolverFallback = new RemoteResolverFallback({ fetch: options.fetch });
     const withConfidenceAuth = withAuth(async () => {
       const { accessToken, expiresIn } = await this.fetchToken();
       return [accessToken, new Date(Date.now() + 1000*expiresIn)]
@@ -145,16 +138,14 @@ export class ConfidenceServerProviderLocal implements Provider {
     const [flagName, ...path] = flagKey.split('.');
 
     // Build resolve request
-    const resolveRequest: ResolveFlagsRequest = {
-      flags: [`flags/${flagName}`],
-      evaluationContext: ConfidenceServerProviderLocal.convertEvaluationContext(context),
-      apply: true,
-      clientSecret: this.options.flagClientSecret
-    };
-
     // Always use sticky resolve request
-    const stickyRequest = {
-      resolveRequest,
+    const stickyRequest: ResolveWithStickyRequest = {
+      resolveRequest: {
+        flags: [`flags/${flagName}`],
+        evaluationContext: ConfidenceServerProviderLocal.convertEvaluationContext(context),
+        apply: true,
+        clientSecret: this.options.flagClientSecret
+      },
       materializationsPerUnit: {},
       failFastOnSticky: !this.materializationRepository
     };
@@ -191,7 +182,7 @@ export class ConfidenceServerProviderLocal implements Provider {
 
       // If we don't have a MaterializationRepository, use the remote resolver fallback
       if (!this.materializationRepository) {
-        return await this.remoteResolverFallback.resolve(request.resolveRequest!);
+        return await this.remoteResolve(request.resolveRequest!);
       }
 
       // Handle MaterializationRepository case
@@ -204,6 +195,25 @@ export class ConfidenceServerProviderLocal implements Provider {
     }
 
     throw new Error('Invalid response: resolve result not set');
+  }
+
+  private async remoteResolve(request: ResolveFlagsRequest): Promise<ResolveFlagsResponse> {
+    const url = 'https://resolver.confidence.dev/v1/flags:resolve';
+    
+    const resp = await this.fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(ResolveFlagsRequest.toJSON(request)),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`Remote resolve failed: ${resp.status} ${resp.statusText}`);
+    }
+
+    const json = await resp.json();
+    return ResolveFlagsResponse.fromJSON(json);
   }
 
   /**
