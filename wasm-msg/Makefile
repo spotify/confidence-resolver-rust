@@ -9,7 +9,7 @@ test:
 
 lint:
 	cargo fmt --check
-	cargo clippy --lib --release
+	cargo clippy --lib --release -- -D warnings
 
 clean:
 	cargo clean

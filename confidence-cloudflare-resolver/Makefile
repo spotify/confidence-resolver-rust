@@ -9,7 +9,7 @@ build:
 		
 lint:
 	RUSTFLAGS='--cfg getrandom_backend="wasm_js"' \
-		cargo clippy --lib --target wasm32-unknown-unknown --release
+		cargo clippy --lib --target wasm32-unknown-unknown --release -- -D warnings
 
 clean:
 	cargo clean

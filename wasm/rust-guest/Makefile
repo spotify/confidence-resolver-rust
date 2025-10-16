@@ -8,7 +8,7 @@ build:
 
 lint:
 	cargo fmt --check
-	cargo clippy --target wasm32-unknown-unknown --lib --release
+	cargo clippy --target wasm32-unknown-unknown --lib --release -- -D warnings
 
 clean:
 	cargo clean
