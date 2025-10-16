@@ -1,12 +1,16 @@
 # confidence-cloudflare-resolver Makefile
 # Cloudflare Worker - deployment via deployer/Dockerfile
 
-.PHONY: lint
+.PHONY: build lint clean
+
+build:
+	RUSTFLAGS='--cfg getrandom_backend="wasm_js"' \
+		cargo build --target wasm32-unknown-unknown --release
+		
 lint:
 	RUSTFLAGS='--cfg getrandom_backend="wasm_js"' \
 		cargo clippy --lib --target wasm32-unknown-unknown --release
 
-.PHONY: clean
 clean:
 	cargo clean
 

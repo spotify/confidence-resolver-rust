@@ -5,9 +5,9 @@
 
 build:
 	cargo build --target wasm32-unknown-unknown --profile wasm
-	@echo "WASM size: $$(ls -lh ../../target/wasm32-unknown-unknown/wasm/rust_guest.wasm | awk '{print $$5}')"
 
 lint:
+	cargo fmt --check
 	cargo clippy --target wasm32-unknown-unknown --lib --release
 
 clean:

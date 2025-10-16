@@ -18,11 +18,11 @@ WASM_ARTIFACT := ../confidence_resolver.wasm
 
 # Always build wasm if not in docker
 ifneq ($(IN_DOCKER_BUILD),1)
-.PHONY: $(WASM_ARTIFACT)
+.PHONY: build-wasm
+build-wasm:
+	@$(MAKE) -C $(ROOT) wasm/confidence_resolver.wasm
+$(BUILD_STAMP): | build-wasm
 endif
-
-$(WASM_ARTIFACT):
-	$(MAKE) -C $(ROOT) wasm/confidence_resolver.wasm
 
 # Install dependencies only when package manifests change
 $(INSTALL_STAMP): package.json yarn.lock
@@ -35,7 +35,7 @@ $(GEN_TS): $(PROTO_SRC) $(INSTALL_STAMP)
 	yarn proto:gen
 
 $(BUILD_STAMP): $(INSTALL_STAMP) $(GEN_TS) $(SRC) $(CONFIG)
-	touch $@
+	@touch $@
 
 build: $(BUILD_STAMP)
 

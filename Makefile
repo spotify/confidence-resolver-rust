@@ -6,11 +6,12 @@ TARGET_WASM := target/wasm32-unknown-unknown/wasm/rust_guest.wasm
 .PHONY: $(TARGET_WASM) test integration-test lint build all clean
 
 $(TARGET_WASM):
-	$(MAKE) -C wasm/rust-guest build
+	@$(MAKE) -C wasm/rust-guest build
 
 wasm/confidence_resolver.wasm: $(TARGET_WASM)
-	mkdir -p wasm
-	cp $(TARGET_WASM) $@
+	@mkdir -p wasm
+	@cp -p $(TARGET_WASM) $@
+	@echo "WASM size: $$(ls -lh $@ | awk '{print $$5}')"
 
 test:
 	$(MAKE) -C confidence-resolver test
