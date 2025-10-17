@@ -434,6 +434,10 @@ COPY openfeature-provider/java/src ./src/
 # Copy WASM module into resources
 COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../../../wasm/confidence_resolver.wasm
 
+
+# Copy WASM module into resources
+COPY openfeature-provider/java/.embedded-wasm-version ./.embedded-wasm-version
+
 # Set environment variable
 ENV IN_DOCKER_BUILD=1
 
