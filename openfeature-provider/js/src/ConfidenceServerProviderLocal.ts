@@ -19,8 +19,9 @@ import {
 import { Fetch, FetchMiddleware, withAuth, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
 import { AccessToken, LocalResolver, ResolveStateUri } from './LocalResolver';
-import type { MaterializationRepository } from './MaterializationRepository';
-import { handleMissingMaterializations, storeUpdates } from './materializationUtils';
+// TODO: WIP - MaterializationRepository support
+// import type { MaterializationRepository } from './MaterializationRepository';
+// import { handleMissingMaterializations, storeUpdates } from './materializationUtils';
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
@@ -31,7 +32,6 @@ export interface ProviderOptions {
   initializeTimeout?:number,
   flushInterval?:number,
   fetch?: typeof fetch,
-  materializationRepository?: MaterializationRepository,
 }
 
 /**
@@ -49,7 +49,6 @@ export class ConfidenceServerProviderLocal implements Provider {
   private readonly main = new AbortController();
   private readonly fetch:Fetch;
   private readonly flushInterval:number;
-  private readonly materializationRepository?: MaterializationRepository;
   private stateEtag:string | null = null;
 
 
@@ -58,7 +57,6 @@ export class ConfidenceServerProviderLocal implements Provider {
     // TODO better error handling
     // TODO validate options
     this.flushInterval = options.flushInterval ?? DEFAULT_FLUSH_INTERVAL;
-    this.materializationRepository = options.materializationRepository;
     const withConfidenceAuth = withAuth(async () => {
       const { accessToken, expiresIn } = await this.fetchToken();
       return [accessToken, new Date(Date.now() + 1000*expiresIn)]
@@ -130,7 +128,6 @@ export class ConfidenceServerProviderLocal implements Provider {
   async onClose(): Promise<void> {
     this.main.abort();
     await this.flush();
-    await this.materializationRepository?.close();
   }
 
   // TODO test unknown flagClientSecret
@@ -138,7 +135,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     const [flagName, ...path] = flagKey.split('.');
 
     // Build resolve request
-    // Always use sticky resolve request
+    // Always use sticky resolve request with remote fallback
     const stickyRequest: ResolveWithStickyRequest = {
       resolveRequest: {
         flags: [`flags/${flagName}`],
@@ -147,7 +144,7 @@ export class ConfidenceServerProviderLocal implements Provider {
         clientSecret: this.options.flagClientSecret
       },
       materializationsPerUnit: {},
-      failFastOnSticky: !this.materializationRepository
+      failFastOnSticky: true  // Always fail fast - use remote resolver for sticky assignments
     };
 
     const response = await this.resolveWithStickyInternal(stickyRequest);
@@ -156,7 +153,7 @@ export class ConfidenceServerProviderLocal implements Provider {
 
   /**
    * Internal recursive method for resolving with sticky assignments.
-   * 
+   *
    * @private
    */
   private async resolveWithStickyInternal(
@@ -167,11 +164,12 @@ export class ConfidenceServerProviderLocal implements Provider {
     if (response.success && response.success.response) {
       const { response: flagsResponse, updates } = response.success;
 
+      // TODO: WIP - MaterializationRepository support
       // Store updates if present (only for MaterializationRepository)
       // Fire-and-forget - doesn't block resolve path
-      if (updates.length > 0 && this.materializationRepository) {
-        storeUpdates(updates, this.materializationRepository);
-      }
+      // if (updates.length > 0 && this.materializationRepository) {
+      //   storeUpdates(updates, this.materializationRepository);
+      // }
 
       return flagsResponse;
     }
@@ -180,18 +178,21 @@ export class ConfidenceServerProviderLocal implements Provider {
     if (response.missingMaterializations) {
       const { items } = response.missingMaterializations;
 
-      // If we don't have a MaterializationRepository, use the remote resolver fallback
-      if (!this.materializationRepository) {
-        return await this.remoteResolve(request.resolveRequest!);
-      }
+      // Use remote resolver fallback for sticky assignments
+      // Materializations are stored on Confidence servers with 90-day TTL
+      return await this.remoteResolve(request.resolveRequest!);
 
-      // Handle MaterializationRepository case
-      const updatedRequest = await handleMissingMaterializations(
-        request,
-        items,
-        this.materializationRepository
-      );
-      return this.resolveWithStickyInternal(updatedRequest);
+      // TODO: WIP - MaterializationRepository support
+      // When MaterializationRepository is implemented, the logic will be:
+      // if (!this.materializationRepository) {
+      //   return await this.remoteResolve(request.resolveRequest!);
+      // }
+      // const updatedRequest = await handleMissingMaterializations(
+      //   request,
+      //   items,
+      //   this.materializationRepository
+      // );
+      // return this.resolveWithStickyInternal(updatedRequest);
     }
 
     throw new Error('Invalid response: resolve result not set');

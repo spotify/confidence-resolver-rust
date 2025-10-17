@@ -71,7 +71,6 @@ await provider.onClose();
 - `initializeTimeout` (number, optional): Max ms to wait for initial state fetch. Defaults to 30_000.
 - `flushInterval` (number, optional): Interval in ms for sending evaluation logs. Defaults to 10_000.
 - `fetch` (optional): Custom `fetch` implementation. Required for Node < 18; for Node 18+ you can omit.
-- `materializationRepository` (optional): Custom storage for sticky assignments. See [Sticky Assignments](#sticky-assignments) below.
 
 The provider periodically:
 - Refreshes resolver state (default every 30s)
@@ -81,7 +80,7 @@ The provider periodically:
 
 ## Sticky Assignments
 
-Confidence supports "sticky" flag assignments to ensure users receive consistent variant assignments even when their context changes or flag configurations are updated. 
+Confidence supports "sticky" flag assignments to ensure users receive consistent variant assignments even when their context changes or flag configurations are updated.
 
 ### How it works
 
@@ -90,66 +89,38 @@ When a flag is evaluated for a user, Confidence creates a "materialization" - a 
 - The flag's targeting rules are modified
 - New assignments are paused
 
-### Default behavior (no repository)
+### Implementation
 
-If you don't provide a `materializationRepository`, the provider automatically falls back to resolve with our cloud resolvers:
-- Materializations are stored on Confidence servers with a 90-day TTL
+The provider uses a **remote resolver fallback** for sticky assignments:
+- First, the local WASM resolver attempts to resolve the flag
+- If sticky assignment data is needed, the provider makes a network call to Confidence's cloud resolvers
+- Materializations are stored on Confidence servers with a **90-day TTL** (automatically renewed on access)
 - No local storage or database setup required
-- Best for most use cases
 
 ```ts
 const provider = createConfidenceServerProvider({
   flagClientSecret: process.env.CONFIDENCE_FLAG_CLIENT_SECRET!,
   apiClientId: process.env.CONFIDENCE_API_CLIENT_ID!,
   apiClientSecret: process.env.CONFIDENCE_API_CLIENT_SECRET!,
-  // materializationRepository is optional - uses remote storage by default
+});
+
+// Sticky assignments work automatically via remote fallback
+const client = OpenFeature.getClient();
+const value = await client.getBooleanValue('my-flag', false, {
+  targetingKey: 'user-123'
 });
 ```
 
-### Custom storage with MaterializationRepository
+### Benefits
 
-For advanced use cases where you want full control over materialization storage (e.g., Redis, database, file system), implement the `MaterializationRepository` interface:
+- **Zero configuration**: Works out of the box with no additional setup
+- **Managed storage**: Confidence handles all storage, TTL, and consistency
+- **Automatic renewal**: TTL is refreshed on each access
+- **Global availability**: Materializations are available across all your services
 
-```ts
-interface MaterializationRepository {
-  /**
-   * Load ALL stored materialization assignments for a targeting unit.
-   *
-   * @param unit - The targeting key (e.g., user ID, session ID)
-   * @param materialization - The materialization ID being requested (for context)
-   * @returns Map of materialization ID to MaterializationInfo for this unit
-   */
-  loadMaterializedAssignmentsForUnit(
-    unit: string,
-    materialization: string
-  ): Promise<Map<string, MaterializationInfo>>;
+### Coming Soon: Custom Materialization Storage
 
-  /**
-   * Store materialization assignments for a targeting unit.
-   *
-   * @param unit - The targeting key (e.g., user ID, session ID)
-   * @param assignments - Map of materialization ID to MaterializationInfo
-   */
-  storeAssignment(
-    unit: string,
-    assignments: Map<string, MaterializationInfo>
-  ): Promise<void>;
-
-  /**
-   * Close and cleanup any resources used by this repository.
-   */
-  close(): void | Promise<void>;
-}
-```
-
-**Key points:**
-- `loadMaterializedAssignmentsForUnit` should return ALL materializations for the given unit, not just the one requested
-- This allows efficient bulk loading from your storage system
-- The provider handles caching and coordination internally
-
-See [MAT_REPO_EXAMPLES.md](./MAT_REPO_EXAMPLES.md) for complete implementation examples including:
-- In-memory repository for testing
-- File-backed repository for persistent storage
+We're working on support for connecting your own materialization storage repository (Redis, database, file system, etc.) to eliminate network calls for sticky assignments and have full control over storage. This feature is currently in development.
 
 ---
 

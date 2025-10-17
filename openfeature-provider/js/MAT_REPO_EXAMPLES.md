@@ -1,5 +1,9 @@
 # MaterializationRepository Examples
 
+> **⚠️ WORK IN PROGRESS**
+> This feature is currently in development and not yet available in the public API.
+> The `MaterializationRepository` interface will allow users to provide their own storage backend for sticky assignment materializations.
+
 This document provides implementation examples for custom `MaterializationRepository` implementations.
 
 ## Table of Contents

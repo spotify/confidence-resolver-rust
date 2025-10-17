@@ -1,3 +1,10 @@
+// ============================================================================
+// WIP: Materialization Utilities - Helper functions for MaterializationRepository
+// ============================================================================
+// These utilities are currently in development and not yet part of the public API.
+// They support the MaterializationRepository feature for custom sticky assignment storage.
+// ============================================================================
+
 import type {
   MaterializationInfo,
   MaterializationMap,
@@ -8,7 +15,7 @@ import type {
 import type { MaterializationRepository } from './MaterializationRepository';
 
 /**
- * Handle missing materializations by loading from repository and building updated request.
+ * WIP: Handle missing materializations by loading from repository and building updated request.
  * Matches Java implementation logic.
  */
 export async function handleMissingMaterializations(

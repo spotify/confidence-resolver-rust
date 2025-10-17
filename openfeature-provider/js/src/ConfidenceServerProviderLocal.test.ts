@@ -158,7 +158,9 @@ describe('no network', () => {
 describe('sticky resolve', () => {
   const RESOLVE_REASON_MATCH = 1;
 
-  describe('with MaterializationRepository strategy', () => {
+  // TODO: WIP - MaterializationRepository support
+  // These tests will be re-enabled when MaterializationRepository is implemented
+  describe.skip('with MaterializationRepository strategy', () => {
     let mockRepository: MockedObject<MaterializationRepository>;
     let providerWithRepo: ConfidenceServerProviderLocal;
 
@@ -353,7 +355,7 @@ describe('sticky resolve', () => {
     });
   });
 
-  describe('without MaterializationRepository (uses RemoteResolverFallback)', () => {
+  describe('remote resolver fallback for sticky assignments', () => {
     let providerWithFallback: ConfidenceServerProviderLocal;
 
     beforeEach(async () => {
@@ -362,7 +364,7 @@ describe('sticky resolve', () => {
         apiClientId: 'apiClientId',
         apiClientSecret: 'apiClientSecret',
         fetch: mockedFetch
-        // No materializationRepository - will use RemoteResolverFallback
+        // Uses remote resolver fallback for sticky assignments
       });
 
       await providerWithFallback.initialize();
@@ -431,7 +433,7 @@ describe('sticky resolve', () => {
       expect(remoteResolveEndpoint).toHaveBeenCalledTimes(1);
     });
 
-    it('should not store updates when no repository configured', async () => {
+    it('should handle updates with remote fallback (no local storage)', async () => {
       mockedWasmResolver.resolveWithSticky.mockReturnValue({
         success: {
           response: {
@@ -459,8 +461,8 @@ describe('sticky resolve', () => {
         targetingKey: 'user-1'
       });
 
-      // Should not try to store when no repository is configured
-      // (success - no exception thrown)
+      // Updates are handled by remote resolver, not stored locally
+      // Verify no remote resolve was needed (successful local resolve)
       expect(remoteResolveEndpoint).not.toHaveBeenCalled();
     });
   });

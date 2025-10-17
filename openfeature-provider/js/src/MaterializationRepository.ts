@@ -1,10 +1,18 @@
+// ============================================================================
+// WIP: MaterializationRepository - Custom Storage for Sticky Assignments
+// ============================================================================
+// This interface is currently in development and not yet part of the public API.
+// When complete, it will allow users to provide their own storage backend
+// (Redis, database, file system, etc.) for sticky assignment materializations.
+// ============================================================================
+
 import type {
   MaterializationInfo,
 } from './proto/api';
 
 
 /**
- * Strategy for storing and loading materialized assignments locally.
+ * WIP: Strategy for storing and loading materialized assignments locally.
  *
  * Use this when you want to:
  * - Store assignments in a database, Redis, or other persistent storage
