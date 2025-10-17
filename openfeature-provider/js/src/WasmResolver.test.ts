@@ -18,7 +18,11 @@ beforeEach(async () => {
 
 it('should fail to resolve without state', () => {
   expect(() => {
-    wasmResolver.resolveFlags({ flags: [], clientSecret: 'xyz', apply: false });
+    wasmResolver.resolveWithSticky({
+      resolveRequest: { flags: [], clientSecret: 'xyz', apply: false },
+      materializationsPerUnit: {},
+      failFastOnSticky: false
+    });
   }).toThrowError('Resolver state not set');
 });
 
@@ -29,17 +33,22 @@ describe('with state', () => {
 
   it('should resolve flags', () => {
     try {
-      const resp = wasmResolver.resolveFlags({
-        flags: ['flags/tutorial-feature'],
-        clientSecret: CLIENT_SECRET,
-        apply: true,
-        evaluationContext: {
-          targeting_key: 'tutorial_visitor',
-          visitor_id: 'tutorial_visitor',
+      const resp = wasmResolver.resolveWithSticky({
+        resolveRequest: {
+          flags: ['flags/tutorial-feature'],
+          clientSecret: CLIENT_SECRET,
+          apply: true,
+          evaluationContext: {
+            targeting_key: 'tutorial_visitor',
+            visitor_id: 'tutorial_visitor',
+          },
         },
+        materializationsPerUnit: {},
+        failFastOnSticky: false
       });
 
-      expect(resp).toMatchObject({
+      expect(resp.success).toBeDefined();
+      expect(resp.success?.response).toMatchObject({
         resolvedFlags: [
           {
             reason: ResolveReason.RESOLVE_REASON_MATCH,
@@ -59,14 +68,18 @@ describe('with state', () => {
     })
 
     it('should contain logs after a resolve', () => {
-      wasmResolver.resolveFlags({
-        flags: ['flags/tutorial-feature'],
-        clientSecret: CLIENT_SECRET,
-        apply: true,
-        evaluationContext: {
-          targeting_key: 'tutorial_visitor',
-          visitor_id: 'tutorial_visitor',
+      wasmResolver.resolveWithSticky({
+        resolveRequest: {
+          flags: ['flags/tutorial-feature'],
+          clientSecret: CLIENT_SECRET,
+          apply: true,
+          evaluationContext: {
+            targeting_key: 'tutorial_visitor',
+            visitor_id: 'tutorial_visitor',
+          },
         },
+        materializationsPerUnit: {},
+        failFastOnSticky: false
       });
 
       const decoded = decodeBuffer(wasmResolver.flushLogs());
