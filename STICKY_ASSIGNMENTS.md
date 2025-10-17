@@ -84,7 +84,6 @@ flowchart TD
     SegmentMatch2{Segment Match?}
     ReturnSticky[Return Sticky Assignment<br/>no updates]
     SkipRule2[Skip Rule]
-    SkipRule3[Skip Rule]
     CalcBucket[Calculate Bucket &<br/>Find Assignment]
     AssignmentFound{Assignment Found?}
     SkipRule4[Skip Rule]
@@ -93,7 +92,7 @@ flowchart TD
     ReturnAssignment[Return Assignment<br/>with Updates]
 
     Start --> ReadSpec
-    ReadSpec -->|NO| CheckSegment2
+    ReadSpec -->|NO| CheckMatMatched
     ReadSpec -->|YES| GetInfo
     GetInfo --> InfoFound
     InfoFound -->|NOT FOUND| MissingError
