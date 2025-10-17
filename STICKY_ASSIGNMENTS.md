@@ -61,145 +61,68 @@ When resolving a flag with sticky assignments enabled:
 
 The following flowchart illustrates the complete sticky assignment resolution logic for a single rule:
 
-```
-┌─────────────────────────────────────────────┐
-│  Start: Processing Rule with Materialization │
-└──────────────────┬──────────────────────────┘
-                   │
-                   ▼
-         ┌─────────────────────┐
-         │ Read Materialization │
-         │ Spec Defined?       │
-         └──────┬──────────────┘
-                │
-         ┌──────┴──────┐
-         │             │
-        NO            YES
-         │             │
-         │             ▼
-         │   ┌─────────────────────────┐
-         │   │ Get MaterializationInfo │
-         │   │ from Context            │
-         │   └──────┬──────────────────┘
-         │          │
-         │   ┌──────┴──────┐
-         │   │             │
-         │  FOUND      NOT FOUND
-         │   │             │
-         │   │             ▼
-         │   │    ┌────────────────────┐
-         │   │    │ Return: Missing    │
-         │   │    │ Materialization    │
-         │   │    │ Error              │
-         │   │    └────────────────────┘
-         │   │
-         │   ▼
-         │ ┌────────────────────────────┐
-         │ │ Check: unit_in_info flag   │
-         │ └──────┬─────────────────────┘
-         │        │
-         │ ┌──────┴──────┐
-         │ │             │
-         │ FALSE        TRUE
-         │ │             │
-         │ │ Unit NOT    │ Unit IS
-         │ │ in mat.     │ in mat.
-         │ │             │
-         │ ▼             ▼
-         │ ┌──────────┐  ┌──────────────────────┐
-         │ │materialization│ │segment_targeting_    │
-         │ │_must_match?  │ │can_be_ignored?       │
-         │ └──┬───────┘  └──┬────────────────────┘
-         │    │             │
-         │ ┌──┴──┐       ┌──┴──┐
-         │ │     │       │     │
-         │TRUE  FALSE   TRUE  FALSE
-         │ │     │       │     │
-         │ ▼     │       │     ▼
-         │┌────────┐   │  ┌──────────────┐
-         ││Skip    │   │  │Check Segment │
-         ││Rule    │   │  │Match         │
-         │└────────┘   │  └──────┬───────┘
-         │         │   │         │
-         │         │   │    ┌────┴────┐
-         │         │   │    │         │
-         │         │   │  MATCH   NO MATCH
-         │         │   │    │         │
-         │         ▼   ▼    ▼         │
-         │       ┌──────────┐         │
-         │       │mat_matched│         │
-         │       │= false    │         │
-         │       └─────┬─────┘         │
-         │             │               │
-         │             │      ┌────────┘
-         │             │      │mat_matched
-         │             │      │= segment result
-         │             │      │
-         │             │      ▼
-         │             │  ┌──────────┐
-         │             │  │mat_matched│
-         │             │  │= true     │
-         │             │  └─────┬─────┘
-         │             │        │
-         └─────────────┴────────┴────────┐
-                                         │
-                                         ▼
-                               ┌─────────────────┐
-                               │ mat_matched?    │
-                               └────┬────────────┘
-                                    │
-                              ┌─────┴─────┐
-                              │           │
-                             YES          NO
-                              │           │
-                              ▼           ▼
-                    ┌──────────────────┐  ┌────────────────┐
-                    │ Check if variant │  │ Check Normal   │
-                    │ exists in        │  │ Segment Match? │
-                    │ rule_to_variant  │  └────┬───────────┘
-                    └────┬─────────────┘       │
-                         │                ┌────┴────┐
-                    ┌────┴────┐           │         │
-                    │         │          YES        NO
-                   FOUND   NOT FOUND      │         │
-                    │         │           │         ▼
-                    ▼         │           │   ┌──────────┐
-          ┌──────────────┐   │           │   │Skip Rule │
-          │Return Sticky │   │           │   └──────────┘
-          │Assignment    │   │           │
-          │(no updates)  │   │           ▼
-          └──────────────┘   │    ┌────────────────┐
-                             │    │ Calculate      │
-                             │    │ Bucket & Find  │
-                             └────┤ Assignment     │
-                                  └────┬───────────┘
-                                       │
-                                  ┌────┴────┐
-                                  │         │
-                                FOUND    NOT FOUND
-                                  │         │
-                                  ▼         ▼
-                        ┌──────────────┐ ┌──────────┐
-                        │Has write_mat?│ │Skip Rule │
-                        └────┬─────────┘ └──────────┘
-                             │
-                        ┌────┴────┐
-                        │         │
-                       YES        NO
-                        │         │
-                        ▼         │
-              ┌──────────────┐   │
-              │Create Update │   │
-              │for write_mat │   │
-              └────┬─────────┘   │
-                   │             │
-                   └─────┬───────┘
-                         │
-                         ▼
-               ┌──────────────────┐
-               │ Return Assignment│
-               │ with Updates     │
-               └──────────────────┘
+```mermaid
+flowchart TD
+    Start([Start: Processing Rule with Materialization])
+    ReadSpec{Read Materialization<br/>Spec Defined?}
+    GetInfo[Get MaterializationInfo<br/>from Context]
+    InfoFound{MaterializationInfo<br/>Found?}
+    MissingError[Return: Missing<br/>Materialization Error]
+    CheckUnitInfo{Check: unit_in_info flag}
+    MustMatch{materialization<br/>_must_match?}
+    CanIgnore{segment_targeting<br/>_can_be_ignored?}
+    SkipRule1[Skip Rule]
+    CheckSegment1[Check Segment Match]
+    SegmentMatch1{Segment Match?}
+    SetMatFalse[mat_matched = false]
+    SetMatTrue[mat_matched = true]
+    SetMatSegment[mat_matched = segment result]
+    CheckMatMatched{mat_matched?}
+    CheckVariant[Check if variant exists<br/>in rule_to_variant]
+    CheckSegment2[Check Normal<br/>Segment Match?]
+    VariantFound{Variant Found?}
+    SegmentMatch2{Segment Match?}
+    ReturnSticky[Return Sticky Assignment<br/>no updates]
+    SkipRule2[Skip Rule]
+    CalcBucket[Calculate Bucket &<br/>Find Assignment]
+    AssignmentFound{Assignment Found?}
+    SkipRule4[Skip Rule]
+    HasWriteMat{Has write_mat?}
+    CreateUpdate[Create Update<br/>for write_mat]
+    ReturnAssignment[Return Assignment<br/>with Updates]
+
+    Start --> ReadSpec
+    ReadSpec -->|NO| CheckMatMatched
+    ReadSpec -->|YES| GetInfo
+    GetInfo --> InfoFound
+    InfoFound -->|NOT FOUND| MissingError
+    InfoFound -->|FOUND| CheckUnitInfo
+    CheckUnitInfo -->|FALSE<br/>Unit NOT in mat| MustMatch
+    CheckUnitInfo -->|TRUE<br/>Unit IS in mat| CanIgnore
+    MustMatch -->|TRUE| SkipRule1
+    MustMatch -->|FALSE| SetMatFalse
+    CanIgnore -->|TRUE| SetMatTrue
+    CanIgnore -->|FALSE| CheckSegment1
+    CheckSegment1 --> SegmentMatch1
+    SegmentMatch1 -->|MATCH| SetMatTrue
+    SegmentMatch1 -->|NO MATCH| SetMatSegment
+    SetMatFalse --> CheckMatMatched
+    SetMatTrue --> CheckMatMatched
+    SetMatSegment --> CheckMatMatched
+    CheckMatMatched -->|YES| CheckVariant
+    CheckMatMatched -->|NO| CheckSegment2
+    CheckVariant --> VariantFound
+    VariantFound -->|FOUND| ReturnSticky
+    VariantFound -->|NOT FOUND| CalcBucket
+    CheckSegment2 --> SegmentMatch2
+    SegmentMatch2 -->|YES| CalcBucket
+    SegmentMatch2 -->|NO| SkipRule2
+    CalcBucket --> AssignmentFound
+    AssignmentFound -->|NOT FOUND| SkipRule4
+    AssignmentFound -->|FOUND| HasWriteMat
+    HasWriteMat -->|YES| CreateUpdate
+    HasWriteMat -->|NO| ReturnAssignment
+    CreateUpdate --> ReturnAssignment
 ```
 
 #### Key Decision Points
@@ -361,90 +284,37 @@ These updates should be persisted by the client and included in the `materializa
 
 When resolving multiple flags with sticky assignments, the resolver uses a sophisticated flow to handle missing materializations efficiently:
 
-```
-┌──────────────────────────────────────┐
-│ Start: resolve_flags_sticky()       │
-│ Input: Multiple flags + context     │
-└────────────┬─────────────────────────┘
-             │
-             ▼
-   ┌─────────────────────┐
-   │ For each flag:      │
-   │ Process flag        │
-   └──────┬──────────────┘
-          │
-          ▼
-   ┌───────────────────────────┐
-   │ Try to resolve flag       │
-   └──────┬────────────────────┘
-          │
-    ┌─────┴─────┐
-    │           │
-  Success    Error
-    │           │
-    │      ┌────┴──────┐
-    │      │           │
-    │  Missing    Other
-    │  Mat.       Error
-    │   │           │
-    │   ▼           ▼
-    │ ┌──────────────────┐
-    │ │fail_fast_on_     │
-    │ │sticky = true?    │
-    │ └────┬────────┬────┘
-    │      │        │
-    │     YES      NO
-    │      │        │
-    │      ▼        ▼
-    │  ┌────────┐ ┌───────────────┐
-    │  │Return  │ │Set has_missing│
-    │  │Missing │ │= true; break  │
-    │  │Mat.    │ │loop           │
-    │  │(empty) │ └────┬──────────┘
-    │  └────────┘      │
-    │                  │
-    ▼                  ▼
- ┌───────────────────────┐
- │ All flags processed?  │
- └────┬──────────────────┘
-      │
- ┌────┴────┐
- │         │
-YES       NO
- │         └──────┐
- │                │
- ▼                │
-┌──────────────┐  │
-│has_missing   │  │
-│= true?       │  │
-└──┬───────────┘  │
-   │              │
-┌──┴──┐           │
-│     │           │
-YES   NO          │
-│     │           │
-▼     │           │
-┌──────────────┐  │
-│Collect all   │  │
-│missing mat.  │  │
-│dependencies  │  │
-└──┬───────────┘  │
-   │              │
-   ▼              │
-┌──────────────┐  │
-│Return        │  │
-│Missing       │  │
-│Mat. List     │  │
-└──────────────┘  │
-                  │
-       ┌──────────┘
-       │
-       ▼
-┌────────────────┐
-│Return Success  │
-│with Resolved   │
-│Flags + Updates │
-└────────────────┘
+```mermaid
+flowchart TD
+    Start([Start: resolve_flags_sticky<br/>Input: Multiple flags + context])
+    ForEach[For each flag:<br/>Process flag]
+    TryResolve[Try to resolve flag]
+    Result{Result?}
+    OtherError[Other Error]
+    FailFast{fail_fast_on_<br/>sticky = true?}
+    ReturnEmpty[Return Missing Mat.<br/>empty]
+    SetHasMissing[Set has_missing = true<br/>break loop]
+    AllProcessed{All flags processed?}
+    CheckHasMissing{has_missing<br/>= true?}
+    CollectMissing[Collect all<br/>missing mat.<br/>dependencies]
+    ReturnMissingList[Return Missing<br/>Mat. List]
+    ReturnSuccess[Return Success<br/>with Resolved<br/>Flags + Updates]
+
+    Start --> ForEach
+    ForEach --> TryResolve
+    TryResolve --> Result
+    Result -->|Success| AllProcessed
+    Result -->|Error| Result2{Error Type?}
+    Result2 -->|Missing Mat.| FailFast
+    Result2 -->|Other Error| OtherError
+    FailFast -->|YES| ReturnEmpty
+    FailFast -->|NO| SetHasMissing
+    SetHasMissing --> AllProcessed
+    AllProcessed -->|NO| ForEach
+    AllProcessed -->|YES| CheckHasMissing
+    CheckHasMissing -->|YES| CollectMissing
+    CheckHasMissing -->|NO| ReturnSuccess
+    CollectMissing --> ReturnMissingList
 ```
 
 ### Fail Fast vs. Discovery Mode
