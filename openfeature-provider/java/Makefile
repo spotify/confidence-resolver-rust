@@ -5,29 +5,48 @@ ROOT := $(realpath $(CURDIR)/../..)
 
 # Stamps and inputs
 BUILD_STAMP := .build.stamp
+INSTALL_STAMP := .install.stamp
 SRC := $(shell find src -name '*.java' 2>/dev/null)
 RESOURCES_WASM := src/main/resources/wasm/confidence_resolver.wasm
 LOCAL_WASM := $(ROOT)/wasm/confidence_resolver.wasm
+MARKER := .embedded-wasm-version
+
+.PHONY: FORCE
+FORCE:
 
 .PHONY: build test clean
 
-# Always build wasm if not in docker
-ifneq ($(IN_DOCKER_BUILD),1)
-.PHONY: build-wasm
-build-wasm:
-	@$(MAKE) -C $(ROOT) wasm/confidence_resolver.wasm
-$(BUILD_STAMP): | build-wasm
-endif
+$(RESOURCES_WASM):
+	@mkdir -p $(dir $(RESOURCES_WASM))
+	@if [ "$(IN_DOCKER_BUILD)" = "1" ]; then \
+		test -f $(LOCAL_WASM) || (echo "Missing $(LOCAL_WASM) (expected via Docker COPY)"; exit 1); \
+	else \
+		$(MAKE) -C $(ROOT) wasm/confidence_resolver.wasm; \
+	fi
+	@echo "Copying WASM from $(LOCAL_WASM) to $(RESOURCES_WASM)"
+	cp $(LOCAL_WASM) $(RESOURCES_WASM)
+	@HASH_S256=$$(if command -v sha256sum >/dev/null 2>&1; then sha256sum $(RESOURCES_WASM) | awk '{print $$1}'; else shasum -a 256 $(RESOURCES_WASM) | awk '{print $$1}'; fi); \
+	echo sha256:$$HASH_S256 > $(MARKER)
 
-$(RESOURCES_WASM): $(LOCAL_WASM)
-	@mkdir -p $(dir $@)
-	@cp -p $(LOCAL_WASM) $@
+$(RESOURCES_WASM): FORCE
 
-$(BUILD_STAMP): pom.xml $(RESOURCES_WASM) $(SRC)
-	mvn package -DskipTests
-	@touch $@
+# A lightweight install target to prep resources
+$(INSTALL_STAMP): pom.xml $(RESOURCES_WASM)
+	touch $@
 
-build: $(BUILD_STAMP)
+
+$(BUILD_STAMP): $(INSTALL_STAMP) pom.xml $(SRC)
+	mvn -q -DskipTests protobuf:compile
+	@if [ -f "$(GEN_MESSAGES)" ]; then \
+		mkdir -p src/main/java/com/spotify/confidence/wasm; \
+		cp $(GEN_MESSAGES) src/main/java/com/spotify/confidence/wasm/Messages.java; \
+	fi
+	mvn -q -DskipTests package
+	touch $@
+
+install: $(INSTALL_STAMP)
+
+build: $(RESOURCES_WASM) $(BUILD_STAMP)
 
 test: $(BUILD_STAMP)
 	mvn -q test
@@ -35,6 +54,7 @@ test: $(BUILD_STAMP)
 clean:
 	mvn -q clean
 	rm -f $(BUILD_STAMP)
+	rm -f $(INSTALL_STAMP)
 	rm -f $(RESOURCES_WASM)
 
 
