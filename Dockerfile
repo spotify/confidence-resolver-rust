@@ -80,7 +80,7 @@ RUN cargo test -p confidence_resolver --lib --no-run --release
 RUN cargo build -p rust-guest --target wasm32-unknown-unknown --profile wasm
 
 # Build confidence-cloudflare-resolver dependencies (this layer will be cached)
-RUN RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo build --target wasm32-unknown-unknown --release
+RUN RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo build -p confidence-cloudflare-resolver --target wasm32-unknown-unknown --release
 
 # ==============================================================================
 # Test & Lint Base - Copy source for testing/linting (native builds)

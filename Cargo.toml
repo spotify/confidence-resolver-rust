@@ -8,6 +8,15 @@ members = [
     "confidence-cloudflare-resolver",
     "openfeature-provider/java"
 ]
+
+# Exclude the Java provider from default workspace builds (cargo build --workspace)
+# It's a dummy package for release-please tracking only, not meant to be built
+default-members = [
+    "wasm-msg",
+    "wasm/rust-guest",
+    "confidence-resolver",
+    "confidence-cloudflare-resolver"
+]
 [profile.wasm]
 inherits = "release"
 opt-level = "z"

@@ -21,6 +21,11 @@ WORKDIR /workspace
 # source changes, but downstream cook stage will be, based on the recipe only.
 COPY . .
 
+# Remove the openfeature-provider directory to avoid cargo-chef parsing the dummy Java package
+# Also remove all openfeature-provider references from the workspace members list
+RUN rm -rf openfeature-provider && \
+    sed -i '/openfeature-provider/d' Cargo.toml
+
 RUN if [ -d .git ]; then git describe --tags --exact-match 2>/dev/null > /workspace/.release_tag || true; fi
 RUN cargo chef prepare --recipe-path recipe.json
 
