@@ -115,9 +115,9 @@ export class ConfidenceServerProviderLocal implements Provider {
     }
   }
 
-  onClose(): Promise<void> {
+  async onClose(): Promise<void> {
+    await this.flush(timeoutSignal(3000));
     this.main.abort();
-    return this.flush();
   }
 
   // TODO test unknown flagClientSecret
@@ -190,6 +190,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     })
   }
 
+  // TODO should this return success/failure, or even throw?
   async flush(signal?:AbortSignal):Promise<void> {
     const writeFlagLogRequest = this.resolver.flushLogs();
     if(writeFlagLogRequest.length == 0) {
