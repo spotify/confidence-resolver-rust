@@ -122,14 +122,9 @@ export function promiseSignal(signal:AbortSignal):Promise<never> {
     return Promise.reject(signal.reason);
   }
   return new Promise((_,reject) => {
-    signal.addEventListener('abort', () => { reject(signal.reason) }, { once: true });
+    signal.addEventListener('abort', () => { reject(signal.aborted) }, { once: true });
   })
 }
-
 export function abortablePromise<T>(promise:Promise<T>, signal?: AbortSignal | null | undefined):Promise<T> {
   return signal ? Promise.race([promise, promiseSignal(signal)]) : promise;
-}
-
-export function isObject(value:unknown):value is {} {
-  return typeof value === 'object' && value !== null;
 }

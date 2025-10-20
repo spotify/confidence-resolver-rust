@@ -1,7 +1,7 @@
 import { BinaryWriter } from '@bufbuild/protobuf/wire';
 import { Request, Response, Void } from './proto/messages';
 import { Timestamp } from './proto/google/protobuf/timestamp';
-import { ResolveFlagsRequest, ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
+import { ResolveWithStickyRequest, ResolveWithStickyResponse, SetResolverStateRequest } from './proto/api';
 import { LocalResolver } from './LocalResolver';
 
 type Codec<T> = {
@@ -17,20 +17,17 @@ export class WasmResolver implements LocalResolver {
     this.imports = {
       wasm_msg: {
         wasm_msg_host_current_time: () => {
-          const epochMillisecond = Date.now();
-          const seconds = Math.floor(epochMillisecond / 1000);
-          const nanos = (epochMillisecond - 1000 * seconds) * 1_000_000;
-          const ptr = this.transferRequest({ seconds, nanos }, Timestamp);
+          const ptr = this.transferRequest({ seconds: Date.now(), nanos: 0 }, Timestamp);
           return ptr;
         },
       },
     };
   }
 
-  resolveFlags(request: ResolveFlagsRequest): ResolveFlagsResponse {
-    const reqPtr = this.transferRequest(request, ResolveFlagsRequest);
-    const resPtr = this.exports.wasm_msg_guest_resolve(reqPtr);
-    return this.consumeResponse(resPtr, ResolveFlagsResponse);
+  resolveWithSticky(request: ResolveWithStickyRequest): ResolveWithStickyResponse {
+    const reqPtr = this.transferRequest(request, ResolveWithStickyRequest);
+    const resPtr = this.exports.wasm_msg_guest_resolve_with_sticky(reqPtr);
+    return this.consumeResponse(resPtr, ResolveWithStickyResponse);
   }
 
   setResolverState(request: SetResolverStateRequest): void {

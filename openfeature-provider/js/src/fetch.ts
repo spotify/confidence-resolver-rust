@@ -33,7 +33,7 @@ export function withStallTimeout(stallTimeoutMs:number) : FetchMiddleware {
     const ac = new AbortController();
     const signal = init.signal ? AbortSignal.any([ac.signal, init.signal]) : ac.signal;
     const abort = () => { 
-      ac.abort(new Error(`The operation timed out after not receiving data for ${stallTimeoutMs}ms`)); 
+      ac.abort(new Error(`This operation timed out after not receiving data for ${stallTimeoutMs}ms`)); 
     }
     let timeoutId = portableSetTimeout(abort, stallTimeoutMs);
 
@@ -41,16 +41,16 @@ export function withStallTimeout(stallTimeoutMs:number) : FetchMiddleware {
     const resp = await next(url, { ...init, signal });
     clearTimeout(timeoutId);
     if(resp.body) {
-      const chunks:Uint8Array<ArrayBuffer>[] = [];
       timeoutId = portableSetTimeout(abort, stallTimeoutMs);
 
-      for await(const chunk of resp.body) {
-        chunks.push(chunk);
+      const touch = () => {
         clearTimeout(timeoutId);
         timeoutId = portableSetTimeout(abort, stallTimeoutMs);
       }
+      const [body, copy] = resp.body.tee();
+      consumeReadableStream(copy, touch);
 
-      return new Response(new Blob(chunks), {
+      return new Response(body, {
         status: resp.status,
         statusText: resp.statusText,
         headers: resp.headers,
