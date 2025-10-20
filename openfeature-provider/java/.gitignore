@@ -2,3 +2,4 @@ src/main/resources/wasm/confidence_resolver.wasm
 
 # Dummy Cargo package artifacts (used only for release-please dependency tracking)
 Cargo.lock
+src/lib.rs
