@@ -13,7 +13,7 @@ package com.spotify.confidence;
 public interface AccountStateProvider {
 
   /**
-   * Provides an AccountState protobuf, from this proto specification: {@link
+   * Provides an AccountState protobuf, from this proto specification: {@code
    * com.spotify.confidence.flags.admin.v1.AccountState}
    *
    * @return the AccountState protobuf containing flag configurations and metadata
