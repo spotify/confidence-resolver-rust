@@ -66,9 +66,7 @@ RUN mkdir -p confidence-resolver/src && \
     mkdir -p wasm-msg/src && \
     echo "pub fn dummy() {}" > wasm-msg/src/lib.rs && \
     mkdir -p wasm/rust-guest/src && \
-    echo "pub fn dummy() {}" > wasm/rust-guest/src/lib.rs && \
-    mkdir -p openfeature-provider/java/src && \
-    echo "pub fn dummy() {}" > openfeature-provider/java/src/lib.rs
+    echo "pub fn dummy() {}" > wasm/rust-guest/src/lib.rs
 
 # Build dependencies (this layer will be cached)
 RUN cargo build -p confidence_resolver --release 
