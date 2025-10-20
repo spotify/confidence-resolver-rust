@@ -17,7 +17,10 @@ export class WasmResolver implements LocalResolver {
     this.imports = {
       wasm_msg: {
         wasm_msg_host_current_time: () => {
-          const ptr = this.transferRequest({ seconds: Date.now(), nanos: 0 }, Timestamp);
+          const epochMillisecond = Date.now();
+          const seconds = Math.floor(epochMillisecond / 1000);
+          const nanos = (epochMillisecond - 1000 * seconds) * 1_000_000;
+          const ptr = this.transferRequest({ seconds, nanos }, Timestamp);
           return ptr;
         },
       },
