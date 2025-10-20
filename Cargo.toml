@@ -5,7 +5,8 @@ members = [
     "wasm-msg",
     "wasm/rust-guest",
     "confidence-resolver",
-    "confidence-cloudflare-resolver"
+    "confidence-cloudflare-resolver",
+    "openfeature-provider/java"
 ]
 [profile.wasm]
 inherits = "release"

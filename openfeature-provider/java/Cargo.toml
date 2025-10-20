@@ -1,0 +1,13 @@
+[package]
+name = "openfeature-provider-local-java"
+version = "0.6.4"
+edition = "2021"
+publish = false
+
+# This is a dummy Cargo.toml to enable cargo-workspace plugin tracking
+# in release-please. The actual package is built with Maven (pom.xml).
+# This package depends on rust-guest's WASM output.
+
+[dependencies]
+rust-guest = { path = "../../wasm/rust-guest", version = "0.1.8" }
+
