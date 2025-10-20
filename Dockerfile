@@ -371,6 +371,8 @@ COPY \
     openfeature-provider/js/yarn.lock \
     openfeature-provider/js/.yarnrc.yml \
     openfeature-provider/js/proto \
+    openfeature-provider/js/prettier.config.cjs \
+    openfeature-provider/js/.prettierignore \
     ./
 COPY openfeature-provider/js/proto ./proto
 
