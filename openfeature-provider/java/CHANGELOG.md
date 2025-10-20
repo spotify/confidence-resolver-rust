@@ -2,5 +2,4 @@
 
 ## 0.6.4 (2025-10-20)
 
-Initial tracked release of the OpenFeature Java provider for local flag resolution.
-
+First release from this repository, mirrored from the deprecated repository previously used to work on this provider ( reference: https://github.com/spotify/confidence-sdk-java/releases/tag/v0.6.4).
