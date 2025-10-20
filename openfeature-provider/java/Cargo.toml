@@ -1,5 +1,5 @@
 [package]
-name = "openfeature-provider-local-java"
+name = "openfeature-provider-java"
 version = "0.6.4"
 edition = "2021"
 publish = false
