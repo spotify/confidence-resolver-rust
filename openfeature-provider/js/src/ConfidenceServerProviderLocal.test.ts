@@ -3,11 +3,10 @@ import { LocalResolver } from './LocalResolver';
 import { ConfidenceServerProviderLocal, DEFAULT_FLUSH_INTERVAL, DEFAULT_STATE_INTERVAL } from './ConfidenceServerProviderLocal';
 import { abortableSleep, TimeUnit, timeoutSignal } from './util';
 import { advanceTimersUntil, NetworkMock } from './test-helpers';
-import { aD } from 'vitest/dist/chunks/reporters.d.BFLkQcL6.js';
 
 
 const mockedWasmResolver:MockedObject<LocalResolver> = {
-  resolveFlags: vi.fn(),
+  resolveWithSticky: vi.fn(),
   setResolverState: vi.fn(),
   flushLogs: vi.fn().mockReturnValue(new Uint8Array(100))
 }
@@ -429,5 +428,131 @@ describe('network error modes', () => {
       expect(provider.flush()).rejects.toThrow()
     );
     expect(net.resolver.flagLogs.calls).toBeGreaterThan(1);
+  });
+});
+
+describe('remote resolver fallback for sticky assignments', () => {
+  const RESOLVE_REASON_MATCH = 1;
+
+  it('resolves locally when WASM has all materialization data', async () => {
+    await advanceTimersUntil(
+      expect(provider.initialize()).resolves.toBeUndefined()
+    );
+
+    // WASM resolver succeeds with local data
+    mockedWasmResolver.resolveWithSticky.mockReturnValue({
+      success: {
+        response: {
+          resolvedFlags: [{
+            flag: 'test-flag',
+            variant: 'variant-a',
+            value: { enabled: true },
+            reason: RESOLVE_REASON_MATCH
+          }],
+          resolveToken: new Uint8Array(),
+          resolveId: 'resolve-123'
+        },
+        updates: []
+      }
+    });
+
+    const result = await provider.resolveBooleanEvaluation('test-flag.enabled', false, {
+      targetingKey: 'user-123'
+    });
+
+    expect(result.value).toBe(true);
+    expect(result.variant).toBe('variant-a');
+
+    // Should use failFastOnSticky: true (fallback strategy)
+    expect(mockedWasmResolver.resolveWithSticky).toHaveBeenCalledWith({
+      resolveRequest: expect.objectContaining({
+        flags: ['flags/test-flag'],
+        clientSecret: 'flagClientSecret'
+      }),
+      materializationsPerUnit: {},
+      failFastOnSticky: true
+    });
+
+    // No remote call needed
+    expect(net.resolver.flagsResolve.calls).toBe(0);
+  });
+
+  it('falls back to remote resolver when WASM reports missing materializations', async () => {
+    await advanceTimersUntil(
+      expect(provider.initialize()).resolves.toBeUndefined()
+    );
+
+    // WASM resolver reports missing materialization
+    mockedWasmResolver.resolveWithSticky.mockReturnValue({
+      missingMaterializations: {
+        items: [
+          { unit: 'user-456', rule: 'rule-1', readMaterialization: 'mat-v1' }
+        ]
+      }
+    });
+
+    // Configure remote resolver response
+    net.resolver.flagsResolve.handler = () => {
+      return new Response(JSON.stringify({
+        resolvedFlags: [{
+          flag: 'flags/my-flag',
+          variant: 'flags/my-flag/variants/control',
+          value: { color: 'blue', size: 10 },
+          reason: 'RESOLVE_REASON_MATCH'
+        }],
+        resolveToken: '',
+        resolveId: 'remote-resolve-456'
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+
+    const result = await provider.resolveObjectEvaluation('my-flag', { color: 'red' }, {
+      targetingKey: 'user-456',
+      country: 'SE'
+    });
+
+    expect(result.value).toEqual({ color: 'blue', size: 10 });
+    expect(result.variant).toBe('flags/my-flag/variants/control');
+
+    // Remote resolver should have been called
+    expect(net.resolver.flagsResolve.calls).toBe(1);
+
+    // Verify auth header was added
+    const lastRequest = net.resolver.flagsResolve.requests[0];
+    expect(lastRequest.method).toBe('POST');
+  });
+
+  it('retries remote resolve on transient errors', async () => {
+    await advanceTimersUntil(
+      expect(provider.initialize()).resolves.toBeUndefined()
+    );
+
+    mockedWasmResolver.resolveWithSticky.mockReturnValue({
+      missingMaterializations: {
+        items: [{ unit: 'user-1', rule: 'rule-1', readMaterialization: 'mat-1' }]
+      }
+    });
+
+    // First two calls fail, third succeeds
+    net.resolver.flagsResolve.status = 503;
+    setTimeout(() => {
+      net.resolver.flagsResolve.status = 200;
+      net.resolver.flagsResolve.handler = () => new Response(JSON.stringify({
+        resolvedFlags: [{ flag: 'test-flag', variant: 'v1', value: { ok: true }, reason: 'RESOLVE_REASON_MATCH' }],
+        resolveToken: '',
+        resolveId: 'resolved'
+      }), { status: 200 });
+    }, 300);
+
+    const result = await advanceTimersUntil(
+      provider.resolveBooleanEvaluation('test-flag.ok', false, { targetingKey: 'user-1' })
+    );
+
+    expect(result.value).toBe(true);
+    // Should have retried multiple times
+    expect(net.resolver.flagsResolve.calls).toBeGreaterThan(1);
+    expect(net.resolver.flagsResolve.calls).toBeLessThanOrEqual(3);
   });
 });

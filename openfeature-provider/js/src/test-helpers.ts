@@ -154,13 +154,21 @@ class FlagsServerMock extends ServerMock {
 class ResolverServerMock extends ServerMock {
 
   readonly flagLogs: EndpointMock
+  readonly flagsResolve: EndpointMock
 
   constructor() {
     const flagLogs = new EndpointMock();
+    const flagsResolve = new EndpointMock(() => JSON.stringify({
+      resolvedFlags: [],
+      resolveToken: '',
+      resolveId: 'resolve-default'
+    }));
     super({
-      '/v1/flagLogs:write': flagLogs
+      '/v1/flagLogs:write': flagLogs,
+      '/v1/flags:resolve': flagsResolve
     })
     this.flagLogs = flagLogs;
+    this.flagsResolve = flagsResolve;
   }
 }
 

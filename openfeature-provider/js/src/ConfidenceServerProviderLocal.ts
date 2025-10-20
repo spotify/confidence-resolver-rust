@@ -8,7 +8,14 @@ import type {
   ResolutionDetails,
   ResolutionReason,
 } from '@openfeature/server-sdk';
-import { ResolveReason } from './proto/api';
+import {
+  ResolveReason
+} from './proto/api';
+import {
+  ResolveFlagsRequest,
+  ResolveFlagsResponse,
+  ResolveWithStickyRequest,
+} from './proto/api';
 import { Fetch, FetchMiddleware, withAuth, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
 import { AccessToken, LocalResolver, ResolveStateUri } from './LocalResolver';
@@ -20,7 +27,7 @@ export interface ProviderOptions {
   apiClientId:string,
   apiClientSecret:string,
   initializeTimeout?:number,
-  flushInterval?:number, 
+  flushInterval?:number,
   fetch?: typeof fetch,
 }
 
@@ -40,7 +47,7 @@ export class ConfidenceServerProviderLocal implements Provider {
   private readonly fetch:Fetch;
   private readonly flushInterval:number;
   private stateEtag:string | null = null;
-  
+
 
   // TODO Maybe pass in a resolver factory, so that we can initialize it in initialize and transition to fatal if not.
   constructor(private resolver:LocalResolver, private options:ProviderOptions) {
@@ -78,7 +85,14 @@ export class ConfidenceServerProviderLocal implements Provider {
           withConfidenceAuth,
           withRouter({
             '*/v1/resolverState:resolverStateUri':[
-              withFastRetry,    
+              withFastRetry,
+            ],
+            '*/v1/flags:resolve':[
+              withRetry({
+                maxAttempts: 3,
+                baseInterval: 100,
+              }),
+              withTimeout(3*TimeUnit.SECOND) // TODO make configurable
             ],
             '*/v1/flagLogs:write':[
               withRetry({
@@ -121,46 +135,112 @@ export class ConfidenceServerProviderLocal implements Provider {
   }
 
   // TODO test unknown flagClientSecret
-  evaluate<T>(flagKey: string, defaultValue: T, context: EvaluationContext): ResolutionDetails<T> {
+  async evaluate<T>(flagKey: string, defaultValue: T, context: EvaluationContext): Promise<ResolutionDetails<T>> {
+    const [flagName, ...path] = flagKey.split('.');
+
+    // Build resolve request
+    // Always use sticky resolve request with remote fallback
+    const stickyRequest: ResolveWithStickyRequest = {
+      resolveRequest: {
+        flags: [`flags/${flagName}`],
+        evaluationContext: ConfidenceServerProviderLocal.convertEvaluationContext(context),
+        apply: true,
+        clientSecret: this.options.flagClientSecret
+      },
+      materializationsPerUnit: {},
+      failFastOnSticky: true  // Always fail fast - use remote resolver for sticky assignments
+    };
+
+    const response = await this.resolveWithStickyInternal(stickyRequest);
+    return this.extractValue(response.resolvedFlags[0], flagName, path, defaultValue);
+  }
+
+  /**
+   * Internal recursive method for resolving with sticky assignments.
+   *
+   * @private
+   */
+  private async resolveWithStickyInternal(
+    request: ResolveWithStickyRequest
+  ): Promise<ResolveFlagsResponse> {
+    const response = this.resolver.resolveWithSticky(request);
+
+    if (response.success && response.success.response) {
+      const { response: flagsResponse } = response.success;
+      return flagsResponse;
+    }
+
+    // Handle missing materializations by falling back to remote resolver
+    if (response.missingMaterializations) {
+      return await this.remoteResolve(request.resolveRequest!);
+    }
+
+    throw new Error('Invalid response: resolve result not set');
+  }
+
+  private async remoteResolve(request: ResolveFlagsRequest): Promise<ResolveFlagsResponse> {
+    const url = 'https://resolver.confidence.dev/v1/flags:resolve';
     
-    const [flagName, ...path] = flagKey.split('.')
-    const { resolvedFlags: [flag]} = this.resolver.resolveFlags({
-      flags: [`flags/${flagName}`],
-      evaluationContext: ConfidenceServerProviderLocal.convertEvaluationContext(context),
-      apply: true,
-      clientSecret: this.options.flagClientSecret
+    const resp = await this.fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(ResolveFlagsRequest.toJSON(request)),
     });
-    if(!flag) {
+
+    if (!resp.ok) {
+      throw new Error(`Remote resolve failed: ${resp.status} ${resp.statusText}`);
+    }
+
+    const json = await resp.json();
+    return ResolveFlagsResponse.fromJSON(json);
+  }
+
+  /**
+   * Extract and validate the value from a resolved flag.
+   */
+  private extractValue<T>(
+    flag: any,
+    flagName: string,
+    path: string[],
+    defaultValue: T
+  ): ResolutionDetails<T> {
+    if (!flag) {
       return {
         value: defaultValue,
         reason: 'ERROR',
         errorCode: 'FLAG_NOT_FOUND' as ErrorCode
-      }
+      };
     }
-    if(flag.reason != ResolveReason.RESOLVE_REASON_MATCH) {
+
+    if (flag.reason !== ResolveReason.RESOLVE_REASON_MATCH) {
       return {
         value: defaultValue,
         reason: ConfidenceServerProviderLocal.convertReason(flag.reason),
-      }
+      };
     }
-    let value:unknown = flag.value;
-    for(const step of path) {
-      if(typeof value !== 'object' || value === null || !hasKey(value, step)) {
+
+    let value: unknown = flag.value;
+    for (const step of path) {
+      if (typeof value !== 'object' || value === null || !hasKey(value, step)) {
         return {
           value: defaultValue,
           reason: 'ERROR',
           errorCode: 'TYPE_MISMATCH' as ErrorCode
-        }
+        };
       }
       value = value[step];
     }
-    if(!isAssignableTo(value, defaultValue)) {
+
+    if (!isAssignableTo(value, defaultValue)) {
       return {
         value: defaultValue,
         reason: 'ERROR',
         errorCode: 'TYPE_MISMATCH' as ErrorCode
-      }
+      };
     }
+
     return {
       value,
       reason: 'MATCH',
