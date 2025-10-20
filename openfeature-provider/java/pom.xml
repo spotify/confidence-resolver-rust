@@ -6,6 +6,57 @@
   <artifactId>openfeature-provider-local</artifactId>
   <version>0.6.4</version>
   <name>Confidence local resolve provider</name>
+  <description>Confidence OpenFeature provider for local flag resolution using WebAssembly</description>
+  <url>https://github.com/spotify/confidence-resolver-rust</url>
+
+  <licenses>
+    <license>
+      <name>Apache License 2.0</name>
+      <url>https://github.com/spotify/confidence-resolver-rust/blob/main/LICENSE</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <scm>
+    <url>https://github.com/spotify/confidence-resolver-rust</url>
+    <connection>scm:git:git@github.com:spotify/confidence-resolver-rust.git</connection>
+    <developerConnection>scm:git:git@github.com:spotify/confidence-resolver-rust.git</developerConnection>
+  </scm>
+
+  <developers>
+    <developer>
+      <id>fdema</id>
+      <email>fdema@spotify.com</email>
+      <name>Fabrizio Demaria</name>
+    </developer>
+    <developer>
+      <id>nicklasl</id>
+      <email>nicklasl@spotify.com</email>
+      <name>Nicklas Lundin</name>
+    </developer>
+    <developer>
+      <id>DennisPersson</id>
+      <email>dennisp@spotify.com</email>
+      <name>Dennis Persson</name>
+    </developer>
+    <developer>
+      <id>mfranberg</id>
+      <email>mfranberg@spotify.com</email>
+      <name>Mattias Frånberg</name>
+    </developer>
+    <developer>
+      <id>andreas-karlsson</id>
+      <email>andreask@spotify.com</email>
+      <name>Andreas Karlsson</name>
+    </developer>
+  </developers>
+
+  <distributionManagement>
+    <repository>
+      <id>central</id>
+      <url>https://central.sonatype.com/repository/maven-releases/</url>
+    </repository>
+  </distributionManagement>
 
   <properties>
     <!-- Required by maven to compile Java 11 -->
@@ -269,6 +320,77 @@
         <version>3.2.5</version>
         <configuration>
           <useModulePath>false</useModulePath>
+        </configuration>
+      </plugin>
+
+      <!-- Generate sources JAR -->
+      <plugin>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.3.0</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Generate Javadoc JAR -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <excludePackageNames>
+            com.spotify.confidence.flags.*
+          </excludePackageNames>
+        </configuration>
+      </plugin>
+
+      <!-- GPG Signing -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>3.1.0</version>
+        <configuration>
+          <gpgArguments>
+            <arg>--pinentry-mode</arg>
+            <arg>loopback</arg>
+            <arg>--no-tty</arg>
+          </gpgArguments>
+        </configuration>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>install</phase>
+            <goals>
+              <goal>sign</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Maven Central Publishing -->
+      <plugin>
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <version>0.8.0</version>
+        <extensions>true</extensions>
+        <configuration>
+          <publishingServerId>central</publishingServerId>
+          <deploymentName>Confidence OpenFeature Local Provider</deploymentName>
+          <autoPublish>true</autoPublish>
+          <waitUntil>published</waitUntil>
         </configuration>
       </plugin>
     </plugins>
