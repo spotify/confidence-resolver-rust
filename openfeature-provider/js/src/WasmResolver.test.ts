@@ -52,11 +52,10 @@ describe('with state', () => {
   });
 
   describe('flushLogs', () => {
-
     it('should be empty before any resolve', () => {
       const logs = wasmResolver.flushLogs();
       expect(logs.length).toBe(0);
-    })
+    });
 
     it('should contain logs after a resolve', () => {
       wasmResolver.resolveFlags({
@@ -74,22 +73,25 @@ describe('with state', () => {
       expect(decoded).contains('flag_assigned');
       expect(decoded).contains('client_resolve_info');
       expect(decoded).contains('flag_resolve_info');
-    })
-  })
+    });
+  });
 });
 
-
-function decodeBuffer(input:Uint8Array):string {
-  const res = spawnSync('protoc',[
-    `-I${__dirname}/../../../confidence-resolver/protos`,
-    `--decode=confidence.flags.resolver.v1.WriteFlagLogsRequest`, 
-    `confidence/flags/resolver/v1/internal_api.proto`
-  ], { input, encoding: 'utf8' });
-  if(res.error) {
+function decodeBuffer(input: Uint8Array): string {
+  const res = spawnSync(
+    'protoc',
+    [
+      `-I${__dirname}/../../../confidence-resolver/protos`,
+      `--decode=confidence.flags.resolver.v1.WriteFlagLogsRequest`,
+      `confidence/flags/resolver/v1/internal_api.proto`,
+    ],
+    { input, encoding: 'utf8' },
+  );
+  if (res.error) {
     throw res.error;
   }
-  if(res.status !== 0) {
-    throw new Error(res.stderr)
+  if (res.status !== 0) {
+    throw new Error(res.stderr);
   }
   return res.stdout;
 }

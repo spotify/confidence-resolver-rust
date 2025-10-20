@@ -4,10 +4,10 @@ import { ConfidenceServerProviderLocal } from './ConfidenceServerProviderLocal';
 import { readFileSync } from 'node:fs';
 import { WasmResolver } from './WasmResolver';
 
-const {
-  CONFIDENCE_API_CLIENT_ID,
-  CONFIDENCE_API_CLIENT_SECRET, 
-} = requireEnv('CONFIDENCE_API_CLIENT_ID', 'CONFIDENCE_API_CLIENT_SECRET');
+const { CONFIDENCE_API_CLIENT_ID, CONFIDENCE_API_CLIENT_SECRET } = requireEnv(
+  'CONFIDENCE_API_CLIENT_ID',
+  'CONFIDENCE_API_CLIENT_SECRET',
+);
 
 const moduleBytes = readFileSync(__dirname + '/../../../wasm/confidence_resolver.wasm');
 const module = new WebAssembly.Module(moduleBytes);
@@ -15,19 +15,18 @@ const resolver = await WasmResolver.load(module);
 const confidenceProvider = new ConfidenceServerProviderLocal(resolver, {
   flagClientSecret: 'RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV',
   apiClientId: CONFIDENCE_API_CLIENT_ID,
-  apiClientSecret: CONFIDENCE_API_CLIENT_SECRET
+  apiClientSecret: CONFIDENCE_API_CLIENT_SECRET,
 });
 
 describe('ConfidenceServerProvider E2E tests', () => {
-  beforeAll( async () => {
-
+  beforeAll(async () => {
     await OpenFeature.setProviderAndWait(confidenceProvider);
     OpenFeature.setContext({
       targetingKey: 'test-a', // control
     });
   });
 
-  afterAll(() => OpenFeature.close())
+  afterAll(() => OpenFeature.close());
 
   it('should resolve a boolean e2e', async () => {
     const client = OpenFeature.getClient();
@@ -86,13 +85,13 @@ describe('ConfidenceServerProvider E2E tests', () => {
   });
 });
 
-function requireEnv<const N extends string[]>(...names:N): Record<N[number],string> {
+function requireEnv<const N extends string[]>(...names: N): Record<N[number], string> {
   return names.reduce((acc, name) => {
     const value = process.env[name];
-    if(!value) throw new Error(`Missing environment variable ${name}`)
+    if (!value) throw new Error(`Missing environment variable ${name}`);
     return {
       ...acc,
-      [name]: value
+      [name]: value,
     };
-  }, {}) as Record<N[number],string>;
+  }, {}) as Record<N[number], string>;
 }

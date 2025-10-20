@@ -1,18 +1,21 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, MockedObject, test, vi } from 'vitest';
 import { LocalResolver } from './LocalResolver';
-import { ConfidenceServerProviderLocal, DEFAULT_FLUSH_INTERVAL, DEFAULT_STATE_INTERVAL } from './ConfidenceServerProviderLocal';
+import {
+  ConfidenceServerProviderLocal,
+  DEFAULT_FLUSH_INTERVAL,
+  DEFAULT_STATE_INTERVAL,
+} from './ConfidenceServerProviderLocal';
 import { abortableSleep, TimeUnit, timeoutSignal } from './util';
 import { advanceTimersUntil, NetworkMock } from './test-helpers';
 import { aD } from 'vitest/dist/chunks/reporters.d.BFLkQcL6.js';
 
-
-const mockedWasmResolver:MockedObject<LocalResolver> = {
+const mockedWasmResolver: MockedObject<LocalResolver> = {
   resolveFlags: vi.fn(),
   setResolverState: vi.fn(),
-  flushLogs: vi.fn().mockReturnValue(new Uint8Array(100))
-}
+  flushLogs: vi.fn().mockReturnValue(new Uint8Array(100)),
+};
 
-let provider:ConfidenceServerProviderLocal;
+let provider: ConfidenceServerProviderLocal;
 let net: NetworkMock;
 
 vi.useFakeTimers();
@@ -23,25 +26,20 @@ beforeEach(() => {
   vi.setSystemTime(0);
   net = new NetworkMock();
   provider = new ConfidenceServerProviderLocal(mockedWasmResolver, {
-    flagClientSecret:'flagClientSecret',
+    flagClientSecret: 'flagClientSecret',
     apiClientId: 'apiClientId',
     apiClientSecret: 'apiClientSecret',
-    fetch: net.fetch
+    fetch: net.fetch,
   });
-})
+});
 
-afterEach(() => {
-})
-
+afterEach(() => {});
 
 describe('idealized conditions', () => {
   it('makes some requests', async () => {
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    )
-
-    await vi.advanceTimersByTimeAsync(TimeUnit.HOUR + TimeUnit.SECOND)
+    await vi.advanceTimersByTimeAsync(TimeUnit.HOUR + TimeUnit.SECOND);
 
     // the token ttl is one hour, since it renews at 80% of ttl, it will be fetched twice
     expect(net.iam.token.calls).toBe(2);
@@ -51,36 +49,25 @@ describe('idealized conditions', () => {
     // flush is called every 10s so 360 times in an hour
     expect(net.resolver.flagLogs.calls).toBe(360);
 
-    await advanceTimersUntil(
-      expect(provider.onClose()).resolves.toBeUndefined()
-    );
-        
+    await advanceTimersUntil(expect(provider.onClose()).resolves.toBeUndefined());
 
     // close does a final flush
     expect(net.resolver.flagLogs.calls).toBe(361);
-
-  })
-})
+  });
+});
 
 describe('no network', () => {
-
   beforeEach(() => {
     net.error = 'No network';
   });
 
   it('initialize throws after timeout', async () => {
-
-    await advanceTimersUntil(
-      expect(provider.initialize()).rejects.toThrow()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).rejects.toThrow());
 
     expect(provider.status).toBe('ERROR');
     expect(Date.now()).toBe(DEFAULT_STATE_INTERVAL);
-    
-  })
-
-
-})
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Stubbed tests for broader request/middleware behavior (implement later)
@@ -88,10 +75,7 @@ describe('no network', () => {
 
 describe('auth token handling', () => {
   it('renews token at 80% of TTL', async () => {
-
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
     // Immediately after initialize starts, token should be fetched once
     expect(net.iam.token.calls).toBe(1);
@@ -103,17 +87,16 @@ describe('auth token handling', () => {
     // Cross the 80% boundary, renewal should trigger
     await vi.advanceTimersByTimeAsync(2 * TimeUnit.SECOND);
     expect(net.iam.token.calls).toBe(2);
-
   });
   it('retries token fetch on transient errors', async () => {
     // Make the IAM token endpoint transiently fail
     net.iam.token.status = 503;
     // Recover after 5s
-    setTimeout(() => { net.iam.token.status = 200 }, 15_000);
+    setTimeout(() => {
+      net.iam.token.status = 200;
+    }, 15_000);
 
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
     // We should have retried at least once
     expect(net.iam.token.calls).toBeGreaterThan(1);
@@ -121,12 +104,9 @@ describe('auth token handling', () => {
   });
   it('refreshes token on 401 and retries once', async () => {
     // First authed request returns 401
-    net.flags.stateUri.status = req => req.headers.get('authorization') === 'Bearer token1' ?
-      401 : 200;
+    net.flags.stateUri.status = req => (req.headers.get('authorization') === 'Bearer token1' ? 401 : 200);
 
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
     // Token should have been fetched initially and then renewed after 401
     expect(net.iam.token.calls).toBe(2);
@@ -137,9 +117,7 @@ describe('auth token handling', () => {
     // Make IAM token fetch permanently fail (network-level)
     net.iam.token.status = 'No network';
 
-    await advanceTimersUntil(
-      expect(provider.initialize()).rejects.toThrow()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).rejects.toThrow());
 
     // We should have attempted token fetch multiple times due to retry
     expect(net.iam.token.calls).toBeGreaterThanOrEqual(1);
@@ -153,16 +131,12 @@ describe('auth token handling', () => {
 
 describe('state update scheduling', () => {
   it('fetches resolverStateUri on initialize', async () => {
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
     expect(net.flags.stateUri.calls).toBe(1);
     expect(net.gcs.stateBucket.calls).toBe(1);
   });
   it('polls state at fixed interval', async () => {
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
     expect(net.flags.stateUri.calls).toBe(1);
     expect(net.gcs.stateBucket.calls).toBe(1);
 
@@ -175,64 +149,57 @@ describe('state update scheduling', () => {
     expect(net.gcs.stateBucket.calls).toBe(3);
   });
   it('honors If-None-Match and handles 304 Not Modified', async () => {
-    let eTag = 'v1'
+    let eTag = 'v1';
     const payload = new Uint8Array(100);
     net.gcs.stateBucket.handler = req => {
       const ifNoneMatch = req.headers.get('If-None-Match');
-      if(ifNoneMatch === eTag) {
-        return new Response(null, { status: 304 })
+      if (ifNoneMatch === eTag) {
+        return new Response(null, { status: 304 });
       }
-      return new Response(payload, { headers: { eTag }})
-    }
+      return new Response(payload, { headers: { eTag } });
+    };
 
-    await advanceTimersUntil(
-      provider.updateState()
-    );
+    await advanceTimersUntil(provider.updateState());
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(1);
 
-    await advanceTimersUntil(
-      provider.updateState()
-    );
+    await advanceTimersUntil(provider.updateState());
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(1);
 
-    eTag = 'v2'
-    await advanceTimersUntil(
-      provider.updateState()
-    );
+    eTag = 'v2';
+    await advanceTimersUntil(provider.updateState());
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(2);
-
   });
   it('retries resolverStateUri on 5xx/network errors with fast backoff', async () => {
     net.flags.stateUri.status = 503;
-    setTimeout(() => { net.flags.stateUri.status = 200 }, 1500);
+    setTimeout(() => {
+      net.flags.stateUri.status = 200;
+    }, 1500);
 
-    await advanceTimersUntil(
-      provider.updateState()
-    );
+    await advanceTimersUntil(provider.updateState());
 
     expect(net.flags.stateUri.calls).toBeGreaterThan(1);
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(1);
   });
   it('retries GCS state download with backoff and stall-timeout', async () => {
     let chunkDelay = 600;
-    net.gcs.stateBucket.handler = (req) => {
+    net.gcs.stateBucket.handler = req => {
       const body = new ReadableStream<Uint8Array>({
         async start(controller) {
-          for(let i = 0; i < 10; i++) {
+          for (let i = 0; i < 10; i++) {
             await abortableSleep(chunkDelay, req.signal);
             controller.enqueue(new Uint8Array(100));
           }
           controller.close();
-        }
+        },
       });
       return new Response(body);
     };
     // Decrease chunkDelay after 2.5s so next retry succeeds
-    setTimeout(() => { chunkDelay = 100; }, 2500);
+    setTimeout(() => {
+      chunkDelay = 100;
+    }, 2500);
 
-    await advanceTimersUntil(
-      provider.updateState()
-    );
+    await advanceTimersUntil(provider.updateState());
     expect(net.gcs.stateBucket.calls).toBeGreaterThan(1);
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(1);
   });
@@ -240,9 +207,7 @@ describe('state update scheduling', () => {
 
 describe('flush behavior', () => {
   it('flushes periodically at the configured interval', async () => {
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
     const start = net.resolver.flagLogs.calls;
 
@@ -253,47 +218,35 @@ describe('flush behavior', () => {
     expect(net.resolver.flagLogs.calls).toBe(start + 2);
   });
   it('retries flagLogs writes up to 3 attempts', async () => {
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
     // Make writes fail transiently, then succeed
     net.resolver.flagLogs.status = 503;
 
     const start = net.resolver.flagLogs.calls;
-    await advanceTimersUntil(
-      provider.flush()
-    );
+    await advanceTimersUntil(provider.flush());
 
     const attempts = net.resolver.flagLogs.calls - start;
     expect(attempts).toBe(3);
     expect(Date.now()).toBe(1500);
   });
   it('does one final flush on close', async () => {
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
     const start = net.resolver.flagLogs.calls;
 
-    await advanceTimersUntil(
-      expect(provider.onClose()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.onClose()).resolves.toBeUndefined());
 
     expect(net.resolver.flagLogs.calls).toBe(start + 1);
   });
   it('skips flush if there are no logs to send', async () => {
-    await advanceTimersUntil(
-      expect(provider.initialize()).resolves.toBeUndefined()
-    );
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
     const start = net.resolver.flagLogs.calls;
     // Make resolver return no logs
     mockedWasmResolver.flushLogs.mockReturnValueOnce(new Uint8Array(0));
 
-    await advanceTimersUntil(
-      provider.flush()
-    );
+    await advanceTimersUntil(provider.flush());
 
     expect(net.resolver.flagLogs.calls).toBe(start);
   });
@@ -307,9 +260,12 @@ describe('router and middleware composition', () => {
     net.flags.stateUri.handler = req => {
       const auth = req.headers.get('authorization');
       if (auth && auth.startsWith('Bearer ')) sawAuthOnFlags = true;
-      return new Response(JSON.stringify({ signedUri: 'https://storage.googleapis.com/stateBucket', account: '<account>' }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({ signedUri: 'https://storage.googleapis.com/stateBucket', account: '<account>' }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     };
     net.gcs.stateBucket.handler = req => {
       const auth = req.headers.get('authorization');
@@ -317,9 +273,7 @@ describe('router and middleware composition', () => {
       return new Response(new Uint8Array(100));
     };
 
-    await advanceTimersUntil(
-      provider.updateState()
-    );
+    await advanceTimersUntil(provider.updateState());
 
     expect(sawAuthOnFlags).toBe(true);
     expect(sawNoAuthOnGcs).toBe(true);
@@ -327,7 +281,7 @@ describe('router and middleware composition', () => {
 
   it('routes storage to retry + stall-timeout', async () => {
     // Ensure small per-chunk delay (< 500ms) does not trigger stall abort
-    net.gcs.stateBucket.handler = async (req) => {
+    net.gcs.stateBucket.handler = async req => {
       const body = new ReadableStream<Uint8Array>({
         async start(controller) {
           for (let i = 0; i < 3; i++) {
@@ -335,15 +289,13 @@ describe('router and middleware composition', () => {
             controller.enqueue(new Uint8Array(100));
           }
           controller.close();
-        }
+        },
       });
       return new Response(body);
     };
 
     const start = net.gcs.stateBucket.calls;
-    await advanceTimersUntil(
-      provider.updateState()
-    );
+    await advanceTimersUntil(provider.updateState());
     expect(net.gcs.stateBucket.calls - start).toBe(1);
   });
 
@@ -359,16 +311,14 @@ describe('timeouts and aborts', () => {
     net.flags.stateUri.status = 'No network';
 
     const shortTimeoutProvider = new ConfidenceServerProviderLocal(mockedWasmResolver, {
-      flagClientSecret:'flagClientSecret',
+      flagClientSecret: 'flagClientSecret',
       apiClientId: 'apiClientId',
       apiClientSecret: 'apiClientSecret',
       initializeTimeout: 1000,
       fetch: net.fetch,
     });
 
-    await advanceTimersUntil(
-      expect(shortTimeoutProvider.initialize()).rejects.toThrow()
-    );
+    await advanceTimersUntil(expect(shortTimeoutProvider.initialize()).rejects.toThrow());
 
     expect(Date.now()).toBe(1000);
     expect(shortTimeoutProvider.status).toBe('ERROR');
@@ -382,9 +332,7 @@ describe('timeouts and aborts', () => {
     // Abort provider immediately
     const close = provider.onClose();
 
-    await advanceTimersUntil(
-      expect(init).rejects.toThrow()
-    );
+    await advanceTimersUntil(expect(init).rejects.toThrow());
     await advanceTimersUntil(close);
     expect(provider.status).toBe('ERROR');
     await vi.runAllTimersAsync();
@@ -394,9 +342,7 @@ describe('timeouts and aborts', () => {
     // Abort before dispatch by using server pre-latency and a short timeout signal
     net.flags.latency = 1_000; // 500ms pre-dispatch
     const signal = timeoutSignal(100);
-    await advanceTimersUntil(
-      expect(provider.updateState(signal)).rejects.toThrow()
-    );
+    await advanceTimersUntil(expect(provider.updateState(signal)).rejects.toThrow());
     // aborted before endpoint was invoked
     expect(net.flags.stateUri.calls).toBe(0);
   });
@@ -405,9 +351,7 @@ describe('timeouts and aborts', () => {
     net.flags.latency = 0;
     net.flags.stateUri.latency = 200;
     const signal = timeoutSignal(100);
-    await advanceTimersUntil(
-      expect(provider.updateState(signal)).rejects.toThrow()
-    );
+    await advanceTimersUntil(expect(provider.updateState(signal)).rejects.toThrow());
     // endpoint was invoked once
     expect(net.flags.stateUri.calls).toBe(1);
   });
@@ -416,18 +360,16 @@ describe('timeouts and aborts', () => {
 describe('network error modes', () => {
   it('treats HTTP 5xx as Response (no throw) and retries appropriately', async () => {
     net.flags.stateUri.status = 503;
-    setTimeout(() => { net.flags.stateUri.status = 200 }, 1500);
-    await advanceTimersUntil(
-      provider.updateState()
-    );
+    setTimeout(() => {
+      net.flags.stateUri.status = 200;
+    }, 1500);
+    await advanceTimersUntil(provider.updateState());
     expect(net.flags.stateUri.calls).toBeGreaterThan(1);
   });
 
   it('treats DNS/connect/TLS failures as throws and retries appropriately', async () => {
     net.resolver.flagLogs.status = 'No network';
-    await advanceTimersUntil(
-      expect(provider.flush()).rejects.toThrow()
-    );
+    await advanceTimersUntil(expect(provider.flush()).rejects.toThrow());
     expect(net.resolver.flagLogs.calls).toBeGreaterThan(1);
   });
 });

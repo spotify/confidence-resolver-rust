@@ -39,10 +39,10 @@ export class WasmResolver implements LocalResolver {
     this.consumeResponse(resPtr, Void);
   }
 
-  flushLogs():Uint8Array {
+  flushLogs(): Uint8Array {
     const resPtr = this.exports.wasm_msg_guest_flush_logs(0);
-    const {data, error} = this.consume(resPtr, Response);
-    if(error) {
+    const { data, error } = this.consume(resPtr, Response);
+    if (error) {
       throw new Error(error);
     }
     return data!;
