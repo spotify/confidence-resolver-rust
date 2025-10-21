@@ -82,6 +82,12 @@ The provider periodically:
 
 Confidence supports "sticky" flag assignments to ensure users receive consistent variant assignments even when their context changes or flag configurations are updated. This SDK falls back to a cloud resolve in these cases.
 
+> **ℹ️ Latency Considerations**
+>
+> When a sticky assignment is needed, the provider makes a **network call to Confidence's cloud resolvers**. This introduces additional latency (typically 50-200ms depending on your location) compared to local WASM evaluation.
+>
+> **Coming soon**: We're developing support for custom materialization storage (Redis, database, etc.) that will eliminate this network call and keep evaluation latency consistently low.
+
 ### How it works
 
 When a flag is evaluated for a user, Confidence creates a "materialization" - a snapshot of which variant that user was assigned. On subsequent evaluations, the same variant is returned even if:
