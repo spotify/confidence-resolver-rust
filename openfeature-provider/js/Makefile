@@ -45,7 +45,7 @@ test: $(WASM_ARTIFACT) $(INSTALL_STAMP) $(GEN_TS)
 	yarn test --run --exclude='**/*.e2e.test.ts'
 
 test-e2e: $(WASM_ARTIFACT) $(INSTALL_STAMP) $(GEN_TS)
-	yarn test --run
+	yarn test --run e2e.test
 
 clean:
 	rm -rf node_modules dist src/proto $(INSTALL_STAMP) $(BUILD_STAMP)
