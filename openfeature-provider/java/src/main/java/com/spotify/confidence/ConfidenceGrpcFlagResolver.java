@@ -8,10 +8,7 @@ import com.spotify.confidence.flags.resolver.v1.Sdk;
 import com.spotify.confidence.flags.resolver.v1.Sdk.Builder;
 import com.spotify.confidence.flags.resolver.v1.SdkId;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import java.time.Duration;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -27,22 +24,7 @@ public class ConfidenceGrpcFlagResolver {
   private final FlagResolverServiceGrpc.FlagResolverServiceFutureStub stub;
 
   public ConfidenceGrpcFlagResolver() {
-    final String confidenceDomain =
-        Optional.ofNullable(System.getenv("CONFIDENCE_DOMAIN")).orElse("edge-grpc.spotify.com");
-    final boolean useGrpcPlaintext =
-        Optional.ofNullable(System.getenv("CONFIDENCE_GRPC_PLAINTEXT"))
-            .map(Boolean::parseBoolean)
-            .orElse(false);
-
-    ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget(confidenceDomain);
-    if (useGrpcPlaintext) {
-      builder = builder.usePlaintext();
-    }
-
-    final ManagedChannel channel =
-        builder.intercept(new DefaultDeadlineClientInterceptor(Duration.ofMinutes(1))).build();
-
-    this.channel = channel;
+    this.channel = GrpcUtil.createConfidenceChannel();
     this.stub = FlagResolverServiceGrpc.newFutureStub(channel);
   }
 
