@@ -155,3 +155,51 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           GPG_PASS: ${{ secrets.SIGN_KEY_PASS }}
+
+  publish-js-provider-release:
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ needs.release.outputs.releases_created == 'true' && contains(needs.release.outputs['openfeature-provider-js--release_created'], 'true') }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs['openfeature-provider-js--tag_name'] }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Enable Corepack for Yarn
+        run: corepack enable
+
+      - name: Install dependencies
+        working-directory: openfeature-provider/js
+        run: yarn install --immutable
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build WASM artifact
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: wasm-rust-guest.artifact
+          outputs: type=local,dest=./artifacts
+
+      - name: Copy WASM to expected location
+        run: |
+          mkdir -p wasm
+          cp artifacts/confidence_resolver.wasm wasm/confidence_resolver.wasm
+
+      - name: Build package
+        working-directory: openfeature-provider/js
+        run: yarn build
+
+      - name: Publish to npm
+        working-directory: openfeature-provider/js
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,7 +1,6 @@
 {
   "name": "@spotify-confidence/openfeature-server-provider-local",
   "version": "0.0.0",
-  "private": true,
   "description": "Spotify Confidence Open Feature provider",
   "type": "module",
   "files": [
@@ -57,5 +56,24 @@
       "optional": true
     }
   },
-  "packageManager": "yarn@4.6.0"
+  "packageManager": "yarn@4.6.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spotify/confidence-resolver-rust",
+    "directory": "openfeature-provider/js"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "openfeature",
+    "feature-flags",
+    "confidence",
+    "spotify",
+    "wasm",
+    "provider"
+  ],
+  "author": "Spotify",
+  "bugs": {
+    "url": "https://github.com/spotify/confidence-resolver-rust/issues"
+  },
+  "homepage": "https://github.com/spotify/confidence-resolver-rust?tab=readme-ov-file#confidence-rust-flags-resolver"
 }
