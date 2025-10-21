@@ -414,8 +414,7 @@ ARG JS_E2E_CONFIDENCE_API_CLIENT_SECRET
 # Run e2e tests with secrets passed as environment variables
 # If credentials are not provided, skip e2e tests (exit 0)
 # Using ARG in RUN means they're only available during this command execution
-RUN --mount=type=cache,target=/root/.yarn \
-    if [ -n "${JS_E2E_CONFIDENCE_API_CLIENT_ID}" ] && [ -n "${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" ]; then \
+RUN if [ -n "${JS_E2E_CONFIDENCE_API_CLIENT_ID}" ] && [ -n "${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" ]; then \
       JS_E2E_CONFIDENCE_API_CLIENT_ID="${JS_E2E_CONFIDENCE_API_CLIENT_ID}" \
       JS_E2E_CONFIDENCE_API_CLIENT_SECRET="${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" \
       make test-e2e; \
