@@ -45,6 +45,7 @@ COPY confidence-resolver/Cargo.toml ./confidence-resolver/
 COPY confidence-cloudflare-resolver/Cargo.toml ./confidence-cloudflare-resolver/
 COPY wasm-msg/Cargo.toml ./wasm-msg/
 COPY wasm/rust-guest/Cargo.toml ./wasm/rust-guest/
+COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 
 # Copy proto files (needed by build.rs)
 COPY confidence-resolver/protos ./confidence-resolver/protos/
@@ -77,7 +78,7 @@ RUN cargo test -p confidence_resolver --lib --no-run --release
 RUN cargo build -p rust-guest --target wasm32-unknown-unknown --profile wasm
 
 # Build confidence-cloudflare-resolver dependencies (this layer will be cached)
-RUN RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo build --target wasm32-unknown-unknown --release
+RUN RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo build -p confidence-cloudflare-resolver --target wasm32-unknown-unknown --release
 
 # ==============================================================================
 # Test & Lint Base - Copy source for testing/linting (native builds)
@@ -95,6 +96,7 @@ COPY confidence-cloudflare-resolver/ ./confidence-cloudflare-resolver/
 COPY wasm-msg/ ./wasm-msg/
 COPY wasm/rust-guest/ ./wasm/rust-guest/
 COPY wasm/proto/ ./wasm/proto/
+COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 
 # Touch files to ensure rebuild (dependencies are cached)
 RUN find . -type f -name "*.rs" -exec touch {} +
@@ -146,6 +148,7 @@ COPY confidence-cloudflare-resolver/ ./confidence-cloudflare-resolver/
 COPY wasm-msg/ ./wasm-msg/
 COPY wasm/rust-guest/ ./wasm/rust-guest/
 COPY wasm/proto/ ./wasm/proto/
+COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 
 # Copy data directory (needed by confidence-cloudflare-resolver include_str! macros)
 COPY data/ ./data/
