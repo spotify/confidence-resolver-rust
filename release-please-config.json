@@ -37,6 +37,12 @@
           "path": "pom.xml"
         }
       ]
+    },
+    "openfeature-provider/js": {
+      "path": "openfeature-provider/js",
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["package.json"]
     }
   }
 }

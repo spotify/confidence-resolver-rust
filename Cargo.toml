@@ -6,7 +6,8 @@ members = [
     "wasm/rust-guest",
     "confidence-resolver",
     "confidence-cloudflare-resolver",
-    "openfeature-provider/java"
+    "openfeature-provider/java",
+    "openfeature-provider/js"
 ]
 
 # Exclude the Java provider from default workspace builds (cargo build --workspace)

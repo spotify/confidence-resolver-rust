@@ -15,6 +15,7 @@ jobs:
     outputs:
       cloudflare_resolver_release_created: ${{ steps.releasemanifest.outputs['confidence-cloudflare-resolver--release_created'] }}
       java_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/java--release_created'] }}
+      js_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/js--release_created'] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,7 +39,8 @@ jobs:
           echo "Key outputs:"
           echo "cloudflare_resolver_release_created: ${{ steps.releasemanifest.outputs.cloudflare_resolver_release_created }}"
           echo "java_provider_release_created: ${{ steps.releasemanifest.outputs.java_provider_release_created }}"
-
+          echo "js_provider_release_created: ${{ steps.releasemanifest.outputs.js_provider_release_created }}"
+          
   publish-cloudflare-deployer-image:
     needs: release
     if: ${{ needs.release.outputs.cloudflare_resolver_release_created == 'true' }}
@@ -112,3 +114,38 @@ jobs:
             "maven_settings=${{ secrets.MAVEN_SETTINGS }}"
             gpg_private_key=${{ secrets.GPG_PRIVATE_KEY }}
             gpg_pass=${{ secrets.SIGN_KEY_PASS }}
+
+  publish-js-provider-release:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for npm OIDC publishing
+      contents: read
+    if: ${{ needs.release.outputs.js_provider_release_created == 'true' }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and extract package tarball with Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: openfeature-provider-js.artifact
+          outputs: type=local,dest=./artifacts
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Publish to npm with OIDC
+        run: npm publish ./artifacts/package.tgz --provenance --access public

@@ -3,6 +3,7 @@ openfeature-provider/java/src/main/java/com/spotify/confidence/wasm/Messages.jav
 .DS_Store
 *.stamp
 .idea/
+.java-version
 
 target/
 wasm/confidence_resolver.wasm

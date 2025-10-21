@@ -46,6 +46,7 @@ COPY confidence-cloudflare-resolver/Cargo.toml ./confidence-cloudflare-resolver/
 COPY wasm-msg/Cargo.toml ./wasm-msg/
 COPY wasm/rust-guest/Cargo.toml ./wasm/rust-guest/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
+COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
 
 # Copy proto files (needed by build.rs)
 COPY confidence-resolver/protos ./confidence-resolver/protos/
@@ -97,6 +98,7 @@ COPY wasm-msg/ ./wasm-msg/
 COPY wasm/rust-guest/ ./wasm/rust-guest/
 COPY wasm/proto/ ./wasm/proto/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
+COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
 
 # Touch files to ensure rebuild (dependencies are cached)
 RUN find . -type f -name "*.rs" -exec touch {} +
@@ -149,6 +151,7 @@ COPY wasm-msg/ ./wasm-msg/
 COPY wasm/rust-guest/ ./wasm/rust-guest/
 COPY wasm/proto/ ./wasm/proto/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
+COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
 
 # Copy data directory (needed by confidence-cloudflare-resolver include_str! macros)
 COPY data/ ./data/
@@ -416,6 +419,22 @@ RUN --mount=type=secret,id=js_e2e_test_env,target=.env.test \
 FROM openfeature-provider-js-base AS openfeature-provider-js.build
 
 RUN make build
+
+# ==============================================================================
+# Pack OpenFeature Provider (JS) - Create tarball for publishing
+# ==============================================================================
+FROM openfeature-provider-js.build AS openfeature-provider-js.pack
+
+# Create npm package tarball
+RUN npm pack
+
+# ==============================================================================
+# Extract OpenFeature Provider (JS) package artifact
+# ==============================================================================
+FROM scratch AS openfeature-provider-js.artifact
+
+# Copy the tarball (npm pack creates spotify-confidence-openfeature-server-provider-local-*.tgz)
+COPY --from=openfeature-provider-js.pack /app/*.tgz /package.tgz
 
 # ==============================================================================
 # OpenFeature Provider (Java) - Build and test
