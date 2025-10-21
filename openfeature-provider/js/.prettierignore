@@ -1,0 +1,9 @@
+node_modules/
+dist/
+src/proto/
+.idea
+coverage/*
+*.log
+api/*
+CHANGELOG.md
+README.md
