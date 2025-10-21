@@ -45,6 +45,10 @@ class SwapWasmResolverApi implements ResolverApi {
     }
   }
 
+  /**
+   * No-op close implementation. Cleanup is handled by replacing instances through
+   * updateStateAndFlushLogs(), where old instances are explicitly closed.
+   */
   @Override
   public void close() {}
 
