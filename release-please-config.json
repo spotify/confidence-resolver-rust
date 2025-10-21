@@ -32,6 +32,12 @@
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
       "extra-files": ["pom.xml", "version.txt"]
+    },
+    "openfeature-provider-js": {
+      "path": "openfeature-provider/js",
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["package.json"]
     }
   }
 }
