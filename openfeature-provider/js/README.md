@@ -97,20 +97,6 @@ The provider uses a **remote resolver fallback** for sticky assignments:
 - Materializations are stored on Confidence servers with a **90-day TTL** (automatically renewed on access)
 - No local storage or database setup required
 
-```ts
-const provider = createConfidenceServerProvider({
-  flagClientSecret: process.env.CONFIDENCE_FLAG_CLIENT_SECRET!,
-  apiClientId: process.env.CONFIDENCE_API_CLIENT_ID!,
-  apiClientSecret: process.env.CONFIDENCE_API_CLIENT_SECRET!,
-});
-
-// Sticky assignments work automatically via remote fallback
-const client = OpenFeature.getClient();
-const value = await client.getBooleanValue('my-flag', false, {
-  targetingKey: 'user-123'
-});
-```
-
 ### Benefits
 
 - **Zero configuration**: Works out of the box with no additional setup

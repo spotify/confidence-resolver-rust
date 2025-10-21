@@ -394,10 +394,21 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../../../wasm/con
 # Test OpenFeature Provider
 # ==============================================================================
 FROM openfeature-provider-js-base AS openfeature-provider-js.test
+
 # Copy confidence-resolver protos (needed by some tests for proto parsing)
 COPY confidence-resolver/protos ../../../confidence-resolver/protos
 COPY wasm/resolver_state.pb ../../../wasm/resolver_state.pb
-RUN make test
+
+# Accept e2e test credentials as build args (not persisted in image)
+ARG JS_E2E_CONFIDENCE_API_CLIENT_ID
+ARG JS_E2E_CONFIDENCE_API_CLIENT_SECRET
+
+# Run tests with secrets passed as environment variables
+# Using ARG in RUN means they're only available during this command execution
+RUN --mount=type=cache,target=/root/.yarn \
+    JS_E2E_CONFIDENCE_API_CLIENT_ID="${JS_E2E_CONFIDENCE_API_CLIENT_ID}" \
+    JS_E2E_CONFIDENCE_API_CLIENT_SECRET="${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" \
+    make test
 
 # ==============================================================================
 # Build OpenFeature Provider

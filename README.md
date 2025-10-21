@@ -28,6 +28,12 @@ The Confidence Flag Resolver implemented in Rust, plus example hosts and a Cloud
 docker build .                    # Build, test, lint everything
 make                              # Same, using Makefile
 
+# With Docker + e2e tests (requires Confidence credentials)
+docker build \
+  --build-arg JS_E2E_CONFIDENCE_API_CLIENT_ID=<your-client-id> \
+  --build-arg JS_E2E_CONFIDENCE_API_CLIENT_SECRET=<your-secret> \
+  .
+
 # With local tools (fast iteration)
 make test                         # Run tests
 make lint                         # Run linting
