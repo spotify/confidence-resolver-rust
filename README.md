@@ -62,6 +62,8 @@ make cloudflare
 
 You can then integrate with Wrangler using `confidence-cloudflare-resolver/wrangler.toml`.
 
+TEST
+
 ## License
 
 See `LICENSE` for details.
