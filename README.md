@@ -25,10 +25,11 @@ The Confidence Flag Resolver implemented in Rust, plus example hosts and a Cloud
 
 ```bash
 # With Docker (reproducible, no setup needed)
-docker build .                    # Build, test, lint everything
+docker build .                    # Build, test, lint everything (including e2e tests in CI)
 make                              # Same, using Makefile
 
-# With Docker + e2e tests (requires Confidence credentials)
+# E2E tests require Confidence credentials (used in CI)
+# Without credentials, e2e tests are skipped gracefully
 docker build \
   --build-arg JS_E2E_CONFIDENCE_API_CLIENT_ID=<your-client-id> \
   --build-arg JS_E2E_CONFIDENCE_API_CLIENT_SECRET=<your-secret> \

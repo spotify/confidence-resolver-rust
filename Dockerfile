@@ -399,16 +399,29 @@ FROM openfeature-provider-js-base AS openfeature-provider-js.test
 COPY confidence-resolver/protos ../../../confidence-resolver/protos
 COPY wasm/resolver_state.pb ../../../wasm/resolver_state.pb
 
+# Run tests
+RUN make test
+
+# ==============================================================================
+# E2E Test OpenFeature Provider (CI only - requires credentials)
+# ==============================================================================
+FROM openfeature-provider-js.test AS openfeature-provider-js.test_e2e
+
 # Accept e2e test credentials as build args (not persisted in image)
 ARG JS_E2E_CONFIDENCE_API_CLIENT_ID
 ARG JS_E2E_CONFIDENCE_API_CLIENT_SECRET
 
-# Run tests with secrets passed as environment variables
+# Run e2e tests with secrets passed as environment variables
+# If credentials are not provided, skip e2e tests (exit 0)
 # Using ARG in RUN means they're only available during this command execution
 RUN --mount=type=cache,target=/root/.yarn \
-    JS_E2E_CONFIDENCE_API_CLIENT_ID="${JS_E2E_CONFIDENCE_API_CLIENT_ID}" \
-    JS_E2E_CONFIDENCE_API_CLIENT_SECRET="${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" \
-    make test
+    if [ -n "${JS_E2E_CONFIDENCE_API_CLIENT_ID}" ] && [ -n "${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" ]; then \
+      JS_E2E_CONFIDENCE_API_CLIENT_ID="${JS_E2E_CONFIDENCE_API_CLIENT_ID}" \
+      JS_E2E_CONFIDENCE_API_CLIENT_SECRET="${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" \
+      make test-e2e; \
+    else \
+      echo "Skipping e2e tests (credentials not provided)"; \
+    fi
 
 # ==============================================================================
 # Build OpenFeature Provider
@@ -466,7 +479,7 @@ FROM openfeature-provider-java-base AS openfeature-provider-java.build
 RUN make build
 
 # ==============================================================================
-# All - Build and validate everything (default target)
+# All - Build and validate everything (default target - no e2e tests)
 # ==============================================================================
 FROM scratch AS all
 
@@ -477,6 +490,7 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm /artifacts/wasm/
 COPY --from=confidence-resolver.test /workspace/Cargo.toml /markers/test-resolver
 COPY --from=wasm-msg.test /workspace/Cargo.toml /markers/test-wasm-msg
 COPY --from=openfeature-provider-js.test /app/package.json /markers/test-openfeature-js
+COPY --from=openfeature-provider-js.test_e2e /app/package.json /markers/test-openfeature-js-e2e
 COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeature-java
 
 # Force integration test stages to run (host examples)

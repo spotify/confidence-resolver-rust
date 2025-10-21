@@ -34,7 +34,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: all
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           build-args: |
@@ -46,7 +45,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: all
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max

@@ -42,6 +42,9 @@ install: $(INSTALL_STAMP) $(GEN_TS)
 build: $(BUILD_STAMP)
 
 test: $(WASM_ARTIFACT) $(INSTALL_STAMP) $(GEN_TS)
+	yarn test --run --exclude='**/*.e2e.test.ts'
+
+test-e2e: $(WASM_ARTIFACT) $(INSTALL_STAMP) $(GEN_TS)
 	yarn test --run
 
 clean:
