@@ -13,332 +13,77 @@ permissions:
 jobs:
   # Rust Components
   confidence-resolver:
-    name: Confidence Resolver (Rust)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: confidence-resolver.test
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
-
-      - name: Lint
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: confidence-resolver.lint
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: Confidence Resolver (Rust)
+      targets: confidence-resolver.test,confidence-resolver.lint
 
   wasm-msg:
-    name: WASM Message (Rust)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: wasm-msg.test
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
-
-      - name: Lint
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: wasm-msg.lint
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: WASM Message (Rust)
+      targets: wasm-msg.test,wasm-msg.lint
 
   wasm-rust-guest:
-    name: WASM Rust Guest
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: wasm-rust-guest.build
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
-
-      - name: Lint
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: wasm-rust-guest.lint
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
-
-      - name: Extract WASM artifact
-        run: |
-          mkdir -p artifacts
-          docker build --target=wasm-rust-guest.artifact --output=type=local,dest=./artifacts .
-
-      - name: Upload WASM artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: wasm-module
-          path: artifacts/confidence_resolver.wasm
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: WASM Rust Guest
+      targets: wasm-rust-guest.build,wasm-rust-guest.lint
+      upload-artifact: true
 
   cloudflare-resolver:
-    name: Cloudflare Resolver (Rust)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Lint
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: confidence-cloudflare-resolver.lint
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: Cloudflare Resolver (Rust)
+      targets: confidence-cloudflare-resolver.lint
 
   # OpenFeature Providers
   openfeature-js:
-    name: OpenFeature Provider (JS)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: openfeature-provider-js.test
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
-
-      - name: Build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: openfeature-provider-js.build
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: OpenFeature Provider (JS)
+      targets: openfeature-provider-js.test,openfeature-provider-js.build
 
   openfeature-java:
-    name: OpenFeature Provider (Java)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: openfeature-provider-java.test
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
-
-      - name: Build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: openfeature-provider-java.build
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: OpenFeature Provider (Java)
+      targets: openfeature-provider-java.test,openfeature-provider-java.build
 
   # Integration Tests (Host Examples)
   node-host:
-    name: Node.js Host Integration
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: node-host.test
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: Node.js Host Integration
+      targets: node-host.test
 
   java-host:
-    name: Java Host Integration
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: java-host.test
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: Java Host Integration
+      targets: java-host.test
 
   go-host:
-    name: Go Host Integration
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: go-host.test
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: Go Host Integration
+      targets: go-host.test
 
   python-host:
-    name: Python Host Integration
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: python-host.test
-          push: false
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max' || '' }}
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with:
+      job-name: Python Host Integration
+      targets: python-host.test
 
   # Summary job that depends on all others
   summary:
