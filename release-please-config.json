@@ -37,7 +37,7 @@
       "path": "openfeature-provider/js",
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["package.json"]
+      "extra-files": ["package.json", "version.txt"]
     }
   }
 }
