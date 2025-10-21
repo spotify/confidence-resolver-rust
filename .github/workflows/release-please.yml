@@ -30,6 +30,18 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      - name: Debug - Log Release Please outputs
+        run: |
+          echo "=== Release Please Outputs ==="
+          echo "All outputs (JSON):"
+          echo '${{ toJSON(steps.release.outputs) }}'
+          echo ""
+          echo "Key outputs:"
+          echo "release_created: ${{ steps.release.outputs.release_created }}"
+          echo "releases_created: ${{ steps.release.outputs.releases_created }}"
+          echo "tag_name: ${{ steps.release.outputs.tag_name }}"
+          echo "prs_created: ${{ steps.release.outputs.prs_created }}"
+
   publish-wasm:
     needs: release
     if: ${{ needs.release.outputs.releases_created == 'true' }}
@@ -131,27 +143,24 @@ jobs:
   publish-java-provider-release:
     needs: release
     runs-on: ubuntu-latest
-    if: ${{ needs.release.outputs.releases_created == 'true' && contains(needs.release.outputs['openfeature-provider-java--release_created'], 'true') }}
+    if: ${{ needs.release.outputs.releases_created == 'true' && needs.release.outputs['openfeature-provider-java--release_created'] == 'true' }}
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.release.outputs['openfeature-provider-java--tag_name'] }}
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: 17
-          server-id: central
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-passphrase: GPG_PASS
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Deploy with Maven
-        run: cd openfeature-provider/java && mvn --batch-mode clean deploy
-        env:
-          MAVEN_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          GPG_PASS: ${{ secrets.SIGN_KEY_PASS }}
+      - name: Publish Java package with Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: openfeature-provider-java.publish
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          secrets: |
+            "maven_settings=${{ secrets.MAVEN_SETTINGS }}"
+            gpg_private_key=${{ secrets.GPG_PRIVATE_KEY }}
+            gpg_pass=${{ secrets.SIGN_KEY_PASS }}

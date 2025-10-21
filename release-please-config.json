@@ -27,11 +27,11 @@
       "changelog-path": "CHANGELOG.md",
       "initial-version": "0.1.0"
     },
-    "openfeature-provider-java": {
+    "openfeature-provider/java": {
       "path": "openfeature-provider/java",
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["pom.xml", "version.txt"]
+      "extra-files": ["pom.xml"]
     }
   }
 }
