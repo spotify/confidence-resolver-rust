@@ -394,10 +394,21 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../../../wasm/con
 # Test OpenFeature Provider
 # ==============================================================================
 FROM openfeature-provider-js-base AS openfeature-provider-js.test
+
 # Copy confidence-resolver protos (needed by some tests for proto parsing)
 COPY confidence-resolver/protos ../../../confidence-resolver/protos
 COPY wasm/resolver_state.pb ../../../wasm/resolver_state.pb
+
 RUN make test
+
+# ==============================================================================
+# E2E Test OpenFeature Provider (requires credentials)
+# ==============================================================================
+FROM openfeature-provider-js.test AS openfeature-provider-js.test_e2e
+
+# Run e2e tests with secrets mounted as .env.test file
+RUN --mount=type=secret,id=js_e2e_test_env,target=.env.test \
+    make test-e2e
 
 # ==============================================================================
 # Build OpenFeature Provider
@@ -466,6 +477,7 @@ COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm /artifacts/wasm/
 COPY --from=confidence-resolver.test /workspace/Cargo.toml /markers/test-resolver
 COPY --from=wasm-msg.test /workspace/Cargo.toml /markers/test-wasm-msg
 COPY --from=openfeature-provider-js.test /app/package.json /markers/test-openfeature-js
+COPY --from=openfeature-provider-js.test_e2e /app/package.json /markers/test-openfeature-js-e2e
 COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeature-java
 
 # Force integration test stages to run (host examples)

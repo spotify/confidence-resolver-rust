@@ -78,6 +78,44 @@ The provider periodically:
 
 ---
 
+## Sticky Assignments
+
+Confidence supports "sticky" flag assignments to ensure users receive consistent variant assignments even when their context changes or flag configurations are updated. This SDK falls back to a cloud resolve in these cases.
+
+> **ℹ️ Latency Considerations**
+>
+> When a sticky assignment is needed, the provider makes a **network call to Confidence's cloud resolvers**. This introduces additional latency (typically 50-200ms depending on your location) compared to local WASM evaluation.
+>
+> **Coming soon**: We're developing support for custom materialization storage (Redis, database, etc.) that will eliminate this network call and keep evaluation latency consistently low.
+
+### How it works
+
+When a flag is evaluated for a user, Confidence creates a "materialization" - a snapshot of which variant that user was assigned. On subsequent evaluations, the same variant is returned even if:
+- The user's context attributes change (e.g., different country, device type)
+- The flag's targeting rules are modified
+- New assignments are paused
+
+### Implementation
+
+The provider uses a **remote resolver fallback** for sticky assignments:
+- First, the local WASM resolver attempts to resolve the flag
+- If sticky assignment data is needed, the provider makes a network call to Confidence's cloud resolvers
+- Materializations are stored on Confidence servers with a **90-day TTL** (automatically renewed on access)
+- No local storage or database setup required
+
+### Benefits
+
+- **Zero configuration**: Works out of the box with no additional setup
+- **Managed storage**: Confidence handles all storage, TTL, and consistency
+- **Automatic renewal**: TTL is refreshed on each access
+- **Global availability**: Materializations are available across all your services
+
+### Coming Soon: Custom Materialization Storage
+
+We're working on support for connecting your own materialization storage repository (Redis, database, file system, etc.) to eliminate network calls for sticky assignments and have full control over storage. This feature is currently in development.
+
+---
+
 ## Logging (optional)
 
 Logging uses the `debug` library if present; otherwise, all log calls are no-ops.
