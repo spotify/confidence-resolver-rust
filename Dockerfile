@@ -407,16 +407,13 @@ RUN make test
 # ==============================================================================
 FROM openfeature-provider-js.test AS openfeature-provider-js.test_e2e
 
-# Accept e2e test credentials as build args (not persisted in image)
-ARG JS_E2E_CONFIDENCE_API_CLIENT_ID
-ARG JS_E2E_CONFIDENCE_API_CLIENT_SECRET
-
-# Run e2e tests with secrets passed as environment variables
-# If credentials are not provided, skip e2e tests (exit 0)
-# Using ARG in RUN means they're only available during this command execution
-RUN if [ -n "${JS_E2E_CONFIDENCE_API_CLIENT_ID}" ] && [ -n "${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" ]; then \
-      JS_E2E_CONFIDENCE_API_CLIENT_ID="${JS_E2E_CONFIDENCE_API_CLIENT_ID}" \
-      JS_E2E_CONFIDENCE_API_CLIENT_SECRET="${JS_E2E_CONFIDENCE_API_CLIENT_SECRET}" \
+# Run e2e tests with secrets mounted as files (never stored in image or metadata)
+# Docker secrets are mounted at /run/secrets/<id> and are never persisted
+RUN --mount=type=secret,id=e2e_client_id \
+    --mount=type=secret,id=e2e_client_secret \
+    if [ -f /run/secrets/e2e_client_id ] && [ -f /run/secrets/e2e_client_secret ]; then \
+      export JS_E2E_CONFIDENCE_API_CLIENT_ID=$(cat /run/secrets/e2e_client_id); \
+      export JS_E2E_CONFIDENCE_API_CLIENT_SECRET=$(cat /run/secrets/e2e_client_secret); \
       make test-e2e; \
     else \
       echo "Skipping e2e tests (credentials not provided)"; \

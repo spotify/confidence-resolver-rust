@@ -36,9 +36,9 @@ jobs:
           context: .
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          build-args: |
-            JS_E2E_CONFIDENCE_API_CLIENT_ID=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_ID }}
-            JS_E2E_CONFIDENCE_API_CLIENT_SECRET=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_SECRET }}
+          secrets: |
+            e2e_client_id=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_ID }}
+            e2e_client_secret=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_SECRET }}
 
       - name: Build and test everything (Push - updates cache)
         if: github.event_name == 'push'
@@ -48,9 +48,9 @@ jobs:
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max
-          build-args: |
-            JS_E2E_CONFIDENCE_API_CLIENT_ID=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_ID }}
-            JS_E2E_CONFIDENCE_API_CLIENT_SECRET=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_SECRET }}
+          secrets: |
+            e2e_client_id=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_ID }}
+            e2e_client_secret=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_SECRET }}
 
       - name: Extract artifacts
         run: |
