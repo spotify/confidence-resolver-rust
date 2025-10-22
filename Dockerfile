@@ -403,21 +403,14 @@ COPY wasm/resolver_state.pb ../../../wasm/resolver_state.pb
 RUN make test
 
 # ==============================================================================
-# E2E Test OpenFeature Provider (CI only - requires credentials)
+# E2E Test OpenFeature Provider (requires credentials)
 # ==============================================================================
 FROM openfeature-provider-js.test AS openfeature-provider-js.test_e2e
 
-# Run e2e tests with secrets mounted as files (never stored in image or metadata)
+# Run e2e tests with secrets mounted as .env file
 # Docker secrets are mounted at /run/secrets/<id> and are never persisted
-RUN --mount=type=secret,id=e2e_client_id \
-    --mount=type=secret,id=e2e_client_secret \
-    if [ -f /run/secrets/e2e_client_id ] && [ -f /run/secrets/e2e_client_secret ]; then \
-      export JS_E2E_CONFIDENCE_API_CLIENT_ID=$(cat /run/secrets/e2e_client_id); \
-      export JS_E2E_CONFIDENCE_API_CLIENT_SECRET=$(cat /run/secrets/e2e_client_secret); \
-      make test-e2e; \
-    else \
-      echo "Skipping e2e tests (credentials not provided)"; \
-    fi
+RUN --mount=type=secret,id=js_e2e_test_env,target=.env.test \
+    make test-e2e
 
 # ==============================================================================
 # Build OpenFeature Provider

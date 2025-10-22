@@ -37,8 +37,7 @@ jobs:
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           secrets: |
-            e2e_client_id=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_ID }}
-            e2e_client_secret=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_SECRET }}
+            js_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}
 
       - name: Build and test everything (Push - updates cache)
         if: github.event_name == 'push'
@@ -49,8 +48,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max
           secrets: |
-            e2e_client_id=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_ID }}
-            e2e_client_secret=${{ secrets.JS_E2E_CONFIDENCE_API_CLIENT_SECRET }}
+            js_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}
 
       - name: Extract artifacts
         run: |
