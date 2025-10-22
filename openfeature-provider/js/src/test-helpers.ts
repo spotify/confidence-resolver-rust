@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import { AccessToken, ResolveStateUri } from "./LocalResolver";
 import { abortableSleep, isObject, TimeUnit } from "./util";
 import { ReadableStream as NodeReadableStream } from 'node:stream/web'
+import { ResolveFlagsResponse } from "./proto/api";
 
 type PayloadFactory = (req:Request) => BodyInit | null
 type ByteStream = ReadableStream<Uint8Array<ArrayBuffer>>;
@@ -160,9 +161,9 @@ class ResolverServerMock extends ServerMock {
     const flagLogs = new EndpointMock();
     const flagsResolve = new EndpointMock(() => JSON.stringify({
       resolvedFlags: [],
-      resolveToken: '',
+      resolveToken: new Uint8Array(),
       resolveId: 'resolve-default'
-    }));
+    } satisfies ResolveFlagsResponse));
     super({
       '/v1/flagLogs:write': flagLogs,
       '/v1/flags:resolve': flagsResolve
