@@ -399,7 +399,6 @@ FROM openfeature-provider-js-base AS openfeature-provider-js.test
 COPY confidence-resolver/protos ../../../confidence-resolver/protos
 COPY wasm/resolver_state.pb ../../../wasm/resolver_state.pb
 
-# Run tests
 RUN make test
 
 # ==============================================================================
@@ -407,8 +406,7 @@ RUN make test
 # ==============================================================================
 FROM openfeature-provider-js.test AS openfeature-provider-js.test_e2e
 
-# Run e2e tests with secrets mounted as .env file
-# Docker secrets are mounted at /run/secrets/<id> and are never persisted
+# Run e2e tests with secrets mounted as .env.test file
 RUN --mount=type=secret,id=js_e2e_test_env,target=.env.test \
     make test-e2e
 
@@ -468,7 +466,7 @@ FROM openfeature-provider-java-base AS openfeature-provider-java.build
 RUN make build
 
 # ==============================================================================
-# All - Build and validate everything (default target - no e2e tests)
+# All - Build and validate everything (default target)
 # ==============================================================================
 FROM scratch AS all
 
