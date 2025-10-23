@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/spotify/confidence-resolver-rust/compare/openfeature-provider-java-v0.7.0...openfeature-provider-java-v0.7.1) (2025-10-23)
+
+
+### Bug Fixes
+
+* java refactoring and cleanups ([#74](https://github.com/spotify/confidence-resolver-rust/issues/74)) ([700881e](https://github.com/spotify/confidence-resolver-rust/commit/700881ef9605e950607a40984664decf33dc8643))
+
 ## [0.7.0](https://github.com/spotify/confidence-resolver-rust/compare/openfeature-provider-java-v0.6.4...openfeature-provider-java-v0.7.0) (2025-10-23)
 
 
