@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.7...confidence-cloudflare-resolver-v0.3.0) (2025-10-23)
+
+
+### Features
+
+* [release-please] Java Provider support ([#68](https://github.com/spotify/confidence-resolver-rust/issues/68)) ([9478533](https://github.com/spotify/confidence-resolver-rust/commit/9478533960bf02e86d4ed1aab7ac1edd5034c3fb))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * confidence_resolver bumped from 0.5.2 to 0.6.0
+
 ## [0.2.7](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.6...confidence-cloudflare-resolver-v0.2.7) (2025-10-14)
 
 

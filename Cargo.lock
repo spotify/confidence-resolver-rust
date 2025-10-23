@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "confidence-cloudflare-resolver"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -187,7 +187,7 @@ dependencies = [
 
 [[package]]
 name = "confidence_resolver"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "arc-swap",
  "bitvec",
@@ -752,7 +752,7 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "openfeature-provider-java"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "rust-guest",
 ]
@@ -1152,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "rust-guest"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "arc-swap",
  "bytes",
@@ -1538,7 +1538,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-msg"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "paste",
  "prost 0.12.6",
