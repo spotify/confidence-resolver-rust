@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/spotify/confidence-resolver-rust/compare/wasm-msg-v0.2.0...wasm-msg-v0.2.1) (2025-10-23)
+
+
+### Bug Fixes
+
+* cleanup unused and fix lint warnings ([#61](https://github.com/spotify/confidence-resolver-rust/issues/61)) ([1a85a78](https://github.com/spotify/confidence-resolver-rust/commit/1a85a78e57232784bada3da692088d13f9b1089c))
+
 ## [0.2.0](https://github.com/spotify/confidence-resolver-rust/compare/wasm-msg-v0.1.0...wasm-msg-v0.2.0) (2025-10-10)
 
 
