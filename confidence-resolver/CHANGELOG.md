@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.5.2...confidence_resolver-v0.6.0) (2025-10-23)
+
+
+### Features
+
+* Add Java OpenFeature provider ([#58](https://github.com/spotify/confidence-resolver-rust/issues/58)) ([1bba814](https://github.com/spotify/confidence-resolver-rust/commit/1bba8145be547bce4f704585feef5f41d8dbc8bd))
+
 ## [0.5.2](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.5.1...confidence_resolver-v0.5.2) (2025-10-14)
 
 
