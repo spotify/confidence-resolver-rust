@@ -30,34 +30,20 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
 
   @VisibleForTesting
   public GrpcWasmFlagLogger(ApiSecret apiSecret, FlagLogWriter writer) {
-    final var channel = createConfidenceChannel();
-    final AuthServiceGrpc.AuthServiceBlockingStub authService =
-        AuthServiceGrpc.newBlockingStub(channel);
-    final TokenHolder tokenHolder =
-        new TokenHolder(apiSecret.clientId(), apiSecret.clientSecret(), authService);
-    final Channel authenticatedChannel =
-        ClientInterceptors.intercept(channel, new JwtAuthClientInterceptor(tokenHolder));
-    this.stub = InternalFlagLoggerServiceGrpc.newBlockingStub(authenticatedChannel);
+    this.stub = createAuthenticatedStub(apiSecret);
     this.executorService = Executors.newCachedThreadPool();
     this.writer = writer;
   }
 
   public GrpcWasmFlagLogger(ApiSecret apiSecret) {
-    final var channel = createConfidenceChannel();
-    final AuthServiceGrpc.AuthServiceBlockingStub authService =
-        AuthServiceGrpc.newBlockingStub(channel);
-    final TokenHolder tokenHolder =
-        new TokenHolder(apiSecret.clientId(), apiSecret.clientSecret(), authService);
-    final Channel authenticatedChannel =
-        ClientInterceptors.intercept(channel, new JwtAuthClientInterceptor(tokenHolder));
-    this.stub = InternalFlagLoggerServiceGrpc.newBlockingStub(authenticatedChannel);
+    this.stub = createAuthenticatedStub(apiSecret);
     this.executorService = Executors.newCachedThreadPool();
     this.writer =
         request ->
             executorService.submit(
                 () -> {
                   try {
-                    final var ignore = stub.writeFlagLogs(request);
+                    stub.writeFlagLogs(request);
                     logger.debug(
                         "Successfully sent flag log with {} entries",
                         request.getFlagAssignedCount());
@@ -65,6 +51,18 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
                     logger.error("Failed to write flag logs", e);
                   }
                 });
+  }
+
+  private static InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub
+      createAuthenticatedStub(ApiSecret apiSecret) {
+    final var channel = createConfidenceChannel();
+    final AuthServiceGrpc.AuthServiceBlockingStub authService =
+        AuthServiceGrpc.newBlockingStub(channel);
+    final TokenHolder tokenHolder =
+        new TokenHolder(apiSecret.clientId(), apiSecret.clientSecret(), authService);
+    final Channel authenticatedChannel =
+        ClientInterceptors.intercept(channel, new JwtAuthClientInterceptor(tokenHolder));
+    return InternalFlagLoggerServiceGrpc.newBlockingStub(authenticatedChannel);
   }
 
   @Override
