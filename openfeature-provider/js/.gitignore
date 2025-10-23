@@ -8,3 +8,6 @@ node_modules/
 src/proto/
 dist/
 .env.test
+
+# Dummy Cargo package artifacts (used only for release-please dependency tracking)
+Cargo.lock

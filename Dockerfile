@@ -466,6 +466,20 @@ FROM openfeature-provider-java-base AS openfeature-provider-java.build
 RUN make build
 
 # ==============================================================================
+# Publish OpenFeature Provider (Java) to Maven Central
+# ==============================================================================
+FROM openfeature-provider-java.build AS openfeature-provider-java.publish
+
+# Import GPG private key and deploy to Maven Central
+RUN --mount=type=secret,id=maven_settings,target=/root/.m2/settings.xml \
+    --mount=type=secret,id=gpg_private_key \
+    --mount=type=secret,id=gpg_pass \
+    # Import GPG key
+    cat /run/secrets/gpg_private_key | gpg --batch --import && \
+    # Deploy to Maven Central
+    GPG_PASS=$(cat /run/secrets/gpg_pass) mvn --batch-mode deploy
+
+# ==============================================================================
 # All - Build and validate everything (default target)
 # ==============================================================================
 FROM scratch AS all
