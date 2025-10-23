@@ -49,16 +49,3 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max
           secrets: |
             "js_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}"
-
-      - name: Extract artifacts
-        run: |
-          mkdir artifacts
-          docker build --target=wasm-rust-guest.artifact --output=type=local,dest=./artifacts .
-
-      - name: Show build summary
-        run: |
-          echo "## Build Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          find artifacts -type f -exec ls -lh {} \; >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
