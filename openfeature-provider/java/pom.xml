@@ -4,9 +4,7 @@
 
   <groupId>com.spotify.confidence</groupId>
   <artifactId>openfeature-provider-local</artifactId>
-  <!-- x-release-please-start-version -->
   <version>0.6.4</version>
-  <!-- x-release-please-end -->
   <name>Confidence local resolve provider</name>
   <description>Confidence OpenFeature provider for local flag resolution using WebAssembly</description>
   <url>https://github.com/spotify/confidence-resolver-rust</url>

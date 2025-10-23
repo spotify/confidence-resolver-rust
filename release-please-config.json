@@ -31,7 +31,12 @@
       "path": "openfeature-provider/java",
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["pom.xml"]
+      "extra-files": [
+        {
+          "type": "pom",
+          "path": "pom.xml"
+        }
+      ]
     }
   }
 }
