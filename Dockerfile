@@ -477,7 +477,7 @@ RUN --mount=type=secret,id=maven_settings,target=/root/.m2/settings.xml \
     # Import GPG key
     cat /run/secrets/gpg_private_key | gpg --batch --import && \
     # Deploy to Maven Central
-    GPG_PASS=$(cat /run/secrets/gpg_pass) mvn --batch-mode deploy
+    mvn -Dgpg.passphrase="$(cat /run/secrets/gpg_pass)" --batch-mode deploy
 
 # ==============================================================================
 # All - Build and validate everything (default target)
