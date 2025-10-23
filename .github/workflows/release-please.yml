@@ -158,8 +158,7 @@ jobs:
         with:
           context: .
           target: openfeature-provider-java.publish
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           secrets: |
             "maven_settings=${{ secrets.MAVEN_SETTINGS }}"
             gpg_private_key=${{ secrets.GPG_PRIVATE_KEY }}
