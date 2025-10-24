@@ -4,7 +4,10 @@
   "description": "Spotify Confidence Open Feature provider",
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "main": "./dist/index.node.js",
   "module": "./dist/index.browser.js",

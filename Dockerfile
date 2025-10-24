@@ -377,6 +377,9 @@ COPY \
     openfeature-provider/js/yarn.lock \
     openfeature-provider/js/.yarnrc.yml \
     openfeature-provider/js/proto \
+    openfeature-provider/js/README.md \
+    openfeature-provider/js/CHANGELOG.md \
+    openfeature-provider/js/LICENSE \
     ./
 COPY openfeature-provider/js/proto ./proto
 
