@@ -428,16 +428,14 @@ RUN make build
 # ==============================================================================
 FROM openfeature-provider-js.build AS openfeature-provider-js.pack
 
-# Create npm package tarball
-RUN npm pack
+RUN yarn pack
 
 # ==============================================================================
 # Extract OpenFeature Provider (JS) package artifact
 # ==============================================================================
 FROM scratch AS openfeature-provider-js.artifact
 
-# Copy the tarball (npm pack creates spotify-confidence-openfeature-server-provider-local-*.tgz)
-COPY --from=openfeature-provider-js.pack /app/*.tgz /package.tgz
+COPY --from=openfeature-provider-js.pack /app/package.tgz /package.tgz
 
 # ==============================================================================
 # OpenFeature Provider (Java) - Build and test

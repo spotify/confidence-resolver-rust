@@ -18,7 +18,6 @@ test:
 	$(MAKE) -C wasm-msg test
 	$(MAKE) -C openfeature-provider/js test
 	$(MAKE) -C openfeature-provider/java test
-	$(MAKE) -C openfeature-provider/js test
 
 integration-test:
 	$(MAKE) -C wasm/node-host run
