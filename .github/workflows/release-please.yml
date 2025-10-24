@@ -99,16 +99,39 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Construct Maven settings file
+        run: |
+          cat > /tmp/maven_settings.xml <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                http://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${{ secrets.MAVEN_CENTRAL_USERNAME }}</username>
+                <password>${{ secrets.MAVEN_CENTRAL_PASSWORD }}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+      - name: Write GPG key and passphrase to files
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" > /tmp/gpg_private_key.asc
+          echo "${{ secrets.SIGN_KEY_PASS }}" > /tmp/gpg_pass.txt
+
       - name: Publish Java package with Docker
         uses: docker/build-push-action@v6
         with:
           context: .
           target: openfeature-provider-java.publish
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          secrets: |
-            "maven_settings=${{ secrets.MAVEN_SETTINGS }}"
-            gpg_private_key=${{ secrets.GPG_PRIVATE_KEY }}
-            gpg_pass=${{ secrets.SIGN_KEY_PASS }}
+          secret-files: |
+            maven_settings=/tmp/maven_settings.xml
+            gpg_private_key=/tmp/gpg_private_key.asc
+            gpg_pass=/tmp/gpg_pass.txt
 
   publish-js-provider-release:
     needs: release
