@@ -6,7 +6,7 @@ const wasmPath = require.resolve('./confidence_resolver.wasm');
 const buffer = await fs.readFile(wasmPath);
 
 const module = await WebAssembly.compile(buffer as BufferSource);
-const resolver = await WasmResolver.load(module);
+const resolver = new WasmResolver(module);
 
 export function createConfidenceServerProvider(options:ProviderOptions):ConfidenceServerProviderLocal {
   return new ConfidenceServerProviderLocal(resolver, options)

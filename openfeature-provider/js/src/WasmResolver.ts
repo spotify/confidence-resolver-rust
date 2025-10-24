@@ -3,18 +3,38 @@ import { Request, Response, Void } from './proto/messages';
 import { Timestamp } from './proto/google/protobuf/timestamp';
 import { ResolveWithStickyRequest, ResolveWithStickyResponse, SetResolverStateRequest } from './proto/api';
 import { LocalResolver } from './LocalResolver';
+import { getLogger } from './logger'
 
-type Codec<T> = {
+const logger = getLogger('wasm-resolver');
+
+export type Codec<T> = {
   encode(message: T): BinaryWriter;
   decode(input: Uint8Array): T;
 };
 
-export class WasmResolver implements LocalResolver {
-  private exports: any;
-  private imports: any;
+const EXPORT_FN_NAMES = ['wasm_msg_alloc', 'wasm_msg_free', 'wasm_msg_guest_resolve_with_sticky', 'wasm_msg_guest_set_resolver_state', 'wasm_msg_guest_flush_logs'] as const;
+type EXPORT_FN_NAMES = (typeof EXPORT_FN_NAMES)[number];
 
-  private constructor() {
-    this.imports = {
+type ResolverExports = { memory: WebAssembly.Memory } & { 
+  [K in EXPORT_FN_NAMES]: Function
+}
+
+function verifyExports(exports:WebAssembly.Exports): asserts exports is ResolverExports {
+  for(const fnName of EXPORT_FN_NAMES) {
+    if(typeof exports[fnName] !== 'function') {
+      throw new Error(`Expected Function export "${fnName}" found ${exports[fnName]}`);
+    }
+  }
+  if(!(exports.memory instanceof WebAssembly.Memory)) {
+    throw new Error(`Expected WebAssembly.Memory export "memory", found ${exports.memory}`)
+  }
+}
+
+export class UnsafeWasmResolver implements LocalResolver {
+  private exports: ResolverExports;
+
+  constructor(module:WebAssembly.Module) {
+    const imports = {
       wasm_msg: {
         wasm_msg_host_current_time: () => {
           const epochMillisecond = Date.now();
@@ -25,6 +45,9 @@ export class WasmResolver implements LocalResolver {
         },
       },
     };
+    const { exports } = new WebAssembly.Instance(module, imports);
+    verifyExports(exports);
+    this.exports = exports;
   }
 
   resolveWithSticky(request: ResolveWithStickyRequest): ResolveWithStickyResponse {
@@ -86,10 +109,75 @@ export class WasmResolver implements LocalResolver {
     this.exports.wasm_msg_free(ptr);
   }
 
-  static async load(module: WebAssembly.Module): Promise<WasmResolver> {
-    const wasmResolver = new WasmResolver();
-    const instance = await WebAssembly.instantiate(module, wasmResolver.imports);
-    wasmResolver.exports = instance.exports;
-    return wasmResolver;
+}
+
+export type DelegateFactory = (module:WebAssembly.Module) => LocalResolver
+
+export const DEFAULT_DELEGATE_FACTORY:DelegateFactory = module => new UnsafeWasmResolver(module);
+export class WasmResolver implements LocalResolver {
+
+  private delegate:LocalResolver;
+  private currentState?: { state: Uint8Array, accountId:string }
+  private bufferedLogs: Uint8Array[] = []
+
+  constructor(private readonly module:WebAssembly.Module, private delegateFactory = DEFAULT_DELEGATE_FACTORY) {
+    this.delegate = delegateFactory(module);
+  }
+
+  private reloadInstance(error:unknown) {
+    logger.error('Failure calling into wasm:', error);
+    try {
+      this.bufferedLogs.push(this.delegate.flushLogs());
+    } catch(_) {
+      logger.error('Failed to flushLogs on error');
+    }
+
+    this.delegate = this.delegateFactory(this.module);
+    if(this.currentState) {
+      this.delegate.setResolverState(this.currentState);
+    }
+  }
+
+  resolveWithSticky(request: ResolveWithStickyRequest): ResolveWithStickyResponse {
+    try {
+      return this.delegate.resolveWithSticky(request);
+    } catch(error:unknown) {
+      if(error instanceof WebAssembly.RuntimeError) {
+        this.reloadInstance(error);
+      }
+      throw error;
+    }
+  }
+
+  setResolverState(request: SetResolverStateRequest): void {
+    this.currentState = request;
+    try {
+      this.delegate.setResolverState(request);
+    } catch(error:unknown) {
+      if(error instanceof WebAssembly.RuntimeError) {
+        this.reloadInstance(error);
+      }
+      throw error;
+    }
+  }
+
+  flushLogs(): Uint8Array {
+    try {
+      this.bufferedLogs.push(this.delegate.flushLogs());
+      const len = this.bufferedLogs.reduce((sum, chunk) => sum + chunk.length, 0);
+      const buffer = new Uint8Array(len);
+      let offset = 0;
+      for(const chunk of this.bufferedLogs) {
+        buffer.set(chunk, offset);
+        offset += chunk.length;
+      }
+      this.bufferedLogs.length = 0;
+      return buffer;
+    } catch(error:unknown) {
+      if(error instanceof WebAssembly.RuntimeError) {
+        this.reloadInstance(error);
+      }
+      throw error;
+    }
   }
 }
