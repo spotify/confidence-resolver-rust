@@ -32,7 +32,7 @@ lint:
 	$(MAKE) -C wasm-msg lint
 	$(MAKE) -C wasm/rust-guest lint
 	$(MAKE) -C confidence-cloudflare-resolver lint
-	cargo fmt --all --check
+	cargo fmt --check -p wasm-msg -p rust-guest -p confidence_resolver -p confidence-cloudflare-resolver
 
 build: wasm/confidence_resolver.wasm
 	$(MAKE) -C openfeature-provider/js build
