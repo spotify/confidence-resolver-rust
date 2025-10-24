@@ -375,7 +375,6 @@ COPY \
     openfeature-provider/js/.yarnrc.yml \
     openfeature-provider/js/proto \
     ./
-COPY openfeature-provider/js/proto ./proto
 
 # Install dependencies (this layer will be cached)
 ENV IN_DOCKER_BUILD=1
