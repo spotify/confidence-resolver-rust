@@ -22,7 +22,7 @@ const BUCKETS: u64 = 1_000_000;
 const TARGETING_KEY: &str = "targeting_key";
 const NULL: Value = Value { kind: None };
 
-const MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE: usize = 200;
+const MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE: usize = 210;
 
 use err::Fallible;
 
