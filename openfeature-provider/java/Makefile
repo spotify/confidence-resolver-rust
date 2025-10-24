@@ -24,7 +24,7 @@ $(RESOURCES_WASM): $(LOCAL_WASM)
 	@cp -p $(LOCAL_WASM) $@
 
 $(BUILD_STAMP): pom.xml $(RESOURCES_WASM) $(SRC)
-	mvn package -DskipTests
+	mvn -q package -DskipTests
 	@touch $@
 
 build: $(BUILD_STAMP)
