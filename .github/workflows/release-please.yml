@@ -40,7 +40,7 @@ jobs:
           echo "cloudflare_resolver_release_created: ${{ steps.releasemanifest.outputs.cloudflare_resolver_release_created }}"
           echo "java_provider_release_created: ${{ steps.releasemanifest.outputs.java_provider_release_created }}"
           echo "js_provider_release_created: ${{ steps.releasemanifest.outputs.js_provider_release_created }}"
-          
+
   publish-cloudflare-deployer-image:
     needs: release
     if: ${{ needs.release.outputs.cloudflare_resolver_release_created == 'true' }}
@@ -118,6 +118,7 @@ jobs:
   publish-js-provider-release:
     needs: release
     runs-on: ubuntu-latest
+    environment: deployment
     permissions:
       id-token: write  # Required for npm OIDC publishing
       contents: read
