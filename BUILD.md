@@ -7,7 +7,6 @@ This document describes the Docker multi-stage build architecture used in this r
 The Dockerfile uses a multi-stage build approach to:
 - Compile Rust code for both native and WebAssembly targets
 - Build and test OpenFeature providers (JavaScript and Java)
-- Run integration tests with example hosts (Node.js, Java, Go, Python)
 - Package artifacts for distribution
 
 ## Build Stage Diagram
@@ -19,31 +18,27 @@ flowchart TD
     %% Base images
     alpine[alpine:3.22]
     node[node:20-alpine]
-    java[eclipse-temurin:21-alpine]
-    go[golang:1.23-alpine]
-    python[python:3.11-slim]
-    temurin17[eclipse-temurin:17-jdk]
+    java[eclipse-temurin:17-jdk]
 
-    %% Base stages
+    %% Rust toolchain and dependency stages
     alpine --> rust-base[rust-base<br/>Rust toolchain + protoc]
-    node --> openfeature-provider-js-base[openfeature-provider-js-base<br/>Node deps + proto gen]
-    node --> node-host-base[node-host-base<br/>Example host]
-    java --> java-host-base[java-host-base<br/>Example host]
-    go --> go-host-base[go-host-base<br/>Example host]
-    python --> python-host-base[python-host-base<br/>Example host]
-    temurin17 --> openfeature-provider-java-base[openfeature-provider-java-base<br/>Java provider base]
-
-    %% Dependency compilation
     rust-base --> rust-deps[rust-deps<br/>Cached Rust dependencies]
-    rust-deps --> wasm-deps[wasm-deps<br/>WASM-specific deps]
 
-    %% Test stages for native Rust
-    rust-deps --> confidence-resolver.test[confidence-resolver.test<br/>✓ Core resolver tests]
-    rust-deps --> wasm-msg.test[wasm-msg.test<br/>✓ WASM msg tests]
+    %% Native test/lint base
+    rust-base --> rust-test-base[rust-test-base<br/>Base for native tests/lints]
+    rust-deps -.->|copies cargo cache| rust-test-base
 
-    %% Lint stages for native Rust
-    rust-deps --> confidence-resolver.lint[confidence-resolver.lint<br/>⚡ Core resolver lint]
-    rust-deps --> wasm-msg.lint[wasm-msg.lint<br/>⚡ WASM msg lint]
+    %% WASM build base
+    rust-base --> wasm-deps[wasm-deps<br/>WASM build environment]
+    rust-deps -.->|copies cargo cache| wasm-deps
+
+    %% Native Rust tests
+    rust-test-base --> confidence-resolver.test[confidence-resolver.test<br/>✓ Core resolver tests]
+    rust-test-base --> wasm-msg.test[wasm-msg.test<br/>✓ WASM msg tests]
+
+    %% Native Rust lints
+    rust-test-base --> confidence-resolver.lint[confidence-resolver.lint<br/>⚡ Core resolver lint]
+    rust-test-base --> wasm-msg.lint[wasm-msg.lint<br/>⚡ WASM msg lint]
 
     %% WASM build and lint
     wasm-deps --> wasm-rust-guest.build[wasm-rust-guest.build<br/>🔨 Build WASM resolver]
@@ -53,29 +48,21 @@ flowchart TD
     %% WASM artifact
     wasm-rust-guest.build --> wasm-rust-guest.artifact[wasm-rust-guest.artifact<br/>📦 confidence_resolver.wasm]
 
-    %% Host integration tests
-    node-host-base --> node-host.test[node-host.test<br/>✓ Node host integration]
-    java-host-base --> java-host.test[java-host.test<br/>✓ Java host integration]
-    go-host-base --> go-host.test[go-host.test<br/>✓ Go host integration]
-    python-host-base --> python-host.test[python-host.test<br/>✓ Python host integration]
-    wasm-rust-guest.artifact -.-> node-host.test
-    wasm-rust-guest.artifact -.-> java-host.test
-    wasm-rust-guest.artifact -.-> go-host.test
-    wasm-rust-guest.artifact -.-> python-host.test
-
     %% OpenFeature JS provider
-    openfeature-provider-js-base --> openfeature-provider-js.build[openfeature-provider-js.build<br/>🔨 TypeScript build]
-    wasm-rust-guest.artifact -.-> openfeature-provider-js-base
+    node --> openfeature-provider-js-base[openfeature-provider-js-base<br/>Node deps + proto gen]
+    wasm-rust-guest.artifact -.->|copies WASM| openfeature-provider-js-base
     openfeature-provider-js-base --> openfeature-provider-js.test[openfeature-provider-js.test<br/>✓ Provider tests]
     openfeature-provider-js.test --> openfeature-provider-js.test_e2e[openfeature-provider-js.test_e2e<br/>✓ E2E tests]
-    openfeature-provider-js.build --> openfeature-provider-js.pack[openfeature-provider-js.pack<br/>📦 npm pack]
+    openfeature-provider-js-base --> openfeature-provider-js.build[openfeature-provider-js.build<br/>🔨 TypeScript build]
+    openfeature-provider-js.build --> openfeature-provider-js.pack[openfeature-provider-js.pack<br/>📦 yarn pack]
     openfeature-provider-js.pack --> openfeature-provider-js.artifact[openfeature-provider-js.artifact<br/>📦 package.tgz]
 
     %% OpenFeature Java provider
+    java --> openfeature-provider-java-base[openfeature-provider-java-base<br/>Maven + proto gen]
+    wasm-rust-guest.artifact -.->|copies WASM| openfeature-provider-java-base
     openfeature-provider-java-base --> openfeature-provider-java.test[openfeature-provider-java.test<br/>✓ Java provider tests]
     openfeature-provider-java-base --> openfeature-provider-java.build[openfeature-provider-java.build<br/>🔨 Maven build]
     openfeature-provider-java.build --> openfeature-provider-java.publish[openfeature-provider-java.publish<br/>🚀 Maven Central]
-    wasm-rust-guest.artifact -.-> openfeature-provider-java-base
 
     %% All stage aggregates everything
     wasm-rust-guest.artifact --> all[all<br/>✅ Complete build]
@@ -84,10 +71,6 @@ flowchart TD
     openfeature-provider-js.test --> all
     openfeature-provider-js.test_e2e --> all
     openfeature-provider-java.test --> all
-    node-host.test --> all
-    java-host.test --> all
-    go-host.test --> all
-    python-host.test --> all
     confidence-resolver.lint --> all
     wasm-msg.lint --> all
     wasm-rust-guest.lint --> all
@@ -104,10 +87,10 @@ flowchart TD
     classDef publish fill:#ffebee,stroke:#c62828
     classDef final fill:#c8e6c9,stroke:#388e3c
 
-    class alpine,node,java,go,python,temurin17 baseImage
-    class rust-base,openfeature-provider-js-base,node-host-base,java-host-base,go-host-base,python-host-base,openfeature-provider-java-base,rust-deps,wasm-deps baseImage
+    class alpine,node,java baseImage
+    class rust-base,rust-deps,rust-test-base,wasm-deps,openfeature-provider-js-base,openfeature-provider-java-base baseImage
     class wasm-rust-guest.build,openfeature-provider-js.build,openfeature-provider-java.build buildStage
-    class confidence-resolver.test,wasm-msg.test,node-host.test,java-host.test,go-host.test,python-host.test,openfeature-provider-js.test,openfeature-provider-js.test_e2e,openfeature-provider-java.test testStage
+    class confidence-resolver.test,wasm-msg.test,openfeature-provider-js.test,openfeature-provider-js.test_e2e,openfeature-provider-java.test testStage
     class confidence-resolver.lint,wasm-msg.lint,wasm-rust-guest.lint,confidence-cloudflare-resolver.lint lintStage
     class wasm-rust-guest.artifact,openfeature-provider-js.pack,openfeature-provider-js.artifact artifact
     class openfeature-provider-java.publish publish
@@ -132,7 +115,6 @@ Test and lint stages are independent and can run concurrently, reducing total bu
 
 ### WASM Artifact Sharing
 The core `confidence_resolver.wasm` is built once in `wasm-rust-guest.build` and shared across:
-- All host examples (Node.js, Java, Go, Python)
 - OpenFeature JavaScript provider
 - OpenFeature Java provider
 
@@ -157,51 +139,47 @@ docker build .
 
 ### Base Stages
 
-- **rust-base**: Installs Rust toolchain, protoc, and build dependencies
-- **openfeature-provider-js-base**: Node.js environment with dependencies and proto generation
-- **node-host-base**, **java-host-base**, **go-host-base**, **python-host-base**: Example host environments
-- **openfeature-provider-java-base**: Java provider environment with Maven
-
-### Dependency Stages
-
-- **rust-deps**: Compiles all Rust dependencies (cached layer)
-- **wasm-deps**: Extends rust-deps with WASM-specific dependencies
-
-### Build Stages
-
-- **wasm-rust-guest.build**: Compiles Rust resolver to WebAssembly
-- **openfeature-provider-js.build**: Compiles TypeScript to JavaScript
-- **openfeature-provider-java.build**: Builds Java provider with Maven
+- **rust-base** (FROM alpine:3.22): Installs Rust toolchain via rustup, protoc, and build dependencies
+- **rust-deps** (FROM rust-base): Compiles all Rust workspace dependencies (cached layer for faster rebuilds)
+- **rust-test-base** (FROM rust-base): Copies dependency cache and source code for native testing/linting
+- **wasm-deps** (FROM rust-base): Copies dependency cache and source code for WASM builds
+- **openfeature-provider-js-base** (FROM node:20-alpine): Node.js environment with Yarn, dependencies, and proto generation
+- **openfeature-provider-java-base** (FROM eclipse-temurin:17-jdk): Java environment with Maven and proto files
 
 ### Test Stages
 
-- **confidence-resolver.test**: Unit tests for core resolver
-- **wasm-msg.test**: Tests for WASM messaging layer
-- **openfeature-provider-js.test**: Unit tests for JavaScript provider
-- **openfeature-provider-js.test_e2e**: End-to-end tests (requires credentials)
-- **openfeature-provider-java.test**: Tests for Java provider
-- **node-host.test**, **java-host.test**, **go-host.test**, **python-host.test**: Integration tests
+- **confidence-resolver.test** (FROM rust-test-base): Unit tests for core resolver
+- **wasm-msg.test** (FROM rust-test-base): Tests for WASM messaging layer
+- **openfeature-provider-js.test** (FROM openfeature-provider-js-base): Unit tests for JavaScript provider
+- **openfeature-provider-js.test_e2e** (FROM openfeature-provider-js.test): End-to-end tests (requires credentials via Docker secret)
+- **openfeature-provider-java.test** (FROM openfeature-provider-java-base): Tests for Java provider
 
 ### Lint Stages
 
-- **confidence-resolver.lint**: Clippy checks for core resolver
-- **wasm-msg.lint**: Clippy checks for WASM messaging
-- **wasm-rust-guest.lint**: Clippy checks for WASM guest
-- **confidence-cloudflare-resolver.lint**: Clippy checks for Cloudflare resolver
+- **confidence-resolver.lint** (FROM rust-test-base): Clippy checks for core resolver
+- **wasm-msg.lint** (FROM rust-test-base): Clippy checks for WASM messaging
+- **wasm-rust-guest.lint** (FROM wasm-deps): Clippy checks for WASM guest
+- **confidence-cloudflare-resolver.lint** (FROM wasm-deps): Clippy checks for Cloudflare resolver
+
+### Build Stages
+
+- **wasm-rust-guest.build** (FROM wasm-deps): Compiles Rust resolver to WebAssembly (wasm32-unknown-unknown target)
+- **openfeature-provider-js.build** (FROM openfeature-provider-js-base): Compiles TypeScript to JavaScript
+- **openfeature-provider-java.build** (FROM openfeature-provider-java-base): Builds Java provider with Maven
 
 ### Artifact Stages
 
-- **wasm-rust-guest.artifact**: Extracts `confidence_resolver.wasm`
-- **openfeature-provider-js.pack**: Creates npm package tarball
-- **openfeature-provider-js.artifact**: Extracts package.tgz for distribution
+- **wasm-rust-guest.artifact** (FROM scratch): Extracts `confidence_resolver.wasm` (rust_guest.wasm → confidence_resolver.wasm)
+- **openfeature-provider-js.pack** (FROM openfeature-provider-js.build): Creates npm package tarball via `yarn pack`
+- **openfeature-provider-js.artifact** (FROM scratch): Extracts package.tgz for distribution
 
 ### Publish Stages
 
-- **openfeature-provider-java.publish**: Publishes Java provider to Maven Central (requires secrets)
+- **openfeature-provider-java.publish** (FROM openfeature-provider-java.build): Publishes Java provider to Maven Central (requires GPG and Maven secrets)
 
 ### Aggregation Stage
 
-- **all**: Default stage that ensures all tests, lints, and builds complete successfully
+- **all** (FROM scratch): Default stage that ensures all tests, lints, and builds complete successfully by copying marker files
 
 ## CI/CD Integration
 
@@ -220,3 +198,11 @@ cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
 ```
 
 This allows GitHub Actions to reuse layers from previous builds.
+
+## Dependency Flow
+
+The `rust-deps` stage builds dummy source files to compile all workspace dependencies, creating a cached layer. This cache is then copied into:
+- `rust-test-base` (for native tests and lints)
+- `wasm-deps` (for WASM builds)
+
+This approach ensures dependencies are only compiled once, even when building multiple targets.
