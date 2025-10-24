@@ -46,6 +46,8 @@ make run-go
 make run-python
 ```
 
+See [BUILD.md](BUILD.md) for detailed information about the Docker multi-stage build architecture.
+
 ## Running the example hosts
 
 There are host implementations for different languages in the `wasm` folder.
