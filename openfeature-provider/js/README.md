@@ -1,14 +1,14 @@
-## @spotify-confidence/openfeature-server-provider-local
+# @spotify-confidence/openfeature-server-provider-local
 
 OpenFeature provider for the Spotify Confidence resolver (local mode, powered by WebAssembly). It periodically fetches resolver state, evaluates flags locally, and flushes evaluation logs to the Confidence backend.
 
-### Features
+## Features
 - Local flag evaluation via WASM (no per-eval network calls)
 - Automatic state refresh and batched flag log flushing
 - Pluggable `fetch` with retries, timeouts and routing
 - Optional logging using `debug`
 
-### Requirements
+## Requirements
 - Node.js 18+ (built-in `fetch`) or provide a compatible `fetch`
 - WebAssembly support (Node 18+/modern browsers)
 
