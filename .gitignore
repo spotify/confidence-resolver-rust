@@ -1,5 +1,7 @@
 # Ignore generated protobuf Java sources vendored during local build
 openfeature-provider/java/src/main/java/com/spotify/confidence/wasm/Messages.java
+# Ignore generated protobuf Go sources
+*.pb.go
 .DS_Store
 *.stamp
 .idea/
