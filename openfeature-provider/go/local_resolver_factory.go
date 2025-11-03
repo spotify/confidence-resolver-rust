@@ -29,7 +29,6 @@ type StateProvider interface {
 // LocalResolverFactory creates and manages local flag resolvers with scheduled state fetching
 type LocalResolverFactory struct {
 	resolverAPI     *SwapWasmResolverApi
-	stateFetcher    *FlagsAdminStateFetcher
 	stateProvider   StateProvider
 	accountId       string
 	flagLogger      WasmFlagLogger
@@ -39,9 +38,9 @@ type LocalResolverFactory struct {
 }
 
 // NewLocalResolverFactory creates a new LocalResolverFactory with gRPC clients and WASM bytes
-// If stateProvider is not nil, it will be used instead of FlagsAdminStateFetcher
+// If customStateProvider is not nil, it will be used; otherwise creates a FlagsAdminStateFetcher
 // If disableLogging is true, all log requests will be dropped
-// accountId is required when using stateProvider, otherwise it's extracted from the token
+// accountId is required when using customStateProvider, otherwise it's extracted from the token
 func NewLocalResolverFactory(
 	ctx context.Context,
 	runtime wazero.Runtime,
@@ -51,7 +50,7 @@ func NewLocalResolverFactory(
 	authServiceAddr string,
 	apiClientID string,
 	apiClientSecret string,
-	stateProvider StateProvider,
+	customStateProvider StateProvider,
 	accountId string,
 	disableLogging bool,
 ) (*LocalResolverFactory, error) {
@@ -59,22 +58,23 @@ func NewLocalResolverFactory(
 	pollInterval := getPollIntervalSeconds()
 	logPollInterval := time.Duration(defaultPollLogInterval) * time.Second
 
-	var stateFetcher *FlagsAdminStateFetcher
 	var flagLogger WasmFlagLogger
 	var initialState []byte
 	var resolvedAccountId string
+	var stateProvider StateProvider
 
-	// If StateProvider is provided, use it instead of gRPC state fetcher
-	if stateProvider != nil {
-		// When using StateProvider, accountId must be provided
+	// If custom StateProvider is provided, use it
+	if customStateProvider != nil {
+		// When using custom StateProvider, accountId must be provided
 		if accountId == "" {
-			return nil, fmt.Errorf("accountId is required when using StateProvider")
+			return nil, fmt.Errorf("accountId is required when using custom StateProvider")
 		}
 		resolvedAccountId = accountId
+		stateProvider = customStateProvider
 
 		// Get initial state from provider
 		var err error
-		initialState, err = stateProvider.Provide(ctx)
+		initialState, err = customStateProvider.Provide(ctx)
 		if err != nil {
 			log.Printf("Initial state fetch from provider failed, using empty state: %v", err)
 			initialState = []byte{}
@@ -84,12 +84,12 @@ func NewLocalResolverFactory(
 		if disableLogging {
 			flagLogger = NewNoOpWasmFlagLogger()
 		} else {
-			// If logging is enabled but using StateProvider, use NoOp for now
+			// If logging is enabled but using custom StateProvider, use NoOp for now
 			// Users can extend this to provide their own logger
 			flagLogger = NewNoOpWasmFlagLogger()
 		}
 	} else {
-		// Use gRPC-based state fetcher and flag logger
+		// Create FlagsAdminStateFetcher and use it as StateProvider
 		// Create TLS credentials for secure connections
 		tlsCreds := credentials.NewTLS(nil)
 
@@ -128,19 +128,19 @@ func NewLocalResolverFactory(
 			accountName = token.Account
 		}
 
-		// Create state fetcher
-		stateFetcher = NewFlagsAdminStateFetcher(resolverStateService, accountName)
+		// Create state fetcher (which implements StateProvider)
+		stateFetcher := NewFlagsAdminStateFetcher(resolverStateService, accountName)
+		stateProvider = stateFetcher
 
-		// Do initial state fetch to get initial state for SwapWasmResolverApi
-		if err := stateFetcher.Reload(ctx); err != nil {
+		// Get initial state using StateProvider interface
+		initialState, err = stateFetcher.Provide(ctx)
+		if err != nil {
 			log.Printf("Initial state fetch failed, using empty state: %v", err)
 		}
-
-		initialState = stateFetcher.GetRawState()
 		if initialState == nil {
-			// Use empty state if no state available
 			initialState = []byte{}
 		}
+
 		resolvedAccountId = stateFetcher.GetAccountID()
 		if resolvedAccountId == "" {
 			resolvedAccountId = "unknown"
@@ -174,7 +174,6 @@ func NewLocalResolverFactory(
 	// Create factory
 	factory := &LocalResolverFactory{
 		resolverAPI:     resolverAPI,
-		stateFetcher:    stateFetcher,
 		stateProvider:   stateProvider,
 		accountId:       resolvedAccountId,
 		flagLogger:      flagLogger,
@@ -193,72 +192,33 @@ func (f *LocalResolverFactory) startScheduledTasks(parentCtx context.Context) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	f.cancelFunc = cancel
 
-	// Use StateProvider if available, otherwise use stateFetcher
-	if f.stateProvider != nil {
-		// Ticker for state fetching using StateProvider
-		go func() {
-			stateTicker := time.NewTicker(f.pollInterval)
-			defer stateTicker.Stop()
+	// Ticker for state fetching and log flushing using StateProvider
+	go func() {
+		ticker := time.NewTicker(f.logPollInterval)
+		defer ticker.Stop()
 
-			for {
-				select {
-				case <-stateTicker.C:
-					state, err := f.stateProvider.Provide(ctx)
-					if err != nil {
-						log.Printf("State fetch from provider failed: %v", err)
+		for {
+			select {
+			case <-ticker.C:
+				// Fetch latest state using StateProvider interface
+				state, err := f.stateProvider.Provide(ctx)
+				if err != nil {
+					log.Printf("State fetch from provider failed: %v", err)
+				}
+
+				// Update state and flush logs (even if state fetch failed, use cached state)
+				if state != nil && f.accountId != "" {
+					if err := f.resolverAPI.UpdateStateAndFlushLogs(state, f.accountId); err != nil {
+						log.Printf("Failed to update state and flush logs: %v", err)
 					} else {
-						if err := f.resolverAPI.UpdateStateAndFlushLogs(state, f.accountId); err != nil {
-							log.Printf("Failed to update state and flush logs: %v", err)
-						} else {
-							log.Printf("Updated resolver state and flushed logs for account %s", f.accountId)
-						}
+						log.Printf("Updated resolver state and flushed logs for account %s", f.accountId)
 					}
-				case <-ctx.Done():
-					return
 				}
+			case <-ctx.Done():
+				return
 			}
-		}()
-	} else {
-		// Ticker for state fetching using FlagsAdminStateFetcher
-		go func() {
-			stateTicker := time.NewTicker(f.pollInterval)
-			defer stateTicker.Stop()
-
-			for {
-				select {
-				case <-stateTicker.C:
-					if err := f.stateFetcher.Reload(ctx); err != nil {
-						log.Printf("State fetch failed: %v", err)
-					}
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
-
-		// Ticker for flushing logs (only when using gRPC state fetcher)
-		go func() {
-			logTicker := time.NewTicker(f.logPollInterval)
-			defer logTicker.Stop()
-
-			for {
-				select {
-				case <-logTicker.C:
-					state := f.stateFetcher.GetRawState()
-					accountId := f.stateFetcher.GetAccountID()
-					if state != nil && accountId != "" {
-						if err := f.resolverAPI.UpdateStateAndFlushLogs(state, accountId); err != nil {
-							log.Printf("Failed to update state and flush logs: %v", err)
-						} else {
-							log.Printf("Updated resolver state and flushed logs for account %s", accountId)
-						}
-					}
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
-	}
+		}
+	}()
 }
 
 // Shutdown stops all scheduled tasks and cleans up resources
