@@ -40,7 +40,6 @@ func main() {
 
 	provider, err := confidence.NewProvider(ctx, confidence.ProviderConfig{
 		APIClientID:     apiClientID,
-		DisableLogging:  true,
 		APIClientSecret: apiClientSecret,
 		ClientSecret:    clientSecret,
 	})

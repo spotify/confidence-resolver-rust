@@ -28,8 +28,6 @@ type ProviderConfig struct {
 	// Optional: Custom WASM bytes (for advanced use cases only)
 	// If not provided, loads from default location
 	WasmBytes []byte
-	// Optional: Disable logging (default: false)
-	DisableLogging bool
 }
 
 // ProviderConfigWithStateProvider holds configuration for the Confidence provider with a custom StateProvider
@@ -42,9 +40,6 @@ type ProviderConfigWithStateProvider struct {
 
 	// Required: Account ID
 	AccountId string
-
-	// Optional: Disable logging (default: false)
-	DisableLogging bool
 
 	// Optional: Custom WASM bytes (for advanced use cases only)
 	// If not provided, loads from default location
@@ -94,7 +89,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
-	// Create LocalResolverFactory (no custom StateProvider, logging enabled)
+	// Create LocalResolverFactory (no custom StateProvider)
 	factory, err := NewLocalResolverFactory(
 		ctx,
 		wasmRuntime,
@@ -104,9 +99,8 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		authServiceAddr,
 		config.APIClientID,
 		config.APIClientSecret,
-		nil,                   // stateProvider
-		"",                    // accountId (will be extracted from token)
-		config.DisableLogging, // disableLogging
+		nil, // stateProvider
+		"",  // accountId (will be extracted from token)
 	)
 	if err != nil {
 		wasmRuntime.Close(ctx)
@@ -152,14 +146,13 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 		ctx,
 		wasmRuntime,
 		wasmBytes,
-		"",                    // resolverStateServiceAddr - not used with StateProvider
-		"",                    // flagLoggerServiceAddr - not used with StateProvider
-		"",                    // authServiceAddr - not used with StateProvider
-		"",                    // apiClientID - not used with StateProvider
-		"",                    // apiClientSecret - not used with StateProvider
-		config.StateProvider,  // stateProvider
-		config.AccountId,      // accountId - required with StateProvider
-		config.DisableLogging, // disableLogging
+		"",                   // resolverStateServiceAddr - not used with StateProvider
+		"",                   // flagLoggerServiceAddr - not used with StateProvider
+		"",                   // authServiceAddr - not used with StateProvider
+		"",                   // apiClientID - not used with StateProvider
+		"",                   // apiClientSecret - not used with StateProvider
+		config.StateProvider, // stateProvider
+		config.AccountId,     // accountId - required with StateProvider
 	)
 	if err != nil {
 		wasmRuntime.Close(ctx)

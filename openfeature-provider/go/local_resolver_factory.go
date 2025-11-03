@@ -39,7 +39,7 @@ type LocalResolverFactory struct {
 
 // NewLocalResolverFactory creates a new LocalResolverFactory with gRPC clients and WASM bytes
 // If customStateProvider is not nil, it will be used; otherwise creates a FlagsAdminStateFetcher
-// If disableLogging is true, all log requests will be dropped
+// Exposure logging is automatically enabled with gRPC services, disabled with custom StateProvider
 // accountId is required when using customStateProvider, otherwise it's extracted from the token
 func NewLocalResolverFactory(
 	ctx context.Context,
@@ -52,7 +52,6 @@ func NewLocalResolverFactory(
 	apiClientSecret string,
 	customStateProvider StateProvider,
 	accountId string,
-	disableLogging bool,
 ) (*LocalResolverFactory, error) {
 	// Get poll interval from environment or use default
 	pollInterval := getPollIntervalSeconds()
@@ -80,14 +79,9 @@ func NewLocalResolverFactory(
 			initialState = []byte{}
 		}
 
-		// Create flag logger based on disableLogging flag
-		if disableLogging {
-			flagLogger = NewNoOpWasmFlagLogger()
-		} else {
-			// If logging is enabled but using custom StateProvider, use NoOp for now
-			// Users can extend this to provide their own logger
-			flagLogger = NewNoOpWasmFlagLogger()
-		}
+		// When using custom StateProvider, no gRPC logger service is available
+		// Exposure logging is disabled
+		flagLogger = NewNoOpWasmFlagLogger()
 	} else {
 		// Create FlagsAdminStateFetcher and use it as StateProvider
 		// Create TLS credentials for secure connections
@@ -146,23 +140,19 @@ func NewLocalResolverFactory(
 			resolvedAccountId = "unknown"
 		}
 
-		// Create flag logger based on disableLogging flag
-		if disableLogging {
-			flagLogger = NewNoOpWasmFlagLogger()
-		} else {
-			// Create gRPC connection for flag logger service with auth
-			loggerConn, err := grpc.NewClient(
-				flagLoggerServiceAddr,
-				grpc.WithTransportCredentials(tlsCreds),
-				grpc.WithUnaryInterceptor(authInterceptor.UnaryClientInterceptor()),
-				grpc.WithStreamInterceptor(authInterceptor.StreamClientInterceptor()),
-			)
-			if err != nil {
-				return nil, err
-			}
-			flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(loggerConn)
-			flagLogger = NewGrpcWasmFlagLogger(flagLoggerService)
+		// Create gRPC connection for flag logger service with auth
+		// Exposure logging is always enabled when using gRPC services
+		loggerConn, err := grpc.NewClient(
+			flagLoggerServiceAddr,
+			grpc.WithTransportCredentials(tlsCreds),
+			grpc.WithUnaryInterceptor(authInterceptor.UnaryClientInterceptor()),
+			grpc.WithStreamInterceptor(authInterceptor.StreamClientInterceptor()),
+		)
+		if err != nil {
+			return nil, err
 		}
+		flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(loggerConn)
+		flagLogger = NewGrpcWasmFlagLogger(flagLoggerService)
 	}
 
 	// Create SwapWasmResolverApi with initial state
