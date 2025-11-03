@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/spotify/confidence-resolver-rust/compare/openfeature-provider-java-v0.7.1...openfeature-provider-java-v0.7.2) (2025-11-03)
+
+
+### Bug Fixes
+
+* **deps-dev:** bump commons-lang3 from 3.17.0 to 3.18.0 in /openfeature-provider/java ([#89](https://github.com/spotify/confidence-resolver-rust/issues/89)) ([7db65a6](https://github.com/spotify/confidence-resolver-rust/commit/7db65a662374d2aab01c77f243082c482113981e))
+
 ## [0.7.1](https://github.com/spotify/confidence-resolver-rust/compare/openfeature-provider-java-v0.7.0...openfeature-provider-java-v0.7.1) (2025-10-23)
 
 
