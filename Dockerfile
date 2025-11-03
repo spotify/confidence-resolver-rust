@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1
 
 # ==============================================================================
 # Base image with Rust toolchain (Alpine - more reliable than Debian)
@@ -490,14 +490,12 @@ RUN make build
 # ==============================================================================
 FROM openfeature-provider-java.build AS openfeature-provider-java.publish
 
-# Import GPG private key and deploy to Maven Central
-RUN --mount=type=secret,id=maven_settings,target=/root/.m2/settings.xml \
-    --mount=type=secret,id=gpg_private_key \
-    --mount=type=secret,id=gpg_pass \
-    # Import GPG key
-    cat /run/secrets/gpg_private_key | gpg --batch --import && \
-    # Deploy to Maven Central
-    mvn -Dgpg.passphrase="$(cat /run/secrets/gpg_pass)" --batch-mode deploy
+RUN --mount=type=secret,id=gpg_private_key \
+    gpg --batch --import /run/secrets/gpg_private_key
+
+RUN --mount=type=secret,id=maven_settings \
+    --mount=type=secret,id=gpg_pass,env=MAVEN_GPG_PASSPHRASE \
+    mvn -q -s /run/secrets/maven_settings --batch-mode deploy
 
 # ==============================================================================
 # All - Build and validate everything (default target)
