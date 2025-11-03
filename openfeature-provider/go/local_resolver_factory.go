@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	defaultPollIntervalSeconds = 15 // 15 seconds (for testing reload)
-	defaultPollLogInterval     = 10 // 10 seconds
+	defaultPollIntervalSeconds = 300 // 5 minutes - aligned with Java implementation
+	defaultPollLogInterval     = 10  // 10 seconds
 )
 
 // StateProvider is an interface for providing resolver state

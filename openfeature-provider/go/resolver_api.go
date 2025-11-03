@@ -186,10 +186,10 @@ func (r *ResolverApi) FlushLogs() error {
 // Close closes the WASM instance
 // Note: This does NOT close the compiled module, as it may be shared across instances
 func (r *ResolverApi) Close(ctx context.Context) {
-	println("Flushing WASM instance")
+	log.Printf("Flushing WASM instance")
 	err := r.FlushLogs()
 	if err != nil {
-		println("Flushing failed")
+		log.Printf("Flushing failed: %v", err)
 		return
 	}
 	if r.instance != nil {
@@ -207,7 +207,7 @@ func (r *ResolverApi) SetResolverState(state []byte, accountId string) error {
 	defer r.mu.Unlock()
 
 	ctx := context.Background()
-	println("setting resolver state")
+	log.Printf("Setting resolver state for account %s", accountId)
 
 	// Create SetResolverStateRequest
 	setStateRequest := &messages.SetResolverStateRequest{
@@ -254,7 +254,9 @@ var ErrInstanceClosed = errors.New("WASM instance is closed or being replaced")
 
 // Resolve resolves flags using the WASM module
 func (r *ResolverApi) Resolve(request *resolver.ResolveFlagsRequest) (*resolver.ResolveFlagsResponse, error) {
-	// Check if instance is closing after acquiring lock
+	// Acquire lock first, then check isClosing flag to prevent race condition
+	// where instance could be marked as closing between check and lock acquisition.
+	// If closing, return immediately with ErrInstanceClosed to prevent using stale instance.
 	r.mu.Lock()
 	if r.isClosing {
 		defer r.mu.Unlock()

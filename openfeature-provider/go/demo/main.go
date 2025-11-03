@@ -20,15 +20,16 @@ func main() {
 	apiClientSecret := getEnvOrDefault("CONFIDENCE_API_CLIENT_SECRET", "API_SECRET")
 	clientSecret := getEnvOrDefault("CONFIDENCE_CLIENT_SECRET", "CLIENT_SECRET")
 
-	// Validate configuration
-	if apiClientID == "YOUR_API_CLIENT_ID" || apiClientSecret == "YOUR_API_CLIENT_SECRET" || clientSecret == "YOUR_CLIENT_SECRET" {
-		log.Println("WARNING: Using placeholder credentials. Please set environment variables:")
-		log.Println("  - CONFIDENCE_API_CLIENT_ID")
-		log.Println("  - CONFIDENCE_API_CLIENT_SECRET")
-		log.Println("  - CONFIDENCE_CLIENT_SECRET")
-		log.Println("")
-		log.Println("Continuing with demo (will fail authentication)...")
-		log.Println("")
+	// Validate configuration - fail fast on placeholder credentials
+	if apiClientID == "API_ID" || apiClientSecret == "API_SECRET" || clientSecret == "CLIENT_SECRET" {
+		log.Fatalf("ERROR: Placeholder credentials detected. Please set environment variables:\n"+
+			"  - CONFIDENCE_API_CLIENT_ID\n"+
+			"  - CONFIDENCE_API_CLIENT_SECRET\n"+
+			"  - CONFIDENCE_CLIENT_SECRET\n\n"+
+			"Example:\n"+
+			"  export CONFIDENCE_API_CLIENT_ID=\"your-api-client-id\"\n"+
+			"  export CONFIDENCE_API_CLIENT_SECRET=\"your-api-client-secret\"\n"+
+			"  export CONFIDENCE_CLIENT_SECRET=\"your-client-secret\"\n")
 	}
 
 	log.Println("Starting Confidence OpenFeature Local Provider Demo")
