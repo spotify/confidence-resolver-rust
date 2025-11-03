@@ -266,7 +266,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				ResolutionError: openfeature.ResolutionError{},
-				Reason:          "The server returned no assignment for the flag. Typically, this happens if no configured rules matches the given evaluation context.",
+				Reason:          openfeature.Reason(resolvedFlag.Reason.String()),
 			},
 		}
 	}
