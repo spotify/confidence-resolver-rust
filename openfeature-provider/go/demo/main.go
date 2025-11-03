@@ -22,13 +22,13 @@ func main() {
 
 	// Validate configuration - fail fast on placeholder credentials
 	if apiClientID == "API_ID" || apiClientSecret == "API_SECRET" || clientSecret == "CLIENT_SECRET" {
-		log.Fatalf("ERROR: Placeholder credentials detected. Please set environment variables:\n"+
-			"  - CONFIDENCE_API_CLIENT_ID\n"+
-			"  - CONFIDENCE_API_CLIENT_SECRET\n"+
-			"  - CONFIDENCE_CLIENT_SECRET\n\n"+
-			"Example:\n"+
-			"  export CONFIDENCE_API_CLIENT_ID=\"your-api-client-id\"\n"+
-			"  export CONFIDENCE_API_CLIENT_SECRET=\"your-api-client-secret\"\n"+
+		log.Fatalf("ERROR: Placeholder credentials detected. Please set environment variables:\n" +
+			"  - CONFIDENCE_API_CLIENT_ID\n" +
+			"  - CONFIDENCE_API_CLIENT_SECRET\n" +
+			"  - CONFIDENCE_CLIENT_SECRET\n\n" +
+			"Example:\n" +
+			"  export CONFIDENCE_API_CLIENT_ID=\"your-api-client-id\"\n" +
+			"  export CONFIDENCE_API_CLIENT_SECRET=\"your-api-client-secret\"\n" +
 			"  export CONFIDENCE_CLIENT_SECRET=\"your-client-secret\"\n")
 	}
 

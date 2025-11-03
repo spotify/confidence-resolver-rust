@@ -18,6 +18,7 @@ test:
 	$(MAKE) -C wasm-msg test
 	$(MAKE) -C openfeature-provider/js test
 	$(MAKE) -C openfeature-provider/java test
+	$(MAKE) -C openfeature-provider/go test
 
 integration-test:
 	$(MAKE) -C wasm/node-host run
@@ -32,11 +33,13 @@ lint:
 	$(MAKE) -C wasm-msg lint
 	$(MAKE) -C wasm/rust-guest lint
 	$(MAKE) -C confidence-cloudflare-resolver lint
+	$(MAKE) -C openfeature-provider/go lint
 	cargo fmt --check -p wasm-msg -p rust-guest -p confidence_resolver -p confidence-cloudflare-resolver
 
 build: wasm/confidence_resolver.wasm
 	$(MAKE) -C openfeature-provider/js build
 	$(MAKE) -C openfeature-provider/java build
+	$(MAKE) -C openfeature-provider/go build
 
 all: lint test build
 	@echo "✅ All checks passed!"
@@ -49,5 +52,6 @@ clean:
 	$(MAKE) -C wasm/python-host clean
 	$(MAKE) -C openfeature-provider/js clean
 	$(MAKE) -C openfeature-provider/java clean
+	$(MAKE) -C openfeature-provider/go clean
 
 .DEFAULT_GOAL := all
