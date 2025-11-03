@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/spotify/confidence-resolver-rust/compare/openfeature-provider-js-v0.1.0...openfeature-provider-js-v0.1.1) (2025-11-03)
+
+
+### Bug Fixes
+
+* handle panics ([#76](https://github.com/spotify/confidence-resolver-rust/issues/76)) ([1ea86ea](https://github.com/spotify/confidence-resolver-rust/commit/1ea86eaa3e64aea5a64086534fe94a155828ef80))
+
 ## 0.1.0 (2025-10-24)
 
 
