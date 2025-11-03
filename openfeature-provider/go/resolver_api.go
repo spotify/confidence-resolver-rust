@@ -237,18 +237,6 @@ func (r *ResolverApi) SetResolverState(state []byte, accountId string) error {
 	return nil
 }
 
-// UpdateStateAndFlushLogs updates the resolver state and flushes any pending logs
-// This method is typically called by a scheduled task to refresh the resolver state
-func (r *ResolverApi) UpdateStateAndFlushLogs(state []byte, accountId string) error {
-	// First flush any pending logs
-	if err := r.FlushLogs(); err != nil {
-		log.Printf("Failed to flush logs before updating state: %v", err)
-	}
-
-	// Then update the state
-	return r.SetResolverState(state, accountId)
-}
-
 // ErrInstanceClosed is returned when the WASM instance is being closed/swapped
 var ErrInstanceClosed = errors.New("WASM instance is closed or being replaced")
 
