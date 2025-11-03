@@ -1,7 +1,27 @@
 #!/bin/bash
 
+set -e
+
 # Add Go bin to PATH
 export PATH=$PATH:$(go env GOPATH)/bin
+
+# Check for required tools
+if ! command -v protoc &> /dev/null; then
+    echo "Error: protoc is not installed. Please install Protocol Buffers compiler." >&2
+    exit 1
+fi
+
+if ! command -v protoc-gen-go &> /dev/null; then
+    echo "Error: protoc-gen-go is not installed." >&2
+    echo "Install with: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest" >&2
+    exit 1
+fi
+
+if ! command -v protoc-gen-go-grpc &> /dev/null; then
+    echo "Error: protoc-gen-go-grpc is not installed." >&2
+    echo "Install with: go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest" >&2
+    exit 1
+fi
 
 # Generate protobuf Go files
 echo "Generating protobuf Go files..."
