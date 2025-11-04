@@ -45,11 +45,6 @@ func NewFlagsAdminStateFetcher(
 	return f
 }
 
-// RawStateHolder returns the atomic value holding the raw resolver state
-func (f *FlagsAdminStateFetcher) RawStateHolder() *atomic.Value {
-	return &f.rawResolverState
-}
-
 // GetRawState returns the current raw resolver state
 func (f *FlagsAdminStateFetcher) GetRawState() []byte {
 	if state := f.rawResolverState.Load(); state != nil {
