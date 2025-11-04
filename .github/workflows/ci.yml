@@ -13,7 +13,7 @@ permissions:
 jobs:
   ci:
     name: Build & Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,6 +36,7 @@ jobs:
           context: .
           push: false
           provenance: false
+          platforms: linux/arm64
           build-args: |
             SOURCE_DATE_EPOCH=0
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
@@ -49,6 +50,7 @@ jobs:
           context: .
           push: false
           provenance: false
+          platforms: linux/arm64
           build-args: |
             SOURCE_DATE_EPOCH=0
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
