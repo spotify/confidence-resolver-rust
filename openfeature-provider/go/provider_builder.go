@@ -20,17 +20,20 @@ type ProviderConfig struct {
 	ClientSecret    string
 
 	// Optional: Custom service addresses (for advanced use cases only)
-	// If not provided, defaults to EU region
+	// If not provided, defaults to global region
 	ResolverStateServiceAddr string
 	FlagLoggerServiceAddr    string
 	AuthServiceAddr          string
-
-	// Optional: Custom WASM bytes (for advanced use cases only)
-	// If not provided, loads from default location
-	WasmBytes []byte
 }
 
 // ProviderConfigWithStateProvider holds configuration for the Confidence provider with a custom StateProvider
+// WARNING: This configuration is intended for testing and advanced use cases ONLY.
+// For production deployments, use NewProvider() with ProviderConfig instead, which provides:
+//   - Automatic state fetching from Confidence backend
+//   - Built-in authentication and secure connections
+//   - Exposure event logging for analytics
+//
+// Only use this when you need to provide a custom state source (e.g., local file cache for testing).
 type ProviderConfigWithStateProvider struct {
 	// Required: Client secret for signing evaluations
 	ClientSecret string
@@ -75,15 +78,10 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		authServiceAddr = ConfidenceDomain
 	}
 
-	// Load WASM bytes
-	wasmBytes := config.WasmBytes
-	if wasmBytes == nil {
-		// Load from default filesystem location
-		var err error
-		wasmBytes, err = os.ReadFile("../../../wasm/confidence_resolver.wasm")
-		if err != nil {
-			return nil, fmt.Errorf("failed to load WASM module from ../../wasm/confidence_resolver.wasm: %w. Please provide WasmBytes in config or ensure WASM file exists", err)
-		}
+	// Load wasm from default filesystem location
+	wasmBytes, err := os.ReadFile("../../../wasm/confidence_resolver.wasm")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load WASM module from ../../../wasm/confidence_resolver.wasm: %w", err)
 	}
 
 	runtimeConfig := wazero.NewRuntimeConfig()
@@ -114,6 +112,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 }
 
 // NewProviderWithStateProvider creates a new Confidence OpenFeature provider with a custom StateProvider
+// Should only be used for testing purposes. Will not emit exposure logging.
 func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWithStateProvider) (*LocalResolverProvider, error) {
 	// Validate required fields
 	if config.ClientSecret == "" {

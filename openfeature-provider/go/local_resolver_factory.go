@@ -116,6 +116,8 @@ func NewLocalResolverFactory(
 		token, err := tokenHolder.GetToken(ctx)
 		if err != nil {
 			log.Printf("Warning: failed to get initial token, account name will be unknown: %v", err)
+			// TODO should we return an error here?
+			// return nil, fmt.Errorf("failed to get initial token: %w", err)
 		}
 		accountName := "unknown"
 		if token != nil {
@@ -127,9 +129,11 @@ func NewLocalResolverFactory(
 		stateProvider = stateFetcher
 
 		// Get initial state using StateProvider interface
-		initialState, err = stateFetcher.Provide(ctx)
+		initialState, err = stateProvider.Provide(ctx)
 		if err != nil {
 			log.Printf("Initial state fetch failed, using empty state: %v", err)
+			// TODO should we return an error here?
+			// return nil, fmt.Errorf("failed to get initial state: %w", err)
 		}
 		if initialState == nil {
 			initialState = []byte{}
@@ -190,10 +194,10 @@ func (f *LocalResolverFactory) startScheduledTasks(parentCtx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				// Fetch latest state using StateProvider interface
+				// Fetch latest state
 				state, err := f.stateProvider.Provide(ctx)
 				if err != nil {
-					log.Printf("State fetch from provider failed: %v", err)
+					log.Printf("State fetch failed: %v", err)
 				}
 
 				// Update state and flush logs (even if state fetch failed, use cached state)

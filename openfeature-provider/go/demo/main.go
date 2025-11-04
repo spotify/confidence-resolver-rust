@@ -73,7 +73,7 @@ func main() {
 		},
 	)
 
-	// Run 10 concurrent threads continuously for at least 20 seconds
+	// Run 20 concurrent threads continuously for at least 20 seconds
 	var wg sync.WaitGroup
 	numThreads := 20
 	runDuration := 20 * time.Second

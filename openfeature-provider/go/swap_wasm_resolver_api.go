@@ -74,7 +74,7 @@ func (s *SwapWasmResolverApi) UpdateStateAndFlushLogs(state []byte, accountId st
 	// Atomically swap to the new instance
 	oldInstance := s.currentInstance.Swap(newInstance).(*ResolverApi)
 
-	// Close the old instance
+	// Close the old instance (which flushes logs)
 	oldInstance.Close(ctx)
 	return nil
 }
