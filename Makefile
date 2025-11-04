@@ -17,7 +17,7 @@ wasm/confidence_resolver.wasm: $(TARGET_WASM)
 .PHONY: sync-wasm-go
 sync-wasm-go:
 	@echo "Building WASM with Docker to ensure correct dependencies..."
-	@docker build --target wasm-rust-guest.artifact --output type=local,dest=. .
+	@docker build --platform linux/arm64 --target wasm-rust-guest.artifact --output type=local,dest=. .
 	@echo "Copying to Go provider embedded location..."
 	@mkdir -p openfeature-provider/go/wasm
 	@cp confidence_resolver.wasm openfeature-provider/go/wasm/
