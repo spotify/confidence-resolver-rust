@@ -13,8 +13,8 @@ ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
 # - protoc/protobuf-dev: Required for prost-build (proto compilation in build.rs)
 # - musl-dev: Required for linking Rust binaries on Alpine
 RUN apk add --no-cache \
-    protobuf-dev \
-    protoc \
+    protobuf-dev=29.4-r0 \
+    protoc=29.4-r0 \
     musl-dev \
     make \
     gcc \
@@ -211,7 +211,7 @@ RUN make lint
 FROM node:20-alpine AS node-host-base
 
 # Install protoc for proto generation
-RUN apk add --no-cache protobuf-dev protoc make
+RUN apk add --no-cache protobuf-dev=29.4-r0 protoc=29.4-r0 make
 
 WORKDIR /app
 
@@ -251,7 +251,7 @@ RUN make run
 FROM eclipse-temurin:21-alpine AS java-host-base
 
 # Install Maven and protobuf
-RUN apk add --no-cache maven protobuf-dev protoc make
+RUN apk add --no-cache maven protobuf-dev=29.4-r0 protoc=29.4-r0 make
 
 WORKDIR /app
 
@@ -290,7 +290,7 @@ RUN make run
 FROM golang:1.23-alpine AS go-host-base
 
 # Install protobuf and protoc-gen-go
-RUN apk add --no-cache protobuf-dev protoc bash make git
+RUN apk add --no-cache protobuf-dev=29.4-r0 protoc=29.4-r0 bash make git
 
 WORKDIR /app
 
@@ -370,7 +370,7 @@ RUN make run
 FROM node:20-alpine AS openfeature-provider-js-base
 
 # Install protoc for proto generation
-RUN apk add --no-cache protobuf-dev protoc make
+RUN apk add --no-cache protobuf-dev=29.4-r0 protoc=29.4-r0 make
 
 WORKDIR /app
 
