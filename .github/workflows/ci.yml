@@ -35,6 +35,9 @@ jobs:
         with:
           context: .
           push: false
+          provenance: false
+          build-args: |
+            SOURCE_DATE_EPOCH=0
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           secrets: |
             "js_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}"
@@ -45,6 +48,9 @@ jobs:
         with:
           context: .
           push: false
+          provenance: false
+          build-args: |
+            SOURCE_DATE_EPOCH=0
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max
           secrets: |

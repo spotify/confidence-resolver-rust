@@ -5,6 +5,10 @@
 # ==============================================================================
 FROM alpine:3.22 AS rust-base
 
+# Accept SOURCE_DATE_EPOCH as a build arg for reproducible builds
+ARG SOURCE_DATE_EPOCH=0
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
+
 # Install system dependencies
 # - protoc/protobuf-dev: Required for prost-build (proto compilation in build.rs)
 # - musl-dev: Required for linking Rust binaries on Alpine
