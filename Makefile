@@ -13,6 +13,21 @@ wasm/confidence_resolver.wasm: $(TARGET_WASM)
 	@cp -p $(TARGET_WASM) $@
 	@echo "WASM size: $$(ls -lh $@ | awk '{print $$5}')"
 
+# Sync WASM to Go provider using Docker to ensure correct toolchain
+.PHONY: sync-wasm-go
+sync-wasm-go:
+	@echo "Building WASM with Docker to ensure correct dependencies..."
+	@docker build --target wasm-rust-guest.artifact --output type=local,dest=. .
+	@echo "Copying to Go provider embedded location..."
+	@mkdir -p openfeature-provider/go/wasm
+	@cp confidence_resolver.wasm openfeature-provider/go/wasm/
+	@rm confidence_resolver.wasm
+	@echo "✅ WASM synced to openfeature-provider/go/wasm/"
+	@echo ""
+	@echo "Don't forget to commit the change:"
+	@echo "  git add openfeature-provider/go/wasm/confidence_resolver.wasm"
+	@echo "  git commit -m 'chore: sync WASM module for Go provider'"
+
 test:
 	$(MAKE) -C confidence-resolver test
 	$(MAKE) -C wasm-msg test

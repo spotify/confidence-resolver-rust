@@ -3,7 +3,6 @@ package confidence
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/tetratelabs/wazero"
 )
@@ -78,11 +77,8 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		authServiceAddr = ConfidenceDomain
 	}
 
-	// Load wasm from default filesystem location
-	wasmBytes, err := os.ReadFile("../../../wasm/confidence_resolver.wasm")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load WASM module from ../../../wasm/confidence_resolver.wasm: %w", err)
-	}
+	// Use embedded WASM module
+	wasmBytes := defaultWasmBytes
 
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
@@ -125,15 +121,10 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 		return nil, fmt.Errorf("AccountId is required")
 	}
 
-	// Load WASM bytes
+	// Use custom WASM bytes if provided, otherwise use embedded default
 	wasmBytes := config.WasmBytes
 	if wasmBytes == nil {
-		// Load from default filesystem location
-		var err error
-		wasmBytes, err = os.ReadFile("../../../wasm/confidence_resolver.wasm")
-		if err != nil {
-			return nil, fmt.Errorf("failed to load WASM module from ../../../wasm/confidence_resolver.wasm: %w. Please provide WasmBytes in config or ensure WASM file exists", err)
-		}
+		wasmBytes = defaultWasmBytes
 	}
 
 	runtimeConfig := wazero.NewRuntimeConfig()

@@ -73,10 +73,10 @@ func main() {
 		},
 	)
 
-	// Run 20 concurrent threads continuously for at least 20 seconds
+	// Run 5 concurrent threads continuously for 5 second
 	var wg sync.WaitGroup
-	numThreads := 20
-	runDuration := 20 * time.Second
+	numThreads := 5
+	runDuration := 5 * time.Second
 
 	log.Printf("Starting %d threads to run for %v to test reload and flush...", numThreads, runDuration)
 	log.Println("")
