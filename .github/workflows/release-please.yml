@@ -91,6 +91,7 @@ jobs:
   publish-java-provider-release:
     needs: release
     runs-on: ubuntu-latest
+    environment: deployment
     if: ${{ needs.release.outputs.java_provider_release_created == 'true' }}
     steps:
       - name: Checkout release tag
