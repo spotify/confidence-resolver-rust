@@ -43,6 +43,12 @@
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
       "extra-files": ["package.json"]
+    },
+    "openfeature-provider/go": {
+      "path": "openfeature-provider/go",
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md",
+      "initial-version": "0.0.1"
     }
   }
 }

@@ -47,6 +47,7 @@ COPY wasm-msg/Cargo.toml ./wasm-msg/
 COPY wasm/rust-guest/Cargo.toml ./wasm/rust-guest/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
+COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
 
 # Copy proto files (needed by build.rs)
 COPY confidence-resolver/protos ./confidence-resolver/protos/
@@ -99,6 +100,7 @@ COPY wasm/rust-guest/ ./wasm/rust-guest/
 COPY wasm/proto/ ./wasm/proto/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
+COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
 
 # Touch files to ensure rebuild (dependencies are cached)
 RUN find . -type f -name "*.rs" -exec touch {} +
@@ -152,6 +154,7 @@ COPY wasm/rust-guest/ ./wasm/rust-guest/
 COPY wasm/proto/ ./wasm/proto/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
+COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
 
 # Copy data directory (needed by confidence-cloudflare-resolver include_str! macros)
 COPY data/ ./data/
@@ -438,6 +441,92 @@ FROM scratch AS openfeature-provider-js.artifact
 COPY --from=openfeature-provider-js.pack /app/package.tgz /package.tgz
 
 # ==============================================================================
+# OpenFeature Provider (Go) - Build and test
+# ==============================================================================
+FROM golang:1.24-alpine AS openfeature-provider-go-base
+
+# Install make (needed for Makefile targets)
+RUN apk add --no-cache make
+
+WORKDIR /app
+
+# Copy go.mod for dependency caching
+COPY openfeature-provider/go/go.mod openfeature-provider/go/go.sum ./
+COPY openfeature-provider/go/Makefile ./
+
+# Download Go dependencies (this layer will be cached)
+RUN go mod download
+
+# Copy pre-generated protobuf files
+COPY openfeature-provider/go/proto ./proto/
+
+# Copy WASM module to embedded location
+COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ./wasm/confidence_resolver.wasm
+
+# Set environment variable
+ENV IN_DOCKER_BUILD=1
+
+# Copy source code
+COPY openfeature-provider/go/*.go ./
+
+# ==============================================================================
+# Validate WASM sync for Go Provider
+# ==============================================================================
+FROM alpine:3.22 AS openfeature-provider-go.validate-wasm
+
+# Install diffutils for cmp command
+RUN apk add --no-cache diffutils
+
+# Copy built WASM from artifact
+COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm /built/confidence_resolver.wasm
+
+# Copy committed WASM from source
+COPY openfeature-provider/go/wasm/confidence_resolver.wasm /committed/confidence_resolver.wasm
+
+# Compare files
+RUN set -e; \
+    echo "Validating WASM sync for Go provider..."; \
+    if ! cmp -s /built/confidence_resolver.wasm /committed/confidence_resolver.wasm; then \
+      echo ""; \
+      echo "❌ ERROR: WASM files are out of sync!"; \
+      echo ""; \
+      echo "The WASM file in openfeature-provider/go/wasm/ doesn't match the built version."; \
+      echo ""; \
+      echo "To fix (using Docker to ensure correct dependencies):"; \
+      echo "  docker build --target wasm-rust-guest.artifact --output type=local,dest=. ."; \
+      echo "  cp confidence_resolver.wasm openfeature-provider/go/wasm/"; \
+      echo "  git add openfeature-provider/go/wasm/confidence_resolver.wasm"; \
+      echo "  git commit -m 'chore: sync WASM module for Go provider'"; \
+      echo ""; \
+      echo "Or use the Makefile target:"; \
+      echo "  make sync-wasm-go"; \
+      echo ""; \
+      exit 1; \
+    fi; \
+    echo "✅ WASM files are in sync"
+
+# ==============================================================================
+# Test OpenFeature Provider (Go)
+# ==============================================================================
+FROM openfeature-provider-go-base AS openfeature-provider-go.test
+
+RUN make test
+
+# ==============================================================================
+# Lint OpenFeature Provider (Go)
+# ==============================================================================
+FROM openfeature-provider-go-base AS openfeature-provider-go.lint
+
+RUN make lint
+
+# ==============================================================================
+# Build OpenFeature Provider (Go)
+# ==============================================================================
+FROM openfeature-provider-go-base AS openfeature-provider-go.build
+
+RUN make build
+
+# ==============================================================================
 # OpenFeature Provider (Java) - Build and test
 # ==============================================================================
 FROM eclipse-temurin:17-jdk AS openfeature-provider-java-base
@@ -511,6 +600,10 @@ COPY --from=wasm-msg.test /workspace/Cargo.toml /markers/test-wasm-msg
 COPY --from=openfeature-provider-js.test /app/package.json /markers/test-openfeature-js
 COPY --from=openfeature-provider-js.test_e2e /app/package.json /markers/test-openfeature-js-e2e
 COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeature-java
+COPY --from=openfeature-provider-go.test /app/go.mod /markers/test-openfeature-go
+
+# Force validation stages to run
+COPY --from=openfeature-provider-go.validate-wasm /built/confidence_resolver.wasm /markers/validate-wasm-go
 
 # Force integration test stages to run (host examples)
 COPY --from=node-host.test /app/package.json /markers/integration-node
@@ -518,12 +611,14 @@ COPY --from=java-host.test /app/pom.xml /markers/integration-java
 COPY --from=go-host.test /app/go.mod /markers/integration-go
 COPY --from=python-host.test /app/Makefile /markers/integration-python
 
-# Force lint stages to run by copying marker files  
+# Force lint stages to run by copying marker files
 COPY --from=confidence-resolver.lint /workspace/Cargo.toml /markers/lint-resolver
 COPY --from=wasm-msg.lint /workspace/Cargo.toml /markers/lint-wasm-msg
 COPY --from=wasm-rust-guest.lint /workspace/Cargo.toml /markers/lint-guest
+COPY --from=openfeature-provider-go.lint /app/go.mod /markers/lint-openfeature-go
+COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
 
 # Force build stages to run
 COPY --from=openfeature-provider-js.build /app/dist/index.node.js /artifacts/openfeature-js/
 COPY --from=openfeature-provider-java.build /app/target/*.jar /artifacts/openfeature-java/
-COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
+COPY --from=openfeature-provider-go.build /app/.build.stamp /artifacts/openfeature-go/

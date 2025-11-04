@@ -13,7 +13,7 @@ permissions:
 jobs:
   ci:
     name: Build & Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +34,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/arm64
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           secrets: |
@@ -44,6 +45,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/arm64
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max
