@@ -32,7 +32,7 @@ class FlagsAdminStateFetcher {
   private final AtomicReference<ResolverStateUriResponse> resolverStateUriResponse =
       new AtomicReference<>();
   private final AtomicReference<Instant> refreshTimeHolder = new AtomicReference<>();
-  String accountId;
+  String accountId = "";
 
   public FlagsAdminStateFetcher(
       ResolverStateServiceGrpc.ResolverStateServiceBlockingStub resolverStateService,

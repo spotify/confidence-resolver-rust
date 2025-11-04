@@ -63,6 +63,8 @@ class LocalResolverServiceFactory implements ResolverServiceFactory {
     final HealthStatus healthStatus = new HealthStatus(healthStatusManager);
     final FlagsAdminStateFetcher sidecarFlagsAdminFetcher =
         new FlagsAdminStateFetcher(resolverStateService, healthStatus, token.account());
+    // Perform initial reload to fetch state and set accountId before creating resolver
+    sidecarFlagsAdminFetcher.reload();
     final long pollIntervalSeconds = getPollIntervalSeconds();
     final var wasmFlagLogger = new GrpcWasmFlagLogger(apiSecret);
     final ResolverApi wasmResolverApi =
