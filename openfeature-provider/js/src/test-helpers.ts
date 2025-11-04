@@ -7,10 +7,6 @@ import { ResolveFlagsResponse } from "./proto/api";
 type PayloadFactory = (req:Request) => BodyInit | null
 type ByteStream = ReadableStream<Uint8Array<ArrayBuffer>>;
 
-const TOKEN_URL = 'https://iam.confidence.dev/v1/oauth/token';
-const LOGS_URL = 'https://resolver.confidence.dev/v1/flagLogs:write';
-const STATE_URI_URL = 'https://flags.confidence.dev/v1/resolverState:resolverStateUri';
-const STATE_URL = 'https://storage.googleapis.com/stateBucket';
 
 type RequestRecord = {
   startTime: number,
@@ -139,23 +135,11 @@ class IamServerMock extends ServerMock {
   }
 }
 
-class FlagsServerMock extends ServerMock {
-
-  readonly stateUri: EndpointMock;
-
-  constructor() {
-    const stateUri = new EndpointMock(() => JSON.stringify({
-      signedUri: STATE_URL,
-      account: '<account>'
-    } satisfies ResolveStateUri));
-    super({'/v1/resolverState:resolverStateUri': stateUri })
-    this.stateUri = stateUri;
-  }
-}
 class ResolverServerMock extends ServerMock {
 
   readonly flagLogs: EndpointMock
   readonly flagsResolve: EndpointMock
+  readonly stateUri: EndpointMock;
 
   constructor() {
     const flagLogs = new EndpointMock();
@@ -164,12 +148,18 @@ class ResolverServerMock extends ServerMock {
       resolveToken: new Uint8Array(),
       resolveId: 'resolve-default'
     } satisfies ResolveFlagsResponse));
+    const stateUri = new EndpointMock(() => JSON.stringify({
+      signedUri: 'https://storage.googleapis.com/stateBucket',
+      account: '<account>'
+    } satisfies ResolveStateUri));
     super({
       '/v1/flagLogs:write': flagLogs,
-      '/v1/flags:resolve': flagsResolve
+      '/v1/flags:resolve': flagsResolve,
+      '/v1/resolverState:resolverStateUri': stateUri,
     })
     this.flagLogs = flagLogs;
     this.flagsResolve = flagsResolve;
+    this.stateUri = stateUri;
   }
 }
 
@@ -188,13 +178,11 @@ class GcsServerMock extends ServerMock {
 export class NetworkMock extends RequestDispatcher<ServerMock> {
 
   readonly iam: IamServerMock;
-  readonly flags: FlagsServerMock;
   readonly resolver: ResolverServerMock;
   readonly gcs: GcsServerMock;
 
   constructor() {
     const iam = new IamServerMock();
-    const flags = new FlagsServerMock();
     const resolver = new ResolverServerMock();
     const gcs = new GcsServerMock();
 
@@ -202,12 +190,10 @@ export class NetworkMock extends RequestDispatcher<ServerMock> {
       req => new URL(req.url).hostname, 
       {
         'iam.confidence.dev': iam,
-        'flags.confidence.dev': flags,
         'resolver.confidence.dev': resolver,
         'storage.googleapis.com': gcs,
       });
     this.iam = iam;
-    this.flags = flags;
     this.resolver = resolver;
     this.gcs = gcs;
   }

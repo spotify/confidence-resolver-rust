@@ -81,7 +81,7 @@ export class ConfidenceServerProviderLocal implements Provider {
           }),
           withStallTimeout(500)
         ],
-        'https://flags.confidence.dev/*|https://resolver.confidence.dev/*':[
+        'https://resolver.confidence.dev/*':[
           withConfidenceAuth,
           withRouter({
             '*/v1/resolverState:resolverStateUri':[
@@ -288,7 +288,7 @@ export class ConfidenceServerProviderLocal implements Provider {
   }
 
   private async fetchResolveStateUri(signal?: AbortSignal):Promise<ResolveStateUri> {
-    const resp = await this.fetch('https://flags.confidence.dev/v1/resolverState:resolverStateUri', { signal });
+    const resp = await this.fetch('https://resolver.confidence.dev/v1/resolverState:resolverStateUri', { signal });
     if(!resp.ok) {
       throw new Error('Failed to get resolve state url');
     }
