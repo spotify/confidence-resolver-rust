@@ -568,6 +568,15 @@ FROM openfeature-provider-java-base AS openfeature-provider-java.test
 RUN make test
 
 # ==============================================================================
+# E2E Test OpenFeature Provider (Java) (requires credentials)
+# ==============================================================================
+FROM openfeature-provider-java.test AS openfeature-provider-java.test_e2e
+
+# Run e2e tests with secrets mounted as .env.test file
+RUN --mount=type=secret,id=java_e2e_test_env,target=.env.test \
+    make test-e2e
+
+# ==============================================================================
 # Build OpenFeature Provider (Java)
 # ==============================================================================
 FROM openfeature-provider-java-base AS openfeature-provider-java.build
@@ -600,6 +609,7 @@ COPY --from=wasm-msg.test /workspace/Cargo.toml /markers/test-wasm-msg
 COPY --from=openfeature-provider-js.test /app/package.json /markers/test-openfeature-js
 COPY --from=openfeature-provider-js.test_e2e /app/package.json /markers/test-openfeature-js-e2e
 COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeature-java
+COPY --from=openfeature-provider-java.test_e2e /app/pom.xml /markers/test-openfeature-java-e2e
 COPY --from=openfeature-provider-go.test /app/go.mod /markers/test-openfeature-go
 
 # Force validation stages to run
