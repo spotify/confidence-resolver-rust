@@ -34,11 +34,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
-          provenance: false
           platforms: linux/arm64
-          build-args: |
-            SOURCE_DATE_EPOCH=0
+          push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           secrets: |
             "js_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}"
@@ -48,11 +45,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
-          provenance: false
           platforms: linux/arm64
-          build-args: |
-            SOURCE_DATE_EPOCH=0
+          push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max
           secrets: |
