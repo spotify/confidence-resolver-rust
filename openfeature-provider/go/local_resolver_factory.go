@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	defaultPollIntervalSeconds = 300 // 5 minutes - aligned with Java implementation
-	defaultPollLogInterval     = 10  // 10 seconds
+	defaultPollIntervalSeconds = 10
 )
 
 // StateProvider is an interface for providing resolver state
@@ -33,7 +32,6 @@ type LocalResolverFactory struct {
 	accountId       string
 	flagLogger      WasmFlagLogger
 	cancelFunc      context.CancelFunc
-	pollInterval    time.Duration
 	logPollInterval time.Duration
 }
 
@@ -53,9 +51,7 @@ func NewLocalResolverFactory(
 	customStateProvider StateProvider,
 	accountId string,
 ) (*LocalResolverFactory, error) {
-	// Get poll interval from environment or use default
-	pollInterval := getPollIntervalSeconds()
-	logPollInterval := time.Duration(defaultPollLogInterval) * time.Second
+	logPollInterval := getPollIntervalSeconds()
 
 	var flagLogger WasmFlagLogger
 	var initialState []byte
@@ -171,7 +167,6 @@ func NewLocalResolverFactory(
 		stateProvider:   stateProvider,
 		accountId:       resolvedAccountId,
 		flagLogger:      flagLogger,
-		pollInterval:    pollInterval,
 		logPollInterval: logPollInterval,
 	}
 
