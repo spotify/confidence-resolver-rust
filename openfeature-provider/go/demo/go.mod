@@ -21,4 +21,4 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
-replace github.com/spotify/confidence-resolver/openfeature-provider/go/confidence => ../
+replace github.com/spotify/confidence-resolver/openfeature-provider/go/confidence => ../confidence
