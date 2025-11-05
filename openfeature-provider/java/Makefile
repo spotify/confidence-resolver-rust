@@ -9,7 +9,7 @@ SRC := $(shell find src -name '*.java' 2>/dev/null)
 RESOURCES_WASM := src/main/resources/wasm/confidence_resolver.wasm
 LOCAL_WASM := $(ROOT)/wasm/confidence_resolver.wasm
 
-.PHONY: build test clean
+.PHONY: build test test-e2e clean
 
 # Always build wasm if not in docker
 ifneq ($(IN_DOCKER_BUILD),1)
@@ -30,7 +30,17 @@ $(BUILD_STAMP): pom.xml $(RESOURCES_WASM) $(SRC)
 build: $(BUILD_STAMP)
 
 test: $(BUILD_STAMP)
-	mvn -q test
+	mvn -q test -Dtest='!**/*E2ETest'
+
+test-e2e: $(BUILD_STAMP)
+	@if [ ! -f .env.test ]; then \
+		echo "Warning: .env.test file not found. E2E tests may fail."; \
+	fi
+	@if [ -f .env.test ]; then \
+		export $$(cat .env.test | xargs) && mvn -q test -Dtest='**/*E2ETest'; \
+	else \
+		mvn -q test -Dtest='**/*E2ETest'; \
+	fi
 
 clean:
 	mvn -q clean

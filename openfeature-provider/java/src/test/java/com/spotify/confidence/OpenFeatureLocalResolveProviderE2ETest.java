@@ -1,0 +1,142 @@
+package com.spotify.confidence;
+
+import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import dev.openfeature.sdk.Client;
+import dev.openfeature.sdk.EvaluationContext;
+import dev.openfeature.sdk.FlagEvaluationDetails;
+import dev.openfeature.sdk.MutableContext;
+import dev.openfeature.sdk.OpenFeatureAPI;
+import dev.openfeature.sdk.Value;
+import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+/**
+ * End-to-end tests for OpenFeatureLocalResolveProvider.
+ *
+ * <p>These tests verify the provider against real Confidence service flags. They require valid API
+ * credentials to be set as environment variables.
+ *
+ * <p>Required environment variables:
+ *
+ * <ul>
+ *   <li>JAVA_E2E_CONFIDENCE_API_CLIENT_ID - API client ID for authentication
+ *   <li>JAVA_E2E_CONFIDENCE_API_CLIENT_SECRET - API client secret for authentication
+ * </ul>
+ */
+class OpenFeatureLocalResolveProviderE2ETest {
+  private static final String FLAG_CLIENT_SECRET = "RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV";
+  private static OpenFeatureLocalResolveProvider provider;
+  private static Client client;
+
+  @BeforeAll
+  static void setup() {
+    final String apiClientId = requireEnv("JS_E2E_CONFIDENCE_API_CLIENT_ID");
+    final String apiClientSecret = requireEnv("JS_E2E_CONFIDENCE_API_CLIENT_SECRET");
+
+    final ApiSecret apiSecret = new ApiSecret(apiClientId, apiClientSecret);
+
+    provider = new OpenFeatureLocalResolveProvider(apiSecret, FLAG_CLIENT_SECRET);
+
+    final OpenFeatureAPI api = OpenFeatureAPI.getInstance();
+    api.setProviderAndWait(provider);
+
+    // Set evaluation context with targeting key
+    final EvaluationContext context = new MutableContext("test-a");
+    api.setEvaluationContext(context);
+
+    client = api.getClient();
+  }
+
+  @AfterAll
+  static void teardown() {
+    if (provider != null) {
+      provider.shutdown();
+    }
+    OpenFeatureAPI.getInstance().shutdown();
+  }
+
+  @Test
+  void shouldResolveBoolean() {
+    final boolean value = client.getBooleanValue("web-sdk-e2e-flag.bool", true);
+    assertThat(value).isFalse();
+  }
+
+  @Test
+  void shouldResolveInt() {
+    final int value = client.getIntegerValue("web-sdk-e2e-flag.int", 10);
+    assertEquals(3, value);
+  }
+
+  @Test
+  void shouldResolveDouble() {
+    final double value = client.getDoubleValue("web-sdk-e2e-flag.double", 10.0);
+    assertEquals(3.5, value, 0.001);
+  }
+
+  @Test
+  void shouldResolveString() {
+    final String value = client.getStringValue("web-sdk-e2e-flag.str", "default");
+    assertEquals("control", value);
+  }
+
+  @Test
+  void shouldResolveStruct() {
+    final Value value = client.getObjectValue("web-sdk-e2e-flag.obj", new Value());
+
+    assertThat(value.isStructure()).isTrue();
+    final Map<String, Value> struct = value.asStructure().asMap();
+
+    assertEquals(4, struct.get("int").asInteger());
+    assertEquals("obj control", struct.get("str").asString());
+    assertThat(struct.get("bool").asBoolean()).isFalse();
+    assertEquals(3.6, struct.get("double").asDouble(), 0.001);
+    assertThat(struct.get("obj-obj").asStructure().asMap()).isEmpty();
+  }
+
+  @Test
+  void shouldResolveSubValueFromStruct() {
+    final boolean value = client.getBooleanValue("web-sdk-e2e-flag.obj.bool", true);
+    assertThat(value).isFalse();
+  }
+
+  @Test
+  void shouldResolveSubValueFromStructWithDetails() {
+    final FlagEvaluationDetails<Double> details =
+        client.getDoubleDetails("web-sdk-e2e-flag.obj.double", 1.0);
+
+    assertEquals(3.6, details.getValue(), 0.001);
+    assertEquals("flags/web-sdk-e2e-flag/variants/control", details.getVariant());
+    assertEquals("RESOLVE_REASON_MATCH", details.getReason());
+  }
+
+  @Test
+  void shouldResolveFlagWithStickyResolve() {
+    final EvaluationContext stickyContext =
+        new MutableContext("test-a")
+            .add("sticky", true);
+
+    final FlagEvaluationDetails<Double> details =
+        client.getDoubleDetails("web-sdk-e2e-flag.double", -1.0, stickyContext);
+
+    // The flag has a running experiment with a sticky assignment. The intake is paused but we
+    // should still get the sticky assignment.
+    // If this test breaks it could mean that the experiment was removed or that the bigtable
+    // materialization was cleaned out.
+    assertEquals(99.99, details.getValue(), 0.001);
+    assertEquals("flags/web-sdk-e2e-flag/variants/sticky", details.getVariant());
+    assertEquals("RESOLVE_REASON_MATCH", details.getReason());
+  }
+
+  private static String requireEnv(String name) {
+    final String value = System.getenv(name);
+    if (value == null || value.isEmpty()) {
+      throw new IllegalStateException(
+          String.format("Missing required environment variable: %s", name));
+    }
+    return value;
+  }
+}
