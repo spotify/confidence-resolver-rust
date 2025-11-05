@@ -24,6 +24,7 @@ describe('ConfidenceServerProvider E2E tests', () => {
     await OpenFeature.setProviderAndWait(confidenceProvider);
     OpenFeature.setContext({
       targetingKey: 'test-a', // control
+      sticky: false,
     });
   });
 
