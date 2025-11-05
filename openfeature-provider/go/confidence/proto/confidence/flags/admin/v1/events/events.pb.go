@@ -7,8 +7,8 @@
 package events
 
 import (
-	_ "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/events/v1"
-	v1 "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
+	_ "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/events/v1"
+	v1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

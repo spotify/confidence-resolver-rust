@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
-	"github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence"
+	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence"
 )
 
 func main() {

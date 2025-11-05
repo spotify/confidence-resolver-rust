@@ -62,7 +62,7 @@
   "packageManager": "yarn@4.6.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/spotify/confidence-resolver-rust",
+    "url": "https://github.com/spotify/confidence-resolver",
     "directory": "openfeature-provider/js"
   },
   "license": "Apache-2.0",
@@ -76,7 +76,7 @@
   ],
   "author": "Spotify",
   "bugs": {
-    "url": "https://github.com/spotify/confidence-resolver-rust/issues"
+    "url": "https://github.com/spotify/confidence-resolver/issues"
   },
-  "homepage": "https://github.com/spotify/confidence-resolver-rust?tab=readme-ov-file#confidence-rust-flags-resolver"
+  "homepage": "https://github.com/spotify/confidence-resolver?tab=readme-ov-file#confidence-rust-flags-resolver"
 }
