@@ -450,24 +450,26 @@ RUN apk add --no-cache make
 
 WORKDIR /app
 
-# Copy go.mod for dependency caching
-COPY openfeature-provider/go/go.mod openfeature-provider/go/go.sum ./
+# Copy Makefile (at top level of go provider)
 COPY openfeature-provider/go/Makefile ./
 
+# Copy go.mod for dependency caching from confidence/ subdirectory
+COPY openfeature-provider/go/confidence/go.mod openfeature-provider/go/confidence/go.sum ./confidence/
+
 # Download Go dependencies (this layer will be cached)
-RUN go mod download
+RUN cd confidence && go mod download
 
 # Copy pre-generated protobuf files
-COPY openfeature-provider/go/proto ./proto/
+COPY openfeature-provider/go/confidence/proto ./confidence/proto/
 
 # Copy WASM module to embedded location
-COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ./wasm/confidence_resolver.wasm
+COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ./confidence/wasm/confidence_resolver.wasm
 
 # Set environment variable
 ENV IN_DOCKER_BUILD=1
 
 # Copy source code
-COPY openfeature-provider/go/*.go ./
+COPY openfeature-provider/go/confidence/*.go ./confidence/
 
 # ==============================================================================
 # Validate WASM sync for Go Provider
@@ -481,7 +483,7 @@ RUN apk add --no-cache diffutils
 COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm /built/confidence_resolver.wasm
 
 # Copy committed WASM from source
-COPY openfeature-provider/go/wasm/confidence_resolver.wasm /committed/confidence_resolver.wasm
+COPY openfeature-provider/go/confidence/wasm/confidence_resolver.wasm /committed/confidence_resolver.wasm
 
 # Compare files
 RUN set -e; \
@@ -490,12 +492,12 @@ RUN set -e; \
       echo ""; \
       echo "❌ ERROR: WASM files are out of sync!"; \
       echo ""; \
-      echo "The WASM file in openfeature-provider/go/wasm/ doesn't match the built version."; \
+      echo "The WASM file in openfeature-provider/go/confidence/wasm/ doesn't match the built version."; \
       echo ""; \
       echo "To fix (using Docker to ensure correct dependencies):"; \
       echo "  docker build --target wasm-rust-guest.artifact --output type=local,dest=. ."; \
-      echo "  cp confidence_resolver.wasm openfeature-provider/go/wasm/"; \
-      echo "  git add openfeature-provider/go/wasm/confidence_resolver.wasm"; \
+      echo "  cp confidence_resolver.wasm openfeature-provider/go/confidence/wasm/"; \
+      echo "  git add openfeature-provider/go/confidence/wasm/confidence_resolver.wasm"; \
       echo "  git commit -m 'chore: sync WASM module for Go provider'"; \
       echo ""; \
       echo "Or use the Makefile target:"; \
@@ -610,7 +612,7 @@ COPY --from=openfeature-provider-js.test /app/package.json /markers/test-openfea
 COPY --from=openfeature-provider-js.test_e2e /app/package.json /markers/test-openfeature-js-e2e
 COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeature-java
 COPY --from=openfeature-provider-java.test_e2e /app/pom.xml /markers/test-openfeature-java-e2e
-COPY --from=openfeature-provider-go.test /app/go.mod /markers/test-openfeature-go
+COPY --from=openfeature-provider-go.test /app/confidence/go.mod /markers/test-openfeature-go
 
 # Force validation stages to run
 COPY --from=openfeature-provider-go.validate-wasm /built/confidence_resolver.wasm /markers/validate-wasm-go
@@ -625,7 +627,7 @@ COPY --from=python-host.test /app/Makefile /markers/integration-python
 COPY --from=confidence-resolver.lint /workspace/Cargo.toml /markers/lint-resolver
 COPY --from=wasm-msg.lint /workspace/Cargo.toml /markers/lint-wasm-msg
 COPY --from=wasm-rust-guest.lint /workspace/Cargo.toml /markers/lint-guest
-COPY --from=openfeature-provider-go.lint /app/go.mod /markers/lint-openfeature-go
+COPY --from=openfeature-provider-go.lint /app/confidence/go.mod /markers/lint-openfeature-go
 COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
 
 # Force build stages to run
