@@ -299,7 +299,14 @@ func (p *LocalResolverProvider) Hooks() []openfeature.Hook {
 	return []openfeature.Hook{}
 }
 
-// Shutdown closes the provider and cleans up resources
+// Init initializes the provider (part of StateHandler interface)
+func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationContext) error {
+	// Provider is already initialized in NewProvider, nothing to do here
+	// TODO move the bulk of the initialization to this place.
+	return nil
+}
+
+// Shutdown closes the provider and cleans up resources (part of StateHandler interface)
 func (p *LocalResolverProvider) Shutdown() {
 	if p.factory != nil {
 		p.factory.Shutdown(context.Background())
