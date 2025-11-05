@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
-	resolvertypes "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
+	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
 )
 
 func TestLocalResolverProvider_ReasonMapping(t *testing.T) {
