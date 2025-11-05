@@ -123,31 +123,81 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	}
 	defer swap.Close(ctx)
 
-	// Try to resolve a flag with the real state
-	// Note: We need a valid client secret from the state
+	// Resolve the tutorial-feature flag using the real client secret from the state
+	// The state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
+	// Use "tutorial_visitor" as the visitor_id to match the segment targeting
 	request := &resolver.ResolveFlagsRequest{
-		Flags:        []string{"flags/test-flag"},
+		Flags:        []string{"flags/tutorial-feature"},
 		Apply:        false,
-		ClientSecret: "CLIENT_SECRET", // This needs to match a credential in the state
+		ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
 		EvaluationContext: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-				"targeting_key": structpb.NewStringValue("user-123"),
+				"visitor_id": structpb.NewStringValue("tutorial_visitor"),
 			},
 		},
 	}
 
 	response, err := swap.Resolve(request)
-	// It's ok if resolution fails due to client secret mismatch or missing flags
-	// The important part is that the WASM module loaded, state was set, and didn't crash
 	if err != nil {
-		t.Logf("Resolve returned error (expected with CLIENT_SECRET placeholder): %v", err)
-		// When there's an error from WASM, response may be nil
-		return
+		t.Fatalf("Unexpected error resolving tutorial-feature flag: %v", err)
 	}
 
-	if response != nil {
-		t.Logf("Successfully resolved with real state, got %d flags", len(response.ResolvedFlags))
+	if response == nil {
+		t.Fatal("Expected non-nil response")
 	}
+
+	if len(response.ResolvedFlags) != 1 {
+		t.Fatalf("Expected 1 resolved flag, got %d", len(response.ResolvedFlags))
+	}
+
+	resolvedFlag := response.ResolvedFlags[0]
+
+	// Verify the exact flag name
+	if resolvedFlag.Flag != "flags/tutorial-feature" {
+		t.Errorf("Expected flag 'flags/tutorial-feature', got '%s'", resolvedFlag.Flag)
+	}
+
+	// Verify the exact variant
+	// The tutorial-visitor segment should resolve to the exciting-welcome variant
+	expectedVariant := "flags/tutorial-feature/variants/exciting-welcome"
+	if resolvedFlag.Variant != expectedVariant {
+		t.Errorf("Expected variant '%s', got '%s'", expectedVariant, resolvedFlag.Variant)
+	}
+
+	// Verify the reason is MATCH (successful targeting match)
+	if resolvedFlag.Reason.String() != "RESOLVE_REASON_MATCH" {
+		t.Errorf("Expected reason RESOLVE_REASON_MATCH, got %v", resolvedFlag.Reason)
+	}
+
+	// Verify the resolved value has the expected structure and content
+	if resolvedFlag.Value == nil {
+		t.Fatal("Expected non-nil value in resolved flag")
+	}
+
+	fields := resolvedFlag.Value.GetFields()
+	if fields == nil {
+		t.Fatal("Expected fields in resolved value")
+	}
+
+	// Verify the exact message value from the exciting-welcome variant
+	expectedMessage := "We are very excited to welcome you to Confidence! This is a message from the tutorial flag."
+	messageValue, hasMessage := fields["message"]
+	if !hasMessage {
+		t.Error("Expected 'message' field in resolved value")
+	} else if messageValue.GetStringValue() != expectedMessage {
+		t.Errorf("Expected message '%s', got '%s'", expectedMessage, messageValue.GetStringValue())
+	}
+
+	// Verify the exact title value from the exciting-welcome variant
+	expectedTitle := "Welcome to Confidence!"
+	titleValue, hasTitle := fields["title"]
+	if !hasTitle {
+		t.Error("Expected 'title' field in resolved value")
+	} else if titleValue.GetStringValue() != expectedTitle {
+		t.Errorf("Expected title '%s', got '%s'", expectedTitle, titleValue.GetStringValue())
+	}
+
+	t.Logf("✓ Successfully resolved flag with correct variant and values")
 }
 
 func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
@@ -156,8 +206,10 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	defer runtime.Close(ctx)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	initialState := createMinimalResolverState()
-	accountId := "test-account"
+
+	// Load real test state
+	initialState := loadTestResolverState(t)
+	accountId := loadTestAccountID(t)
 
 	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, initialState, accountId)
 	if err != nil {
@@ -165,30 +217,40 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	}
 	defer swap.Close(ctx)
 
-	// Update with new state
-	newState := createMinimalResolverState()
+	// Update with new state - the key test is that UpdateStateAndFlushLogs succeeds
+	newState := loadTestResolverState(t)
 	err = swap.UpdateStateAndFlushLogs(newState, accountId)
 	if err != nil {
 		t.Fatalf("UpdateStateAndFlushLogs failed: %v", err)
 	}
 
-	// Verify that we can call Resolve after update (even if it returns an error due to client secret)
+	// Verify that we can successfully resolve after the state update
 	request := &resolver.ResolveFlagsRequest{
-		Flags:        []string{"flags/test-flag"},
+		Flags:        []string{"flags/tutorial-feature"},
 		Apply:        false,
-		ClientSecret: "test-secret",
+		ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
 		EvaluationContext: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-				"targeting_key": structpb.NewStringValue("user-123"),
+				"visitor_id": structpb.NewStringValue("tutorial_visitor"),
 			},
 		},
 	}
 
-	// Call Resolve - it may fail due to client secret not being in state, which is OK
-	_, err = swap.Resolve(request)
-	// The key point is that UpdateStateAndFlushLogs completed and the swap happened
-	// Resolution errors are expected with minimal test state
-	t.Logf("Resolve after update result: %v", err)
+	response, err := swap.Resolve(request)
+	if err != nil {
+		t.Fatalf("Resolve failed after update: %v", err)
+	}
+
+	// Verify we got the expected resolution
+	if len(response.ResolvedFlags) != 1 {
+		t.Errorf("Expected 1 resolved flag, got %d", len(response.ResolvedFlags))
+	}
+
+	if response.ResolvedFlags[0].Variant != "flags/tutorial-feature/variants/exciting-welcome" {
+		t.Errorf("Expected exciting-welcome variant, got %s", response.ResolvedFlags[0].Variant)
+	}
+
+	t.Logf("✓ State update successful and flag resolution works correctly")
 }
 
 func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
@@ -197,8 +259,10 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 	defer runtime.Close(ctx)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	initialState := createMinimalResolverState()
-	accountId := "test-account"
+
+	// Load real test state
+	initialState := loadTestResolverState(t)
+	accountId := loadTestAccountID(t)
 
 	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, initialState, accountId)
 	if err != nil {
@@ -208,28 +272,37 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 
 	// Perform multiple state updates to verify the swap mechanism works correctly
 	for i := 0; i < 3; i++ {
-		newState := createMinimalResolverState()
+		newState := loadTestResolverState(t)
 		err := swap.UpdateStateAndFlushLogs(newState, accountId)
 		if err != nil {
 			t.Fatalf("Update %d failed: %v", i, err)
 		}
 
-		// Verify that Resolve can be called after each update
+		// Verify that Resolve successfully works after each update
 		request := &resolver.ResolveFlagsRequest{
-			Flags:        []string{"flags/test-flag"},
+			Flags:        []string{"flags/tutorial-feature"},
 			Apply:        false,
-			ClientSecret: "test-secret",
+			ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
 			EvaluationContext: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					"targeting_key": structpb.NewStringValue("user-123"),
+					"visitor_id": structpb.NewStringValue("tutorial_visitor"),
 				},
 			},
 		}
 
-		// The key verification is that the swap completed successfully
-		// Resolution may fail with minimal test state, which is expected
-		_, resolveErr := swap.Resolve(request)
-		t.Logf("Update %d: Resolve result: %v", i, resolveErr)
+		response, resolveErr := swap.Resolve(request)
+		if resolveErr != nil {
+			t.Fatalf("Update %d: Resolve failed: %v", i, resolveErr)
+		}
+
+		// Verify we got the expected variant after each swap
+		if len(response.ResolvedFlags) != 1 {
+			t.Errorf("Update %d: Expected 1 resolved flag, got %d", i, len(response.ResolvedFlags))
+		} else if response.ResolvedFlags[0].Variant != "flags/tutorial-feature/variants/exciting-welcome" {
+			t.Errorf("Update %d: Expected exciting-welcome variant, got %s", i, response.ResolvedFlags[0].Variant)
+		}
+
+		t.Logf("Update %d: ✓ Swap successful, flag resolves correctly", i)
 	}
 }
 
