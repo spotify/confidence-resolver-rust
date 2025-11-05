@@ -5,11 +5,11 @@ ROOT := $(realpath $(CURDIR)/../..)
 
 # Stamps and directories
 BUILD_STAMP := .build.stamp
-PROTO_DIR := proto
+PROTO_DIR := confidence/proto
 WASM_ARTIFACT := $(ROOT)/wasm/confidence_resolver.wasm
 
 # Source files
-GO_SRC := $(shell find . -name '*.go' -not -path './proto/*' -not -path './demo/*')
+GO_SRC := $(shell find confidence -name '*.go' -not -path './confidence/proto/*')
 PROTO_GEN := $(shell find $(PROTO_DIR) -name '*.pb.go' 2>/dev/null)
 
 .PHONY: install build test lint clean proto
@@ -24,36 +24,36 @@ endif
 
 # Install Go dependencies
 install:
-	go mod download
-	go mod verify
+	cd confidence && go mod download
+	cd confidence && go mod verify
 
 # Generate protobuf files
 proto:
 	./scripts/generate_proto.sh
 
 # Build (compile check)
-$(BUILD_STAMP): go.mod go.sum $(GO_SRC) $(PROTO_GEN)
-	go build ./...
+$(BUILD_STAMP): confidence/go.mod confidence/go.sum $(GO_SRC) $(PROTO_GEN)
+	cd confidence && go build ./...
 	@touch $@
 
 build: $(BUILD_STAMP)
 
 # Run tests
 test: $(BUILD_STAMP)
-	go test -v ./...
+	cd confidence && go test -v ./...
 
 # Lint using gofmt and go vet
 lint:
 	@echo "Checking gofmt..."
-	@test -z "$$(gofmt -l . | grep -v '^proto/' | tee /dev/stderr)" || (echo "Files need formatting. Run: gofmt -w ." && exit 1)
+	@test -z "$$(cd confidence && gofmt -l . | grep -v '^proto/' | tee /dev/stderr)" || (echo "Files need formatting. Run: cd confidence && gofmt -w ." && exit 1)
 	@echo "Running go vet..."
-	@go vet ./...
+	@cd confidence && go vet ./...
 	@echo "✅ Lint passed"
 
 # Clean build artifacts
 clean:
 	rm -rf $(PROTO_DIR)
 	rm -f $(BUILD_STAMP)
-	go clean -cache -testcache -modcache
+	cd confidence && go clean -cache -testcache -modcache
 
 .DEFAULT_GOAL := build
