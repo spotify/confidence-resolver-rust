@@ -393,42 +393,6 @@ func TestFlattenedContextToProto_InvalidValue(t *testing.T) {
 	}
 }
 
-func TestLocalResolverProvider_BooleanEvaluation_TypeMismatch(t *testing.T) {
-	// This would require setting up a full mock resolver which is complex
-	// For now, we test the type conversion logic
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret")
-
-	// The actual evaluation would need a working resolver
-	// but we can verify the provider structure is correct
-	if provider == nil {
-		t.Fatal("Expected provider to be created")
-	}
-}
-
-func TestLocalResolverProvider_StringEvaluation_TypeMismatch(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret")
-
-	if provider == nil {
-		t.Fatal("Expected provider to be created")
-	}
-}
-
-func TestLocalResolverProvider_IntEvaluation_TypeConversion(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret")
-
-	if provider == nil {
-		t.Fatal("Expected provider to be created")
-	}
-}
-
-func TestLocalResolverProvider_FloatEvaluation_TypeMismatch(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret")
-
-	if provider == nil {
-		t.Fatal("Expected provider to be created")
-	}
-}
-
 func TestLocalResolverProvider_Shutdown(t *testing.T) {
 	factory := &LocalResolverFactory{
 		cancelFunc: func() {
