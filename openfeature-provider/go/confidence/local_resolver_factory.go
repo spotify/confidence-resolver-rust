@@ -19,6 +19,7 @@ import (
 
 const (
 	defaultPollIntervalSeconds = 10
+	confidenceDomain           = "edge-grpc.spotify.com"
 )
 
 // StateProvider is an interface for providing resolver state
@@ -46,13 +47,11 @@ func NewLocalResolverFactory(
 	ctx context.Context,
 	runtime wazero.Runtime,
 	wasmBytes []byte,
-	resolverStateServiceAddr string,
-	flagLoggerServiceAddr string,
-	authServiceAddr string,
 	apiClientID string,
 	apiClientSecret string,
 	customStateProvider StateProvider,
 	accountId string,
+	connFactory ConnFactory,
 ) (*LocalResolverFactory, error) {
 	logPollInterval := getPollIntervalSeconds()
 
@@ -86,12 +85,21 @@ func NewLocalResolverFactory(
 		// Create TLS credentials for secure connections
 		tlsCreds := credentials.NewTLS(nil)
 
+		// Connection factory is provided by the builder
+		factory := connFactory
+
+		// Base dial options with transport credentials
+		baseOpts := []grpc.DialOption{
+			grpc.WithTransportCredentials(tlsCreds),
+		}
+
 		// Create auth service connection (no auth interceptor for this one)
-		authConn, err := grpc.NewClient(authServiceAddr, grpc.WithTransportCredentials(tlsCreds))
+		unauthConn, err := factory(ctx, confidenceDomain, baseOpts)
 		if err != nil {
 			return nil, err
 		}
-		authService := iamv1.NewAuthServiceClient(authConn)
+
+		authService := iamv1.NewAuthServiceClient(unauthConn)
 
 		// Create token holder
 		tokenHolder := NewTokenHolder(apiClientID, apiClientSecret, authService)
@@ -99,17 +107,13 @@ func NewLocalResolverFactory(
 		// Create JWT auth interceptor
 		authInterceptor := NewJwtAuthInterceptor(tokenHolder)
 
-		// Create gRPC connection for resolver state service with auth
-		stateConn, err := grpc.NewClient(
-			resolverStateServiceAddr,
-			grpc.WithTransportCredentials(tlsCreds),
+		authConnection, err := factory(ctx, confidenceDomain, append(
+			append([]grpc.DialOption{}, baseOpts...),
 			grpc.WithUnaryInterceptor(authInterceptor.UnaryClientInterceptor()),
-			grpc.WithStreamInterceptor(authInterceptor.StreamClientInterceptor()),
-		)
+		))
 		if err != nil {
 			return nil, err
 		}
-		resolverStateService := adminv1.NewResolverStateServiceClient(stateConn)
 
 		// Get account name from token
 		token, err := tokenHolder.GetToken(ctx)
@@ -122,6 +126,9 @@ func NewLocalResolverFactory(
 		if token != nil {
 			accountName = token.Account
 		}
+
+		resolverStateService := adminv1.NewResolverStateServiceClient(authConnection)
+		flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(authConnection)
 
 		// Create state fetcher (which implements StateProvider)
 		stateFetcher := NewFlagsAdminStateFetcher(resolverStateService, accountName)
@@ -143,18 +150,6 @@ func NewLocalResolverFactory(
 			resolvedAccountId = "unknown"
 		}
 
-		// Create gRPC connection for flag logger service with auth
-		// Exposure logging is always enabled when using gRPC services
-		loggerConn, err := grpc.NewClient(
-			flagLoggerServiceAddr,
-			grpc.WithTransportCredentials(tlsCreds),
-			grpc.WithUnaryInterceptor(authInterceptor.UnaryClientInterceptor()),
-			grpc.WithStreamInterceptor(authInterceptor.StreamClientInterceptor()),
-		)
-		if err != nil {
-			return nil, err
-		}
-		flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(loggerConn)
 		flagLogger = NewGrpcWasmFlagLogger(flagLoggerService)
 	}
 
