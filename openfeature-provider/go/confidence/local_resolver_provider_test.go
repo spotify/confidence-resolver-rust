@@ -1,9 +1,11 @@
 package confidence
 
 import (
+	"context"
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -405,4 +407,43 @@ func TestLocalResolverProvider_Shutdown(t *testing.T) {
 
 	// Note: The actual shutdown behavior depends on the factory implementation
 	// This just verifies the method exists and can be called without panicking
+}
+
+// mockWasmFlagLogger is a mock implementation for testing shutdown behavior
+type mockWasmFlagLogger struct {
+	shutdownCalled bool
+}
+
+func (m *mockWasmFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+	return nil
+}
+
+func (m *mockWasmFlagLogger) Shutdown() {
+	m.shutdownCalled = true
+}
+
+func TestLocalResolverProvider_ShutdownFlushesLogs(t *testing.T) {
+	mockLogger := &mockWasmFlagLogger{}
+	cancelCalled := false
+
+	factory := &LocalResolverFactory{
+		flagLogger: mockLogger,
+		cancelFunc: func() {
+			cancelCalled = true
+		},
+	}
+
+	provider := NewLocalResolverProvider(factory, "secret")
+
+	// Shutdown should propagate to the factory
+	provider.Shutdown()
+
+	// Verify that shutdown was called on all components
+	if !cancelCalled {
+		t.Error("Expected cancel function to be called")
+	}
+
+	if !mockLogger.shutdownCalled {
+		t.Error("Expected flag logger Shutdown to be called, which flushes pending logs")
+	}
 }

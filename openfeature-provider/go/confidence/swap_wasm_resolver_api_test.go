@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	adminv1 "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
-	iamv1 "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/iam/v1"
-	"github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/resolver"
+	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
+	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
+	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"github.com/tetratelabs/wazero"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
