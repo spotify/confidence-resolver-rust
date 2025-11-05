@@ -7,12 +7,12 @@
 package resolverinternal
 
 import (
-	_ "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/api"
-	_ "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/auth/v1"
-	v1 "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
-	_ "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1/events"
-	resolverevents "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/resolverevents"
-	resolvertypes "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
+	_ "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/api"
+	_ "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/auth/v1"
+	v1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
+	_ "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1/events"
+	resolverevents "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverevents"
+	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	_ "google.golang.org/genproto/googleapis/api/visibility"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"

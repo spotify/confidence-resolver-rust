@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/open-feature/go-sdk/openfeature"
-	"github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/resolver"
+	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 

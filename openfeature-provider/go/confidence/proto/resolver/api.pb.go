@@ -7,10 +7,10 @@
 package resolver
 
 import (
-	_ "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/api"
-	_ "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/resolverevents"
-	resolvertypes "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
-	v1 "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/types/v1"
+	_ "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/api"
+	_ "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverevents"
+	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
+	v1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/types/v1"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"

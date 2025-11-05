@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	iamv1 "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/iam/v1"
+	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
 )
 
 const (

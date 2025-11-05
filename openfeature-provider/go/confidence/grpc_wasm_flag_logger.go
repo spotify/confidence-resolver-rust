@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	resolverv1 "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
+	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 )
 
 const (

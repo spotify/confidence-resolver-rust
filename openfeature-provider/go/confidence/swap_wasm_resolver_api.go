@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/resolver"
+	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"github.com/tetratelabs/wazero"
 )
 

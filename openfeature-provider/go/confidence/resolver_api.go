@@ -9,15 +9,15 @@ import (
 	"sync"
 	"time"
 
-	resolverv1 "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
-	"github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/resolver"
+	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
+	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	messages "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto"
+	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 )
 
 // ResolverApi handles communication with the WASM module

@@ -7,8 +7,8 @@
 package resolverevents
 
 import (
-	_ "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/events/v1"
-	resolvertypes "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
+	_ "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/events/v1"
+	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"

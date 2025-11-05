@@ -15,7 +15,7 @@ A high-performance OpenFeature provider for [Confidence](https://confidence.spot
 ## Installation
 
 ```bash
-go get github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence
+go get github.com/spotify/confidence-resolver/openfeature-provider/go/confidence
 ```
 
 ## Requirements
@@ -33,7 +33,7 @@ import (
     "log"
 
     "github.com/open-feature/go-sdk/openfeature"
-    "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence"
+    "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence"
 )
 
 func main() {
