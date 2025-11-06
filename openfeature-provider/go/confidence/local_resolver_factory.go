@@ -35,6 +35,7 @@ type LocalResolverFactory struct {
 	cancelFunc      context.CancelFunc
 	logPollInterval time.Duration
 	wg              sync.WaitGroup
+	mu              sync.Mutex
 }
 
 // NewLocalResolverFactory creates a new LocalResolverFactory with gRPC clients and WASM bytes
@@ -216,7 +217,14 @@ func (f *LocalResolverFactory) startScheduledTasks(parentCtx context.Context) {
 
 // Shutdown stops all scheduled tasks and cleans up resources
 func (f *LocalResolverFactory) Shutdown(ctx context.Context) {
+	// lock to prevent concurrent shutdowns
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	log.Println("Shutting down local resolver factory")
+	if f.cancelFunc == nil {
+		log.Println("Scheduled tasks already cancelled")
+		return
+	}
 	if f.cancelFunc != nil {
 		c := f.cancelFunc
 		f.cancelFunc = nil
