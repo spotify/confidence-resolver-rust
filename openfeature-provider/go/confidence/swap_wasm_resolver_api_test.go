@@ -18,7 +18,7 @@ import (
 
 // Helper to load test data from the data directory
 func loadTestResolverState(t *testing.T) []byte {
-	dataPath := filepath.Join("..", "..", "data", "resolver_state_current.pb")
+	dataPath := filepath.Join("..", "..", "..", "data", "resolver_state_current.pb")
 	data, err := os.ReadFile(dataPath)
 	if err != nil {
 		t.Skipf("Skipping test - could not load test resolver state: %v", err)
@@ -27,7 +27,7 @@ func loadTestResolverState(t *testing.T) []byte {
 }
 
 func loadTestAccountID(t *testing.T) string {
-	dataPath := filepath.Join("..", "..", "data", "account_id")
+	dataPath := filepath.Join("..", "..", "..", "data", "account_id")
 	data, err := os.ReadFile(dataPath)
 	if err != nil {
 		t.Skipf("Skipping test - could not load test account ID: %v", err)

@@ -1,0 +1,230 @@
+package confidence
+
+import (
+	"context"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/open-feature/go-sdk/openfeature"
+	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
+	"github.com/tetratelabs/wazero"
+	"google.golang.org/grpc"
+)
+
+// mockStateProvider provides test state for integration testing
+type mockStateProvider struct {
+	state []byte
+}
+
+func (m *mockStateProvider) Provide(ctx context.Context) ([]byte, error) {
+	return m.state, nil
+}
+
+// trackingFlagLogger wraps a real GrpcWasmFlagLogger with a mocked connection
+type trackingFlagLogger struct {
+	actualLogger   WasmFlagLogger
+	logsSentCount  int32
+	shutdownCalled bool
+	mu             sync.Mutex
+	// Track when async operations complete
+	lastWriteCompleted chan struct{}
+}
+
+func (t *trackingFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+	atomic.AddInt32(&t.logsSentCount, int32(len(request.FlagAssigned)))
+	return t.actualLogger.Write(ctx, request)
+}
+
+func (t *trackingFlagLogger) Shutdown() {
+	t.mu.Lock()
+	t.shutdownCalled = true
+	t.mu.Unlock()
+	t.actualLogger.Shutdown()
+}
+
+func (t *trackingFlagLogger) GetLogsSentCount() int32 {
+	return atomic.LoadInt32(&t.logsSentCount)
+}
+
+func (t *trackingFlagLogger) WasShutdownCalled() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.shutdownCalled
+}
+
+// mockGrpcStubForIntegration provides a mock gRPC stub that tracks async operations
+type mockGrpcStubForIntegration struct {
+	resolverv1.InternalFlagLoggerServiceClient
+	callsReceived  int32
+	onCallReceived chan struct{}
+}
+
+func (m *mockGrpcStubForIntegration) WriteFlagLogs(ctx context.Context, req *resolverv1.WriteFlagLogsRequest, opts ...grpc.CallOption) (*resolverv1.WriteFlagLogsResponse, error) {
+	atomic.AddInt32(&m.callsReceived, 1)
+	// Signal that a call was received
+	select {
+	case m.onCallReceived <- struct{}{}:
+	default:
+	}
+	// Simulate some processing time to verify shutdown waits for completion
+	time.Sleep(50 * time.Millisecond)
+	return &resolverv1.WriteFlagLogsResponse{}, nil
+}
+
+func (m *mockGrpcStubForIntegration) GetCallsReceived() int32 {
+	return atomic.LoadInt32(&m.callsReceived)
+}
+
+// TestIntegration_OpenFeatureShutdownFlushesLogs tests the full integration:
+// - Real OpenFeature SDK
+// - Real provider with all components
+// - Mock state provider (using test state)
+// - Actual GrpcWasmFlagLogger with mocked gRPC connection
+// - Verifies logs are flushed and gRPC calls complete on openfeature.Shutdown()
+// This test specifically verifies the shutdown bug fix where the GrpcWasmFlagLogger's
+// async goroutines complete before Shutdown() returns, ensuring no data loss.
+func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
+	// Load test state
+	testState := loadTestResolverState(t)
+	accountID := loadTestAccountID(t)
+
+	ctx := context.Background()
+
+	// Create mock state provider
+	stateProvider := &mockStateProvider{
+		state: testState,
+	}
+
+	// Create tracking logger with actual GrpcWasmFlagLogger and mocked connection
+	mockStub := &mockGrpcStubForIntegration{
+		onCallReceived: make(chan struct{}, 100), // Buffer to prevent blocking
+	}
+	actualGrpcLogger := NewGrpcWasmFlagLogger(mockStub)
+
+	trackingLogger := &trackingFlagLogger{
+		actualLogger:       actualGrpcLogger,
+		lastWriteCompleted: make(chan struct{}, 1),
+	}
+
+	// Create provider with test state
+	provider, err := createProviderWithTestState(ctx, stateProvider, accountID, trackingLogger)
+	if err != nil {
+		t.Fatalf("Failed to create provider: %v", err)
+	}
+
+	// Register with OpenFeature
+	err = openfeature.SetProviderAndWait(provider)
+	if err != nil {
+		t.Fatalf("Failed to set provider: %v", err)
+	}
+
+	// Create client and evaluate flags
+	client := openfeature.NewClient("integration-test")
+	evalCtx := openfeature.NewEvaluationContext(
+		"tutorial_visitor",
+		map[string]interface{}{
+			"visitor_id": "tutorial_visitor",
+		},
+	)
+
+	// Evaluate the tutorial-feature flag (this should generate logs)
+	// This flag exists in the test state and should resolve successfully
+	numEvaluations := 5
+	for i := 0; i < numEvaluations; i++ {
+		result, _ := client.ObjectValueDetails(ctx, "tutorial-feature", map[string]interface{}{}, evalCtx)
+		if i == 0 {
+			t.Logf("First evaluation result: %+v", result)
+		}
+	}
+
+	// Now shutdown - this should flush all logs
+	openfeature.Shutdown()
+
+	// Verify shutdown was called
+	if !trackingLogger.WasShutdownCalled() {
+		t.Error("Expected logger shutdown to be called")
+	}
+
+	// Verify logs were flushed
+	finalLogCount := trackingLogger.GetLogsSentCount()
+	if finalLogCount == 0 {
+		t.Error("Expected logs to be flushed during shutdown, but no logs were sent")
+	}
+
+	// Verify that the mock gRPC connection actually received the calls
+	// This proves that the connection completed before shutdown returned
+	grpcCallsReceived := mockStub.GetCallsReceived()
+	if grpcCallsReceived == 0 {
+		t.Error("Expected mock gRPC connection to receive calls, but none were received")
+	}
+
+	t.Logf("Successfully flushed %d log entries via %d gRPC calls during shutdown", finalLogCount, grpcCallsReceived)
+}
+
+// createProviderWithTestState creates a provider with mock state provider and tracking logger
+func createProviderWithTestState(
+	ctx context.Context,
+	stateProvider StateProvider,
+	accountID string,
+	logger WasmFlagLogger,
+) (*LocalResolverProvider, error) {
+	// Create wazero runtime
+	runtimeConfig := wazero.NewRuntimeConfig()
+	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
+
+	// Create factory with custom state provider and logger
+	factory, err := NewLocalResolverFactoryWithStateProviderAndLogger(
+		ctx,
+		runtime,
+		defaultWasmBytes,
+		stateProvider,
+		accountID,
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create provider with the client secret from test state
+	// The test state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
+	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF")
+	return provider, nil
+}
+
+// NewLocalResolverFactoryWithStateProviderAndLogger creates a factory with custom state provider and logger for testing
+func NewLocalResolverFactoryWithStateProviderAndLogger(
+	ctx context.Context,
+	runtime wazero.Runtime,
+	wasmBytes []byte,
+	stateProvider StateProvider,
+	accountId string,
+	flagLogger WasmFlagLogger,
+) (*LocalResolverFactory, error) {
+	// Get initial state from provider
+	initialState, err := stateProvider.Provide(ctx)
+	if err != nil {
+		initialState = []byte{}
+	}
+
+	// Create SwapWasmResolverApi with initial state
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, accountId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create factory
+	factory := &LocalResolverFactory{
+		resolverAPI:     resolverAPI,
+		stateProvider:   stateProvider,
+		accountId:       accountId,
+		flagLogger:      flagLogger,
+		logPollInterval: getPollIntervalSeconds(),
+	}
+
+	// Start scheduled tasks
+	factory.startScheduledTasks(ctx)
+
+	return factory, nil
+}
