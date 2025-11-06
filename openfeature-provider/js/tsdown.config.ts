@@ -1,5 +1,4 @@
-import { defineConfig } from 'tsdown'
-
+import { defineConfig } from 'tsdown';
 
 const base = defineConfig({
   minify: 'dce-only',
@@ -18,13 +17,16 @@ const base = defineConfig({
   // },
 });
 
-export default defineConfig([{
-  entry: './src/index.node.ts',
-  platform: 'node',
-  copy: ['../../wasm/confidence_resolver.wasm'],
-  ...base
-},{
-  entry: './src/index.browser.ts',
-  platform: 'browser',
-  ...base
-}])
+export default defineConfig([
+  {
+    entry: './src/index.node.ts',
+    platform: 'node',
+    copy: ['../../wasm/confidence_resolver.wasm'],
+    ...base,
+  },
+  {
+    entry: './src/index.browser.ts',
+    platform: 'browser',
+    ...base,
+  },
+]);

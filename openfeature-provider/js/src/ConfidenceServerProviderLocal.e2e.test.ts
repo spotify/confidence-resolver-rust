@@ -4,10 +4,10 @@ import { ConfidenceServerProviderLocal } from './ConfidenceServerProviderLocal';
 import { readFileSync } from 'node:fs';
 import { WasmResolver } from './WasmResolver';
 
-const {
-  JS_E2E_CONFIDENCE_API_CLIENT_ID,
-  JS_E2E_CONFIDENCE_API_CLIENT_SECRET,
-} = requireEnv('JS_E2E_CONFIDENCE_API_CLIENT_ID', 'JS_E2E_CONFIDENCE_API_CLIENT_SECRET');
+const { JS_E2E_CONFIDENCE_API_CLIENT_ID, JS_E2E_CONFIDENCE_API_CLIENT_SECRET } = requireEnv(
+  'JS_E2E_CONFIDENCE_API_CLIENT_ID',
+  'JS_E2E_CONFIDENCE_API_CLIENT_SECRET',
+);
 
 const moduleBytes = readFileSync(__dirname + '/../../../wasm/confidence_resolver.wasm');
 const module = new WebAssembly.Module(moduleBytes);
@@ -15,12 +15,11 @@ const resolver = new WasmResolver(module);
 const confidenceProvider = new ConfidenceServerProviderLocal(resolver, {
   flagClientSecret: 'RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV',
   apiClientId: JS_E2E_CONFIDENCE_API_CLIENT_ID,
-  apiClientSecret: JS_E2E_CONFIDENCE_API_CLIENT_SECRET
+  apiClientSecret: JS_E2E_CONFIDENCE_API_CLIENT_SECRET,
 });
 
 describe('ConfidenceServerProvider E2E tests', () => {
-  beforeAll( async () => {
-
+  beforeAll(async () => {
     await OpenFeature.setProviderAndWait(confidenceProvider);
     OpenFeature.setContext({
       targetingKey: 'test-a', // control
@@ -28,7 +27,7 @@ describe('ConfidenceServerProvider E2E tests', () => {
     });
   });
 
-  afterAll(() => OpenFeature.close())
+  afterAll(() => OpenFeature.close());
 
   it('should resolve a boolean e2e', async () => {
     const client = OpenFeature.getClient();
@@ -88,24 +87,26 @@ describe('ConfidenceServerProvider E2E tests', () => {
 
   it('should resolve a flag with a sticky resolve', async () => {
     const client = OpenFeature.getClient();
-    const result = await client.getNumberDetails('web-sdk-e2e-flag.double', -1, { targetingKey: 'test-a', sticky: true });
-    
+    const result = await client.getNumberDetails('web-sdk-e2e-flag.double', -1, {
+      targetingKey: 'test-a',
+      sticky: true,
+    });
+
     // The flag has a running experiment with a sticky assignment. The intake is paused but we should still get the sticky assignment.
     // If this test breaks it could mean that the experiment was removed or that the bigtable materialization was cleaned out.
     expect(result.value).toBe(99.99);
     expect(result.variant).toBe('flags/web-sdk-e2e-flag/variants/sticky');
     expect(result.reason).toBe('MATCH');
-    
   });
 });
 
-function requireEnv<const N extends string[]>(...names:N): Record<N[number],string> {
+function requireEnv<const N extends string[]>(...names: N): Record<N[number], string> {
   return names.reduce((acc, name) => {
     const value = process.env[name];
-    if(!value) throw new Error(`Missing environment variable ${name}`)
+    if (!value) throw new Error(`Missing environment variable ${name}`);
     return {
       ...acc,
-      [name]: value
+      [name]: value,
     };
-  }, {}) as Record<N[number],string>;
+  }, {}) as Record<N[number], string>;
 }

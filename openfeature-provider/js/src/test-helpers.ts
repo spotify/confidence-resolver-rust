@@ -1,70 +1,67 @@
-import { vi } from "vitest";
-import { AccessToken, ResolveStateUri } from "./LocalResolver";
-import { abortableSleep, isObject, TimeUnit } from "./util";
-import { ReadableStream as NodeReadableStream } from 'node:stream/web'
-import { ResolveFlagsResponse } from "./proto/api";
+import { vi } from 'vitest';
+import { AccessToken, ResolveStateUri } from './LocalResolver';
+import { abortableSleep, isObject, TimeUnit } from './util';
+import { ReadableStream as NodeReadableStream } from 'node:stream/web';
+import { ResolveFlagsResponse } from './proto/api';
 
-type PayloadFactory = (req:Request) => BodyInit | null
+type PayloadFactory = (req: Request) => BodyInit | null;
 type ByteStream = ReadableStream<Uint8Array<ArrayBuffer>>;
 
-
 type RequestRecord = {
-  startTime: number,
-  url: string,
-  method: string,
-  status: number | string,
-}
+  startTime: number;
+  url: string;
+  method: string;
+  status: number | string;
+};
 
-type HandlerFn = (req:Request) => Response | Promise<Response>
+type HandlerFn = (req: Request) => Response | Promise<Response>;
 
-type StatusProvider = (req:Request) => number | string
+type StatusProvider = (req: Request) => number | string;
 
 class RequestHandler {
-  readonly requests:RequestRecord[] = [];
-  latency:number = 0;
-  bandwidth:number = Infinity
-  error?: string; 
-  
+  readonly requests: RequestRecord[] = [];
+  latency: number = 0;
+  bandwidth: number = Infinity;
+  error?: string;
+
   constructor(public handler: HandlerFn) {}
 
-  get calls():number {
+  get calls(): number {
     return this.requests.length;
   }
 
   async handle(req: Request): Promise<Response> {
-    const startTime = Date.now()
-    let status:number | string = 'UNKNOWN' 
+    const startTime = Date.now();
+    let status: number | string = 'UNKNOWN';
     try {
-      await abortableSleep(this.latency/2, req.signal);
-      if(this.error) {
+      await abortableSleep(this.latency / 2, req.signal);
+      if (this.error) {
         throw Object.assign(new Error(this.error), { name: this.error });
       }
-      if(req.body && Number.isFinite(this.bandwidth)) {
-        req = new Request(req, { body: throttleStream(req.body, this.latency, req.signal)});
+      if (req.body && Number.isFinite(this.bandwidth)) {
+        req = new Request(req, { body: throttleStream(req.body, this.latency, req.signal) });
       }
       let resp = await this.handler(req);
       status = resp.status;
-      await abortableSleep(this.latency/2, req.signal);
-      if(resp.body && Number.isFinite(this.bandwidth)) {
+      await abortableSleep(this.latency / 2, req.signal);
+      if (resp.body && Number.isFinite(this.bandwidth)) {
         resp = new Response(throttleStream(resp.body, this.bandwidth, req.signal), {
           status: resp.status,
           statusText: resp.statusText,
           headers: resp.headers,
-        })
+        });
       }
       return resp;
-    }
-    catch(err) {
+    } catch (err) {
       status = stringifyErrorType(err);
       throw err;
-    }
-    finally {
+    } finally {
       this.requests.push({
         startTime,
         url: req.url,
         method: req.method,
-        status
-      })
+        status,
+      });
     }
   }
   clear(): void {
@@ -73,16 +70,12 @@ class RequestHandler {
 }
 
 class RequestDispatcher<T extends RequestHandler> extends RequestHandler {
-
-  constructor(
-    private readonly keyFn:(req:Request) => string,
-    private readonly dispatchMap:Record<string, T>, 
-  ) {
+  constructor(private readonly keyFn: (req: Request) => string, private readonly dispatchMap: Record<string, T>) {
     super(req => {
       const key = this.keyFn(req);
       const handler = this.dispatchMap[key];
       return handler ? handler.handle(req) : new Response(null, { status: 404 });
-    })
+    });
   }
 
   clear(): void {
@@ -91,72 +84,72 @@ class RequestDispatcher<T extends RequestHandler> extends RequestHandler {
   }
 }
 class EndpointMock extends RequestHandler {
-  
   status: number | string | StatusProvider = 200;
 
   constructor(private payloadFactory: PayloadFactory = () => null) {
     super(req => {
       let status = this.status;
-      if(typeof status === 'function') {
+      if (typeof status === 'function') {
         status = status(req);
       }
-      if(typeof status === 'string') {
+      if (typeof status === 'string') {
         throw new Error(status);
       }
-      if(status === 200) {
-        return new Response(this.payloadFactory(req))
+      if (status === 200) {
+        return new Response(this.payloadFactory(req));
       }
-      return new Response(null, { status })  
-    })
+      return new Response(null, { status });
+    });
   }
-
 }
 
 class ServerMock extends RequestDispatcher<EndpointMock> {
-
-  constructor(private endpoints:Record<string,EndpointMock>) {
-    super(req => new URL(req.url).pathname, endpoints)
+  constructor(private endpoints: Record<string, EndpointMock>) {
+    super(req => new URL(req.url).pathname, endpoints);
   }
-
 }
 
 class IamServerMock extends ServerMock {
-
   readonly token: EndpointMock;
 
   constructor() {
-    let nextToken = 1
-    const tokenEndpoint = new EndpointMock(() => JSON.stringify({
-      accessToken: `token${nextToken++}`,
-      expiresIn: 60*60
-    } satisfies AccessToken));
-    super({ '/v1/oauth/token': tokenEndpoint })
+    let nextToken = 1;
+    const tokenEndpoint = new EndpointMock(() =>
+      JSON.stringify({
+        accessToken: `token${nextToken++}`,
+        expiresIn: 60 * 60,
+      } satisfies AccessToken),
+    );
+    super({ '/v1/oauth/token': tokenEndpoint });
     this.token = tokenEndpoint;
   }
 }
 
 class ResolverServerMock extends ServerMock {
-
-  readonly flagLogs: EndpointMock
-  readonly flagsResolve: EndpointMock
+  readonly flagLogs: EndpointMock;
+  readonly flagsResolve: EndpointMock;
   readonly stateUri: EndpointMock;
 
   constructor() {
     const flagLogs = new EndpointMock();
-    const flagsResolve = new EndpointMock(() => JSON.stringify({
-      resolvedFlags: [],
-      resolveToken: new Uint8Array(),
-      resolveId: 'resolve-default'
-    } satisfies ResolveFlagsResponse));
-    const stateUri = new EndpointMock(() => JSON.stringify({
-      signedUri: 'https://storage.googleapis.com/stateBucket',
-      account: '<account>'
-    } satisfies ResolveStateUri));
+    const flagsResolve = new EndpointMock(() =>
+      JSON.stringify({
+        resolvedFlags: [],
+        resolveToken: new Uint8Array(),
+        resolveId: 'resolve-default',
+      } satisfies ResolveFlagsResponse),
+    );
+    const stateUri = new EndpointMock(() =>
+      JSON.stringify({
+        signedUri: 'https://storage.googleapis.com/stateBucket',
+        account: '<account>',
+      } satisfies ResolveStateUri),
+    );
     super({
       '/v1/flagLogs:write': flagLogs,
       '/v1/flags:resolve': flagsResolve,
       '/v1/resolverState:resolverStateUri': stateUri,
-    })
+    });
     this.flagLogs = flagLogs;
     this.flagsResolve = flagsResolve;
     this.stateUri = stateUri;
@@ -164,19 +157,17 @@ class ResolverServerMock extends ServerMock {
 }
 
 class GcsServerMock extends ServerMock {
-
-  readonly stateBucket:EndpointMock;
+  readonly stateBucket: EndpointMock;
   constructor() {
-    const stateBucket = new EndpointMock(() => new ArrayBuffer(100))
+    const stateBucket = new EndpointMock(() => new ArrayBuffer(100));
     super({
-      '/stateBucket': stateBucket
-    })
+      '/stateBucket': stateBucket,
+    });
     this.stateBucket = stateBucket;
   }
 }
 
 export class NetworkMock extends RequestDispatcher<ServerMock> {
-
   readonly iam: IamServerMock;
   readonly resolver: ResolverServerMock;
   readonly gcs: GcsServerMock;
@@ -186,102 +177,104 @@ export class NetworkMock extends RequestDispatcher<ServerMock> {
     const resolver = new ResolverServerMock();
     const gcs = new GcsServerMock();
 
-    super(
-      req => new URL(req.url).hostname, 
-      {
-        'iam.confidence.dev': iam,
-        'resolver.confidence.dev': resolver,
-        'storage.googleapis.com': gcs,
-      });
+    super(req => new URL(req.url).hostname, {
+      'iam.confidence.dev': iam,
+      'resolver.confidence.dev': resolver,
+      'storage.googleapis.com': gcs,
+    });
     this.iam = iam;
     this.resolver = resolver;
     this.gcs = gcs;
   }
 
-  readonly fetch:typeof fetch = (input, init) => this.handle(new Request(input, init))
+  readonly fetch: typeof fetch = (input, init) => this.handle(new Request(input, init));
 }
 
-function throttleStream(stream:ByteStream, bandwidth:number, signal?:AbortSignal):ByteStream {
-  const iter = (async function*() {
-    for await(const chunk of stream) {
-      await abortableSleep(chunk.length/bandwidth*1000, signal);
+function throttleStream(stream: ByteStream, bandwidth: number, signal?: AbortSignal): ByteStream {
+  const iter = (async function* () {
+    for await (const chunk of stream) {
+      await abortableSleep((chunk.length / bandwidth) * 1000, signal);
       yield chunk;
     }
   })();
   return NodeReadableStream.from(iter) as ByteStream;
 }
 
-function stringifyErrorType(err:unknown):string {
-  if(isObject(err) && 'name' in err && typeof err.name === 'string') {
+function stringifyErrorType(err: unknown): string {
+  if (isObject(err) && 'name' in err && typeof err.name === 'string') {
     return err.name;
   }
   return String(err);
 }
 
-
-if(vi.isFakeTimers()) {
+if (vi.isFakeTimers()) {
   throw new Error('FakeTimers should not be on when test-helpers.ts is loaded!');
 }
 const realSetImmediate = setImmediate;
 
-
-export async function advanceTimersUntil(predicate:() => boolean):Promise<void>
-export async function advanceTimersUntil(opt: { timeout?: number }, predicate:() => boolean):Promise<void>
-export async function advanceTimersUntil<T>(promise:Promise<T>):Promise<T>
-export async function advanceTimersUntil<T>(opt: { timeout: number }, promise:Promise<T>):Promise<T>
-export async function advanceTimersUntil(...args:any[]):Promise<any> {
-  if(!vi.isFakeTimers()) {
+export async function advanceTimersUntil(predicate: () => boolean): Promise<void>;
+export async function advanceTimersUntil(opt: { timeout?: number }, predicate: () => boolean): Promise<void>;
+export async function advanceTimersUntil<T>(promise: Promise<T>): Promise<T>;
+export async function advanceTimersUntil<T>(opt: { timeout: number }, promise: Promise<T>): Promise<T>;
+export async function advanceTimersUntil(...args: any[]): Promise<any> {
+  if (!vi.isFakeTimers()) {
     throw new Error('FakeTimers are not enabled');
   }
-  const opt: { timeout?: number } = args.length == 2 ? args.shift() : {}; 
-  
+  const opt: { timeout?: number } = args.length == 2 ? args.shift() : {};
+
   let predicate: () => boolean;
   let ret = undefined;
-  if(typeof args[0] === 'function') {
+  if (typeof args[0] === 'function') {
     predicate = args[0];
   } else {
     let done = false;
     ret = args[0];
-    ret.finally(() => { done = true; })
+    ret.finally(() => {
+      done = true;
+    });
     predicate = () => done;
   }
-  
-  if(opt.timeout) {
+
+  if (opt.timeout) {
     let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; }, opt.timeout);
+    const timeout = setTimeout(() => {
+      timedOut = true;
+    }, opt.timeout);
     const origPred = predicate;
     predicate = () => {
-      if(timedOut) {
+      if (timedOut) {
         throw new Error('advanceTimersUntil: Timed out');
       }
       try {
-        if(origPred()) {
+        if (origPred()) {
           clearTimeout(timeout);
           return true;
         }
         return false;
-      }
-      catch(err) {
+      } catch (err) {
         clearTimeout(timeout);
         throw err;
       }
-    }
+    };
   }
 
-  await new Promise(resolve => { realSetImmediate(resolve); });
+  await new Promise(resolve => {
+    realSetImmediate(resolve);
+  });
 
-  while(!predicate()) {
+  while (!predicate()) {
     // some code, notably NodeJS WHATWG streams and fetch impl. might schedule immediate calls
     // that isn't mocked by fake timers, so we advance that first.
-    if(process.getActiveResourcesInfo().includes('Immediate')) {
-      await new Promise(resolve => { realSetImmediate(resolve); });
+    if (process.getActiveResourcesInfo().includes('Immediate')) {
+      await new Promise(resolve => {
+        realSetImmediate(resolve);
+      });
       continue;
     }
-    if(vi.getTimerCount() === 0) {
-      throw new Error('advanceTimersUntil: Condition not met and no timers left to advance')
+    if (vi.getTimerCount() === 0) {
+      throw new Error('advanceTimersUntil: Condition not met and no timers left to advance');
     }
     await vi.advanceTimersToNextTimerAsync();
   }
   return ret;
 }
-

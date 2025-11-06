@@ -691,11 +691,13 @@ __metadata:
     "@bufbuild/protobuf": "npm:^2.9.0"
     "@openfeature/core": "npm:^1.9.0"
     "@openfeature/server-sdk": "npm:^1.19.0"
+    "@spotify/prettier-config": "npm:^15.0.0"
     "@types/debug": "npm:^4"
     "@types/node": "npm:^24.0.1"
     "@vitest/coverage-v8": "npm:^3.2.4"
     debug: "npm:^4.4.3"
     dotenv: "npm:^17.2.2"
+    prettier: "npm:^2.8.8"
     rolldown: "npm:1.0.0-beta.38"
     ts-proto: "npm:^2.7.3"
     tsdown: "npm:latest"
@@ -707,6 +709,15 @@ __metadata:
       optional: true
   languageName: unknown
   linkType: soft
+
+"@spotify/prettier-config@npm:^15.0.0":
+  version: 15.0.0
+  resolution: "@spotify/prettier-config@npm:15.0.0"
+  peerDependencies:
+    prettier: 2.x
+  checksum: 10c0/d7033f9f3ab255b490084f72928d4df086f6a51bb6f88b0d3678a5a63e46fc58ad025a0a709f96d8ae91b82093d991d54ea6a48b7d3f2c7f3f747c1853b76532
+  languageName: node
+  linkType: hard
 
 "@tybys/wasm-util@npm:^0.10.1":
   version: 0.10.1
@@ -1842,6 +1853,15 @@ __metadata:
     picocolors: "npm:^1.1.1"
     source-map-js: "npm:^1.2.1"
   checksum: 10c0/5127cc7c91ed7a133a1b7318012d8bfa112da9ef092dddf369ae699a1f10ebbd89b1b9f25f3228795b84585c72aabd5ced5fc11f2ba467eedf7b081a66fad024
+  languageName: node
+  linkType: hard
+
+"prettier@npm:^2.8.8":
+  version: 2.8.8
+  resolution: "prettier@npm:2.8.8"
+  bin:
+    prettier: bin-prettier.js
+  checksum: 10c0/463ea8f9a0946cd5b828d8cf27bd8b567345cf02f56562d5ecde198b91f47a76b7ac9eae0facd247ace70e927143af6135e8cf411986b8cb8478784a4d6d724a
   languageName: node
   linkType: hard
 

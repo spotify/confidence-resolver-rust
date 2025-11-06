@@ -1,22 +1,18 @@
-import type {
-  ResolveWithStickyRequest,
-  ResolveWithStickyResponse,
-  SetResolverStateRequest
-} from "./proto/api"
+import type { ResolveWithStickyRequest, ResolveWithStickyResponse, SetResolverStateRequest } from './proto/api';
 
 export interface LocalResolver {
-  resolveWithSticky(request: ResolveWithStickyRequest): ResolveWithStickyResponse
-  setResolverState(request: SetResolverStateRequest):void
-  flushLogs():Uint8Array
+  resolveWithSticky(request: ResolveWithStickyRequest): ResolveWithStickyResponse;
+  setResolverState(request: SetResolverStateRequest): void;
+  flushLogs(): Uint8Array;
 }
 
 export interface AccessToken {
-  accessToken: string,
+  accessToken: string;
   /// lifetime seconds
-  expiresIn: number
+  expiresIn: number;
 }
 
 export interface ResolveStateUri {
-  signedUri:string, 
-  account: string,
+  signedUri: string;
+  account: string;
 }

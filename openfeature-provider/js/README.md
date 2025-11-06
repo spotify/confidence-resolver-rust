@@ -182,3 +182,11 @@ The package exports a browser ESM build that compiles the WASM via streaming and
 ## License
 
 See the root `LICENSE`.
+
+## Formatting
+
+Code is formatted using prettier, you can format all files by running
+
+```sh
+yarn format
+```
