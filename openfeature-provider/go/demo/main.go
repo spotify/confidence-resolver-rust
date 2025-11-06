@@ -75,8 +75,8 @@ func main() {
 
 	// Run 5 concurrent threads continuously for 5 second
 	var wg sync.WaitGroup
-	numThreads := 1
-	runDuration := 3 * time.Second
+	numThreads := 5
+	runDuration := 5 * time.Second
 
 	log.Printf("Starting %d threads to run for %v to test reload and flush...", numThreads, runDuration)
 	log.Println("")
@@ -113,8 +113,8 @@ func main() {
 				}
 				iteration++
 
-				// large sleep to avoid tight loop
-				time.Sleep(250 * time.Millisecond)
+				// Small sleep to avoid tight loop
+				time.Sleep(1 * time.Millisecond)
 			}
 
 			// Update shared counters atomically

@@ -172,7 +172,7 @@ func (r *ResolverApi) FlushLogs() error {
 	}
 
 	// Write logs via the flag logger
-	if len(logRequest.FlagAssigned) > 0 || len(logRequest.ClientResolveInfo) > 0 || len(logRequest.FlagResolveInfo) > 0 {
+	if r.flagLogger != nil && (len(logRequest.FlagAssigned) > 0 || len(logRequest.ClientResolveInfo) > 0 || len(logRequest.FlagResolveInfo) > 0) {
 		if err := r.flagLogger.Write(ctx, logRequest); err != nil {
 			log.Printf("Failed to write flushed logs: %v", err)
 		}
