@@ -225,7 +225,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	stickyRequest := &resolver.ResolveWithStickyRequest{
 		ResolveRequest:          request,
 		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
-		FailFastOnSticky:        false,
+		FailFastOnSticky:        true,
 		NotProcessSticky:        false,
 	}
 
