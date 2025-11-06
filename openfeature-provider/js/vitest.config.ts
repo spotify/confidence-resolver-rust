@@ -1,12 +1,11 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vitest/config';
 import { config, parse } from 'dotenv';
 import { existsSync, readFileSync } from 'fs';
 
-
 export default defineConfig({
   define: {
-    __TEST__:'true',
-    __ASSERT__:'true',
+    __TEST__: 'true',
+    __ASSERT__: 'true',
   },
   test: {
     environment: 'node',
@@ -15,17 +14,17 @@ export default defineConfig({
     silent: false,
     watch: false,
     env: {
-      ...readEnv('.env.test')
-    }
-  }
-})
+      ...readEnv('.env.test'),
+    },
+  },
+});
 
-function readEnv(file):Record<string, string> {
+function readEnv(file): Record<string, string> {
   try {
     const buf = readFileSync(file);
     return parse(buf);
-  } catch(e) {
-    if(e.code === 'ENOENT') {
+  } catch (e) {
+    if (e.code === 'ENOENT') {
       console.log('could not find', file);
       return {};
     }
