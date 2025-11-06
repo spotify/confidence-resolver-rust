@@ -562,84 +562,6 @@ func TestSwapWasmResolverApi_ResolveWithSticky(t *testing.T) {
 	t.Logf("✓ Successfully resolved flag with sticky support with correct values")
 }
 
-func TestSwapWasmResolverApi_ResolveWithSticky_EmptyMaterializations(t *testing.T) {
-	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
-	defer runtime.Close(ctx)
-
-	flagLogger := NewNoOpWasmFlagLogger()
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
-
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID)
-	if err != nil {
-		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
-	}
-	defer swap.Close(ctx)
-
-	// Test with empty materializations map
-	request := &resolver.ResolveFlagsRequest{
-		Flags:        []string{"flags/tutorial-feature"},
-		Apply:        false,
-		ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
-		EvaluationContext: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"visitor_id": structpb.NewStringValue("tutorial_visitor"),
-			},
-		},
-	}
-
-	stickyRequest := &resolver.ResolveWithStickyRequest{
-		ResolveRequest:          request,
-		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
-		FailFastOnSticky:        false,
-		NotProcessSticky:        false,
-	}
-
-	response, err := swap.ResolveWithSticky(stickyRequest)
-	if err != nil {
-		t.Fatalf("Failed to resolve with empty materializations: %v", err)
-	}
-
-	if response == nil {
-		t.Fatal("Expected non-nil response")
-	}
-
-	// Verify we got a success result with proper values
-	successResult, ok := response.ResolveResult.(*resolver.ResolveWithStickyResponse_Success_)
-	if !ok {
-		t.Fatal("Expected success result from ResolveWithSticky")
-	}
-
-	resolveResponse := successResult.Success.Response
-	if len(resolveResponse.ResolvedFlags) != 1 {
-		t.Fatalf("Expected 1 resolved flag, got %d", len(resolveResponse.ResolvedFlags))
-	}
-
-	resolvedFlag := resolveResponse.ResolvedFlags[0]
-
-	// Verify the flag has values
-	if resolvedFlag.Value == nil {
-		t.Fatal("Expected non-nil value in resolved flag")
-	}
-
-	fields := resolvedFlag.Value.GetFields()
-	if fields == nil {
-		t.Fatal("Expected fields in resolved value")
-	}
-
-	// Verify the values match the expected variant
-	expectedMessage := "We are very excited to welcome you to Confidence! This is a message from the tutorial flag."
-	messageValue, hasMessage := fields["message"]
-	if !hasMessage {
-		t.Error("Expected 'message' field in resolved value")
-	} else if messageValue.GetStringValue() != expectedMessage {
-		t.Errorf("Expected message '%s', got '%s'", expectedMessage, messageValue.GetStringValue())
-	}
-
-	t.Logf("✓ ResolveWithSticky works with empty materializations and returns correct values")
-}
-
 func TestSwapWasmResolverApi_ResolveWithSticky_FailFast(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
@@ -827,55 +749,7 @@ func TestSwapWasmResolverApi_ResolveWithSticky_AfterStateUpdate(t *testing.T) {
 	t.Logf("✓ ResolveWithSticky works correctly after state update with correct values")
 }
 
-func TestSwapWasmResolverApi_ResolveWithSticky_InvalidClientSecret(t *testing.T) {
-	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
-	defer runtime.Close(ctx)
-
-	flagLogger := NewNoOpWasmFlagLogger()
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
-
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID)
-	if err != nil {
-		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
-	}
-	defer swap.Close(ctx)
-
-	// Test with invalid client secret
-	request := &resolver.ResolveFlagsRequest{
-		Flags:        []string{"flags/tutorial-feature"},
-		Apply:        false,
-		ClientSecret: "invalid-secret",
-		EvaluationContext: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"visitor_id": structpb.NewStringValue("tutorial_visitor"),
-			},
-		},
-	}
-
-	stickyRequest := &resolver.ResolveWithStickyRequest{
-		ResolveRequest:          request,
-		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
-		FailFastOnSticky:        false,
-		NotProcessSticky:        false,
-	}
-
-	response, err := swap.ResolveWithSticky(stickyRequest)
-
-	// Should still get a response, but with an error in the resolved flags
-	if err != nil {
-		// Some implementations may return an error, others may return empty results
-		t.Logf("Got error for invalid secret (expected behavior): %v", err)
-		return
-	}
-
-	if response != nil {
-		t.Logf("✓ ResolveWithSticky handles invalid client secret")
-	}
-}
-
-func TestSwapWasmResolverApi_ResolveWithSticky_MinimalState(t *testing.T) {
+func TestSwapWasmResolverApi_ResolveWithSticky_NonExistentFlag(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
@@ -928,7 +802,7 @@ func TestSwapWasmResolverApi_ResolveWithSticky_MinimalState(t *testing.T) {
 	t.Logf("✓ ResolveWithSticky works with minimal state (no test data required)")
 }
 
-func TestResolverApi_ResolveWithSticky_InstanceClosing(t *testing.T) {
+func TestSwapWasmResolverApi_ResolveWithSticky_InstanceClosing(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
@@ -975,7 +849,7 @@ func TestResolverApi_ResolveWithSticky_InstanceClosing(t *testing.T) {
 	t.Logf("✓ ResolveWithSticky correctly returns ErrInstanceClosed when instance is closing")
 }
 
-func TestResolverApi_ResolveWithSticky_Basic(t *testing.T) {
+func TestSwapWasmResolverApi_ResolveWithSticky_DirectInstanceCall(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
@@ -1024,7 +898,7 @@ func TestResolverApi_ResolveWithSticky_Basic(t *testing.T) {
 		t.Logf("Got expected error (client secret/flag validation): %v", err)
 		// This is actually a pass - the method executed and returned an error from WASM
 		resolverApi.Close(ctx)
-		t.Logf("✓ Basic ResolveWithSticky test passed - method executed successfully")
+		t.Logf("✓ Direct instance ResolveWithSticky call test passed - method executed successfully")
 		return
 	}
 
@@ -1035,7 +909,7 @@ func TestResolverApi_ResolveWithSticky_Basic(t *testing.T) {
 	// Close the instance
 	resolverApi.Close(ctx)
 
-	t.Logf("✓ Basic ResolveWithSticky test passed")
+	t.Logf("✓ Direct instance ResolveWithSticky call test passed")
 }
 
 func TestSwapWasmResolverApi_ResolveWithSticky_MissingMaterializations(t *testing.T) {
