@@ -28,6 +28,7 @@ type ResolverApi struct {
 	wasmMsgFree                  api.Function
 	wasmMsgGuestSetResolverState api.Function
 	wasmMsgGuestResolve          api.Function
+	wasmMsgGuestResolveWithSticky api.Function
 	wasmMsgGuestResolveSimple    api.Function
 }
 
@@ -73,8 +74,9 @@ func NewResolverApi(ctx context.Context, runtime wazero.Runtime, wasmBytes []byt
 	wasmMsgFree := instance.ExportedFunction("wasm_msg_free")
 	wasmMsgGuestSetResolverState := instance.ExportedFunction("wasm_msg_guest_set_resolver_state")
 	wasmMsgGuestResolve := instance.ExportedFunction("wasm_msg_guest_resolve")
+	wasmMsgGuestResolveWithSticky := instance.ExportedFunction("wasm_msg_guest_resolve_with_sticky")
 
-	if wasmMsgAlloc == nil || wasmMsgFree == nil || wasmMsgGuestSetResolverState == nil || wasmMsgGuestResolve == nil {
+	if wasmMsgAlloc == nil || wasmMsgFree == nil || wasmMsgGuestSetResolverState == nil || wasmMsgGuestResolve == nil || wasmMsgGuestResolveWithSticky == nil {
 		panic("Required WASM exports not found")
 	}
 
@@ -86,6 +88,7 @@ func NewResolverApi(ctx context.Context, runtime wazero.Runtime, wasmBytes []byt
 		wasmMsgFree:                  wasmMsgFree,
 		wasmMsgGuestSetResolverState: wasmMsgGuestSetResolverState,
 		wasmMsgGuestResolve:          wasmMsgGuestResolve,
+		wasmMsgGuestResolveWithSticky: wasmMsgGuestResolveWithSticky,
 	}
 }
 

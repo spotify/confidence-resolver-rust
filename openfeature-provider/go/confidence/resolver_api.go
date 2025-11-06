@@ -27,12 +27,13 @@ type ResolverApi struct {
 	runtime  wazero.Runtime
 
 	// WASM exports
-	wasmMsgAlloc                 api.Function
-	wasmMsgFree                  api.Function
-	wasmMsgGuestSetResolverState api.Function
-	wasmMsgGuestFlushLogs        api.Function
-	wasmMsgGuestResolve          api.Function
-	wasmMsgGuestResolveSimple    api.Function
+	wasmMsgAlloc                  api.Function
+	wasmMsgFree                   api.Function
+	wasmMsgGuestSetResolverState  api.Function
+	wasmMsgGuestFlushLogs         api.Function
+	wasmMsgGuestResolve           api.Function
+	wasmMsgGuestResolveWithSticky api.Function
+	wasmMsgGuestResolveSimple     api.Function
 
 	// Flag logger for writing logs
 	flagLogger WasmFlagLogger
@@ -118,22 +119,24 @@ func NewResolverApiFromCompiled(ctx context.Context, runtime wazero.Runtime, com
 	wasmMsgGuestSetResolverState := instance.ExportedFunction("wasm_msg_guest_set_resolver_state")
 	wasmMsgGuestFlushLogs := instance.ExportedFunction("wasm_msg_guest_flush_logs")
 	wasmMsgGuestResolve := instance.ExportedFunction("wasm_msg_guest_resolve")
+	wasmMsgGuestResolveWithSticky := instance.ExportedFunction("wasm_msg_guest_resolve_with_sticky")
 
-	if wasmMsgAlloc == nil || wasmMsgFree == nil || wasmMsgGuestSetResolverState == nil || wasmMsgGuestFlushLogs == nil || wasmMsgGuestResolve == nil {
+	if wasmMsgAlloc == nil || wasmMsgFree == nil || wasmMsgGuestSetResolverState == nil || wasmMsgGuestFlushLogs == nil || wasmMsgGuestResolve == nil || wasmMsgGuestResolveWithSticky == nil {
 		panic("Required WASM exports not found")
 	}
 
 	return &ResolverApi{
-		instance:                     instance,
-		module:                       compiledModule,
-		runtime:                      runtime,
-		wasmMsgAlloc:                 wasmMsgAlloc,
-		wasmMsgFree:                  wasmMsgFree,
-		wasmMsgGuestSetResolverState: wasmMsgGuestSetResolverState,
-		wasmMsgGuestFlushLogs:        wasmMsgGuestFlushLogs,
-		wasmMsgGuestResolve:          wasmMsgGuestResolve,
-		flagLogger:                   flagLogger,
-		firstResolve:                 true,
+		instance:                      instance,
+		module:                        compiledModule,
+		runtime:                       runtime,
+		wasmMsgAlloc:                  wasmMsgAlloc,
+		wasmMsgFree:                   wasmMsgFree,
+		wasmMsgGuestSetResolverState:  wasmMsgGuestSetResolverState,
+		wasmMsgGuestFlushLogs:         wasmMsgGuestFlushLogs,
+		wasmMsgGuestResolve:           wasmMsgGuestResolve,
+		wasmMsgGuestResolveWithSticky: wasmMsgGuestResolveWithSticky,
+		flagLogger:                    flagLogger,
+		firstResolve:                  true,
 	}
 }
 
@@ -268,6 +271,40 @@ func (r *ResolverApi) Resolve(request *resolver.ResolveFlagsRequest) (*resolver.
 	err = r.consumeResponse(respPtr, response)
 	if err != nil {
 		log.Printf("Resolve failed with error: %v", err)
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// ResolveWithSticky resolves flags with sticky targeting support using the WASM module
+func (r *ResolverApi) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
+	// Acquire lock first, then check isClosing flag to prevent race condition
+	// where instance could be marked as closing between check and lock acquisition.
+	// If closing, return immediately with ErrInstanceClosed to prevent using stale instance.
+	r.mu.Lock()
+	if r.isClosing {
+		defer r.mu.Unlock()
+		return nil, ErrInstanceClosed
+	}
+	defer r.mu.Unlock()
+
+	ctx := context.Background()
+	// Transfer request to WASM memory
+	reqPtr := r.transferRequest(request)
+
+	// Call the WASM function
+	results, err := r.wasmMsgGuestResolveWithSticky.Call(ctx, uint64(reqPtr))
+	if err != nil {
+		return nil, fmt.Errorf("failed to call wasm_msg_guest_resolve_with_sticky: %w", err)
+	}
+
+	// Consume the response
+	respPtr := uint32(results[0])
+	response := &resolver.ResolveWithStickyResponse{}
+	err = r.consumeResponse(respPtr, response)
+	if err != nil {
+		log.Printf("ResolveWithSticky failed with error: %v", err)
 		return nil, err
 	}
 

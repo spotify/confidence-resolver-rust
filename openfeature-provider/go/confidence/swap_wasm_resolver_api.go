@@ -93,6 +93,20 @@ func (s *SwapWasmResolverApi) Resolve(request *resolver.ResolveFlagsRequest) (*r
 	return response, err
 }
 
+func (s *SwapWasmResolverApi) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
+	// Lock to ensure resolve doesn't happen during swap
+	instance := s.currentInstance.Load().(*ResolverApi)
+	response, err := instance.ResolveWithSticky(request)
+
+	// If instance is closed, retry with the current instance (which may have been swapped)
+	if err != nil && errors.Is(err, ErrInstanceClosed) {
+		instance = s.currentInstance.Load().(*ResolverApi)
+		return instance.ResolveWithSticky(request)
+	}
+
+	return response, err
+}
+
 // Close closes the current ResolverApi instance
 func (s *SwapWasmResolverApi) Close(ctx context.Context) {
 	instance := s.currentInstance.Load().(*ResolverApi)
