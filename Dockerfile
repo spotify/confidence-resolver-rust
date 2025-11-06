@@ -407,6 +407,8 @@ FROM openfeature-provider-js-base AS openfeature-provider-js.test
 # Copy confidence-resolver protos (needed by some tests for proto parsing)
 COPY confidence-resolver/protos ../../../confidence-resolver/protos
 COPY wasm/resolver_state.pb ../../../wasm/resolver_state.pb
+COPY openfeature-provider/js/prettier.config.cjs ./
+COPY openfeature-provider/js/.prettierignore ./
 
 RUN make test
 
