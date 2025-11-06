@@ -11,9 +11,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// TestLocalResolverProvider_ResolveWithSticky_ReturnsDefaultOnError tests that
+// TestLocalResolverProvider_ReturnsDefaultOnError tests that
 // default values are returned when resolve fails
-func TestLocalResolverProvider_ResolveWithSticky_ReturnsDefaultOnError(t *testing.T) {
+func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
@@ -158,9 +158,9 @@ func TestLocalResolverProvider_ResolveWithSticky_ReturnsDefaultOnError(t *testin
 	})
 }
 
-// TestLocalResolverProvider_ResolveWithSticky_ReturnsCorrectValue tests that
+// TestLocalResolverProvider_ReturnsCorrectValue tests that
 // correct values are returned when resolve succeeds with real test data
-func TestLocalResolverProvider_ResolveWithSticky_ReturnsCorrectValue(t *testing.T) {
+func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
@@ -248,9 +248,9 @@ func TestLocalResolverProvider_ResolveWithSticky_ReturnsCorrectValue(t *testing.
 	})
 }
 
-// TestLocalResolverProvider_ResolveWithSticky_MissingMaterializations tests
+// TestLocalResolverProvider_MissingMaterializations tests
 // that missing materializations are handled correctly
-func TestLocalResolverProvider_ResolveWithSticky_MissingMaterializations(t *testing.T) {
+func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
@@ -290,9 +290,9 @@ func TestLocalResolverProvider_ResolveWithSticky_MissingMaterializations(t *test
 	}
 }
 
-// TestLocalResolverProvider_ResolveWithSticky_TypeMismatch tests that
+// TestLocalResolverProvider_TypeMismatch tests that
 // type mismatches return default values
-func TestLocalResolverProvider_ResolveWithSticky_TypeMismatch(t *testing.T) {
+func TestLocalResolverProvider_TypeMismatch(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
@@ -336,9 +336,9 @@ func TestLocalResolverProvider_ResolveWithSticky_TypeMismatch(t *testing.T) {
 	}
 }
 
-// TestLocalResolverProvider_ResolveWithSticky_InvalidClientSecret tests that
+// TestLocalResolverProvider_InvalidClientSecret tests that
 // invalid client secrets return default values
-func TestLocalResolverProvider_ResolveWithSticky_InvalidClientSecret(t *testing.T) {
+func TestLocalResolverProvider_InvalidClientSecret(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
@@ -382,9 +382,9 @@ func TestLocalResolverProvider_ResolveWithSticky_InvalidClientSecret(t *testing.
 	}
 }
 
-// TestLocalResolverProvider_ResolveWithSticky_NestedValues tests that
+// TestLocalResolverProvider_NestedValues tests that
 // nested flag values are resolved correctly
-func TestLocalResolverProvider_ResolveWithSticky_NestedValues(t *testing.T) {
+func TestLocalResolverProvider_NestedValues(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
