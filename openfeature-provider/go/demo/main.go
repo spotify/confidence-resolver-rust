@@ -46,7 +46,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
-	defer provider.Shutdown()
+	defer openfeature.Shutdown()
 	log.Println("Confidence provider created successfully")
 
 	// Register with OpenFeature
@@ -140,6 +140,8 @@ func main() {
 	log.Printf("Average latency: %.2f ms/request", duration.Seconds()*1000/float64(totalRequests))
 	log.Println("Check logs above for per-thread statistics and state reload/flush messages")
 	log.Println("")
+
+	log.Println("At the end of main... shutting down...")
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

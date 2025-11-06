@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
@@ -33,6 +34,8 @@ type LocalResolverFactory struct {
 	flagLogger      WasmFlagLogger
 	cancelFunc      context.CancelFunc
 	logPollInterval time.Duration
+	wg              sync.WaitGroup
+	mu              sync.Mutex
 }
 
 // NewLocalResolverFactory creates a new LocalResolverFactory with gRPC clients and WASM bytes
@@ -179,10 +182,14 @@ func NewLocalResolverFactory(
 // startScheduledTasks starts the background tasks for state fetching and log polling
 func (f *LocalResolverFactory) startScheduledTasks(parentCtx context.Context) {
 	ctx, cancel := context.WithCancel(parentCtx)
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.cancelFunc = cancel
 
 	// Ticker for state fetching and log flushing using StateProvider
+	f.wg.Add(1)
 	go func() {
+		defer f.wg.Done()
 		ticker := time.NewTicker(f.logPollInterval)
 		defer ticker.Stop()
 
@@ -212,15 +219,31 @@ func (f *LocalResolverFactory) startScheduledTasks(parentCtx context.Context) {
 
 // Shutdown stops all scheduled tasks and cleans up resources
 func (f *LocalResolverFactory) Shutdown(ctx context.Context) {
-	if f.cancelFunc != nil {
-		f.cancelFunc()
+	// lock to prevent concurrent shutdowns
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	log.Println("Shutting down local resolver factory")
+	if f.cancelFunc == nil {
+		log.Println("Scheduled tasks already cancelled")
+		return
 	}
-	if f.flagLogger != nil {
-		f.flagLogger.Shutdown()
-	}
+	f.cancelFunc()
+	f.cancelFunc = nil
+	log.Println("Cancelled scheduled tasks")
+
+	// Wait for background goroutines to exit
+	f.wg.Wait()
+	// Close resolver API first (which flushes final logs)
 	if f.resolverAPI != nil {
 		f.resolverAPI.Close(ctx)
+		log.Println("Closed resolver API")
 	}
+	// Then shutdown flag logger (which waits for log sends to complete)
+	if f.flagLogger != nil {
+		f.flagLogger.Shutdown()
+		log.Println("Shut down flag logger")
+	}
+	log.Println("Local resolver factory shut down")
 }
 
 // GetSwapResolverAPI returns the SwapWasmResolverApi
