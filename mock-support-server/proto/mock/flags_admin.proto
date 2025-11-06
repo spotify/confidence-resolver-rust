@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package confidence.flags.admin.v1;
+
+option go_package = "github.com/spotify/confidence-resolver-rust/mock-support-server/genproto/mock;mockpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+service ResolverStateService {
+
+  // Gets a signed uri that can be used to download the current resolver state
+  rpc ResolverStateUri(ResolverStateUriRequest) returns (ResolverStateUriResponse) {
+    option (google.api.http) = {
+      get: "/v1/resolverState:resolverStateUri"
+    };
+  }
+}
+
+// Request to fetch resolver state uri
+message ResolverStateUriRequest {}
+
+// Response of fetching resolver state uri
+message ResolverStateUriResponse {
+  // The signed uri that can be used to fetch state
+  string signed_uri = 1;
+  // At what time the state uri expires
+  google.protobuf.Timestamp expire_time = 2;
+  // The account the referenced state belongs to
+  string account = 3;
+}
