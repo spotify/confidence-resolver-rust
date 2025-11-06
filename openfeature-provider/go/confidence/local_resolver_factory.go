@@ -218,16 +218,18 @@ func (f *LocalResolverFactory) startScheduledTasks(parentCtx context.Context) {
 func (f *LocalResolverFactory) Shutdown(ctx context.Context) {
 	log.Println("Shutting down local resolver factory")
 	if f.cancelFunc != nil {
-		f.cancelFunc()
+		c := f.cancelFunc
+		f.cancelFunc = nil
+		c()
 		log.Println("Cancelled scheduled tasks")
 	}
+	// Wait for background goroutines to exit
+	f.wg.Wait()
 	// Close resolver API first (which flushes final logs)
 	if f.resolverAPI != nil {
 		f.resolverAPI.Close(ctx)
 		log.Println("Closed resolver API")
 	}
-	// Wait for background goroutines to exit
-	f.wg.Wait()
 	// Then shutdown flag logger (which waits for log sends to complete)
 	if f.flagLogger != nil {
 		f.flagLogger.Shutdown()
