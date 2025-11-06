@@ -210,5 +210,53 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 		t.Logf("✓ Resolve succeeded for flag without materialization requirements")
 	})
-}
 
+	t.Run("Provider returns missing materializations error message", func(t *testing.T) {
+		// Create state with a flag that requires materializations
+		stickyState := createStateWithStickyFlag()
+		accountId := "test-account"
+
+		flagLogger := NewNoOpWasmFlagLogger()
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, stickyState, accountId)
+		if err != nil {
+			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+		}
+		defer swap.Close(ctx)
+
+		factory := &LocalResolverFactory{
+			resolverAPI: swap,
+		}
+
+		provider := NewLocalResolverProvider(factory, "test-secret")
+
+		evalCtx := openfeature.FlattenedContext{
+			"user_id": "test-user-123",
+		}
+
+		// Try to evaluate a flag that requires materializations without providing them
+		defaultValue := false
+		result := provider.BooleanEvaluation(ctx, "sticky-test-flag.enabled", defaultValue, evalCtx)
+
+		// Should return the default value
+		if result.Value != defaultValue {
+			t.Errorf("Expected default value %v when materializations missing, got %v", defaultValue, result.Value)
+		}
+
+		// Should have ErrorReason
+		if result.Reason != openfeature.ErrorReason {
+			t.Errorf("Expected ErrorReason when materializations missing, got %v", result.Reason)
+		}
+
+		// Should have an error with the exact message "missing materializations"
+		if result.ResolutionError.Error() == "" {
+			t.Error("Expected ResolutionError when materializations missing")
+		}
+
+		expectedErrorMsg := "missing materializations"
+		if result.ResolutionError.Error() != "GENERAL: missing materializations" {
+			t.Errorf("Expected error message 'GENERAL: %s', got: %v", expectedErrorMsg, result.ResolutionError)
+		}
+
+		t.Logf("✓ Provider correctly returned default value with 'missing materializations' error message")
+	})
+}
