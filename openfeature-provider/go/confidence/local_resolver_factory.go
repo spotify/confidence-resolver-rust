@@ -182,6 +182,8 @@ func NewLocalResolverFactory(
 // startScheduledTasks starts the background tasks for state fetching and log polling
 func (f *LocalResolverFactory) startScheduledTasks(parentCtx context.Context) {
 	ctx, cancel := context.WithCancel(parentCtx)
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.cancelFunc = cancel
 
 	// Ticker for state fetching and log flushing using StateProvider
@@ -225,12 +227,10 @@ func (f *LocalResolverFactory) Shutdown(ctx context.Context) {
 		log.Println("Scheduled tasks already cancelled")
 		return
 	}
-	if f.cancelFunc != nil {
-		c := f.cancelFunc
-		f.cancelFunc = nil
-		c()
-		log.Println("Cancelled scheduled tasks")
-	}
+	f.cancelFunc()
+	f.cancelFunc = nil
+	log.Println("Cancelled scheduled tasks")
+
 	// Wait for background goroutines to exit
 	f.wg.Wait()
 	// Close resolver API first (which flushes final logs)
