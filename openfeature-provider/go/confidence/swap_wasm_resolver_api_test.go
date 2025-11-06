@@ -126,24 +126,32 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	// Resolve the tutorial-feature flag using the real client secret from the state
 	// The state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
 	// Use "tutorial_visitor" as the visitor_id to match the segment targeting
-	request := &resolver.ResolveFlagsRequest{
-		Flags:        []string{"flags/tutorial-feature"},
-		Apply:        false,
-		ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
-		EvaluationContext: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"visitor_id": structpb.NewStringValue("tutorial_visitor"),
+	request := &resolver.ResolveWithStickyRequest{
+		ResolveRequest: &resolver.ResolveFlagsRequest{
+			Flags:        []string{"flags/tutorial-feature"},
+			Apply:        false,
+			ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
+			EvaluationContext: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					"visitor_id": structpb.NewStringValue("tutorial_visitor"),
+				},
 			},
 		},
+		MaterializationsPerUnit: map[string]*resolver.MaterializationMap{},
 	}
 
-	response, err := swap.Resolve(request)
+	stickyResponse, err := swap.ResolveWithSticky(request)
 	if err != nil {
 		t.Fatalf("Unexpected error resolving tutorial-feature flag: %v", err)
 	}
 
-	if response == nil {
+	if stickyResponse == nil {
 		t.Fatal("Expected non-nil response")
+	}
+
+	response := stickyResponse.GetSuccess().GetResponse()
+	if response == nil {
+		t.Fatal("Expected successful resolve response")
 	}
 
 	if len(response.ResolvedFlags) != 1 {
@@ -225,20 +233,28 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	}
 
 	// Verify that we can successfully resolve after the state update
-	request := &resolver.ResolveFlagsRequest{
-		Flags:        []string{"flags/tutorial-feature"},
-		Apply:        false,
-		ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
-		EvaluationContext: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"visitor_id": structpb.NewStringValue("tutorial_visitor"),
+	request := &resolver.ResolveWithStickyRequest{
+		ResolveRequest: &resolver.ResolveFlagsRequest{
+			Flags:        []string{"flags/tutorial-feature"},
+			Apply:        false,
+			ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
+			EvaluationContext: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					"visitor_id": structpb.NewStringValue("tutorial_visitor"),
+				},
 			},
 		},
+		MaterializationsPerUnit: map[string]*resolver.MaterializationMap{},
 	}
 
-	response, err := swap.Resolve(request)
+	stickyResponse, err := swap.ResolveWithSticky(request)
 	if err != nil {
 		t.Fatalf("Resolve failed after update: %v", err)
+	}
+
+	response := stickyResponse.GetSuccess().GetResponse()
+	if response == nil {
+		t.Fatal("Expected successful resolve response")
 	}
 
 	// Verify we got the expected resolution
@@ -279,20 +295,28 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 		}
 
 		// Verify that Resolve successfully works after each update
-		request := &resolver.ResolveFlagsRequest{
-			Flags:        []string{"flags/tutorial-feature"},
-			Apply:        false,
-			ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
-			EvaluationContext: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					"visitor_id": structpb.NewStringValue("tutorial_visitor"),
+		request := &resolver.ResolveWithStickyRequest{
+			ResolveRequest: &resolver.ResolveFlagsRequest{
+				Flags:        []string{"flags/tutorial-feature"},
+				Apply:        false,
+				ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
+				EvaluationContext: &structpb.Struct{
+					Fields: map[string]*structpb.Value{
+						"visitor_id": structpb.NewStringValue("tutorial_visitor"),
+					},
 				},
 			},
+			MaterializationsPerUnit: map[string]*resolver.MaterializationMap{},
 		}
 
-		response, resolveErr := swap.Resolve(request)
+		stickyResponse, resolveErr := swap.ResolveWithSticky(request)
 		if resolveErr != nil {
 			t.Fatalf("Update %d: Resolve failed: %v", i, resolveErr)
+		}
+
+		response := stickyResponse.GetSuccess().GetResponse()
+		if response == nil {
+			t.Fatalf("Update %d: Expected successful resolve response", i)
 		}
 
 		// Verify we got the expected variant after each swap

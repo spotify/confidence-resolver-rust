@@ -78,21 +78,6 @@ func (s *SwapWasmResolverApi) UpdateStateAndFlushLogs(state []byte, accountId st
 	oldInstance.Close(ctx)
 	return nil
 }
-
-func (s *SwapWasmResolverApi) Resolve(request *resolver.ResolveFlagsRequest) (*resolver.ResolveFlagsResponse, error) {
-	// Lock to ensure resolve doesn't happen during swap
-	instance := s.currentInstance.Load().(*ResolverApi)
-	response, err := instance.Resolve(request)
-
-	// If instance is closed, retry with the current instance (which may have been swapped)
-	if err != nil && errors.Is(err, ErrInstanceClosed) {
-		instance = s.currentInstance.Load().(*ResolverApi)
-		return instance.Resolve(request)
-	}
-
-	return response, err
-}
-
 func (s *SwapWasmResolverApi) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
 	// Lock to ensure resolve doesn't happen during swap
 	instance := s.currentInstance.Load().(*ResolverApi)
