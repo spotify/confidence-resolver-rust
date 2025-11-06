@@ -46,7 +46,7 @@ class OpenFeatureLocalResolveProviderE2ETest {
 
     // Set evaluation context with targeting key
     final EvaluationContext context = new MutableContext("test-a")
-      .add("sticky", true);
+      .add("sticky", false);
     api.setEvaluationContext(context);
 
     client = api.getClient();
