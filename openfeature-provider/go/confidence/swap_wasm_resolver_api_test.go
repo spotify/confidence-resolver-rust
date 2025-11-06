@@ -56,6 +56,100 @@ func createMinimalResolverState() []byte {
 	return data
 }
 
+// Helper function to create a resolver state with a flag that requires materializations
+func createStateWithStickyFlag() []byte {
+	state := &adminv1.ResolverState{
+		Flags: []*adminv1.Flag{
+			{
+				Name: "flags/sticky-test-flag",
+				Variants: []*adminv1.Flag_Variant{
+					{
+						Name: "flags/sticky-test-flag/variants/on",
+						Value: &structpb.Struct{
+							Fields: map[string]*structpb.Value{
+								"enabled": structpb.NewBoolValue(true),
+							},
+						},
+					},
+					{
+						Name: "flags/sticky-test-flag/variants/off",
+						Value: &structpb.Struct{
+							Fields: map[string]*structpb.Value{
+								"enabled": structpb.NewBoolValue(false),
+							},
+						},
+					},
+				},
+				State: adminv1.Flag_ACTIVE,
+				// Associate this flag with the test client
+				Clients: []string{"clients/test-client"},
+				Rules: []*adminv1.Flag_Rule{
+					{
+						Name:                 "flags/sticky-test-flag/rules/sticky-rule",
+						Segment:              "segments/always-true",
+						TargetingKeySelector: "user_id",
+						Enabled:              true,
+						AssignmentSpec: &adminv1.Flag_Rule_AssignmentSpec{
+							BucketCount: 10000,
+							Assignments: []*adminv1.Flag_Rule_Assignment{
+								{
+									AssignmentId: "variant-assignment",
+									Assignment: &adminv1.Flag_Rule_Assignment_Variant{
+										Variant: &adminv1.Flag_Rule_Assignment_VariantAssignment{
+											Variant: "flags/sticky-test-flag/variants/on",
+										},
+									},
+									BucketRanges: []*adminv1.Flag_Rule_BucketRange{
+										{
+											Upper: 10000,
+										},
+									},
+								},
+							},
+						},
+						// This rule requires a materialization named "experiment_v1"
+						MaterializationSpec: &adminv1.Flag_Rule_MaterializationSpec{
+							ReadMaterialization:  "experiment_v1",
+							WriteMaterialization: "experiment_v1",
+							Mode: &adminv1.Flag_Rule_MaterializationSpec_MaterializationReadMode{
+								MaterializationMustMatch:     false,
+								SegmentTargetingCanBeIgnored: false,
+							},
+						},
+					},
+				},
+			},
+		},
+		SegmentsNoBitsets: []*adminv1.Segment{
+			{
+				Name: "segments/always-true",
+				// This segment always matches
+			},
+		},
+		Clients: []*iamv1.Client{
+			{
+				Name: "clients/test-client",
+			},
+		},
+		ClientCredentials: []*iamv1.ClientCredential{
+			{
+				// ClientCredential name must start with the client name
+				Name: "clients/test-client/credentials/test-credential",
+				Credential: &iamv1.ClientCredential_ClientSecret_{
+					ClientSecret: &iamv1.ClientCredential_ClientSecret{
+						Secret: "test-secret",
+					},
+				},
+			},
+		},
+	}
+	data, err := proto.Marshal(state)
+	if err != nil {
+		panic("Failed to create state with sticky flag: " + err.Error())
+	}
+	return data
+}
+
 func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
@@ -942,4 +1036,88 @@ func TestResolverApi_ResolveWithSticky_Basic(t *testing.T) {
 	resolverApi.Close(ctx)
 
 	t.Logf("✓ Basic ResolveWithSticky test passed")
+}
+
+func TestSwapWasmResolverApi_ResolveWithSticky_MissingMaterializations(t *testing.T) {
+	ctx := context.Background()
+	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+	defer runtime.Close(ctx)
+
+	flagLogger := NewNoOpWasmFlagLogger()
+	// Use state with a flag that requires materializations
+	stickyState := createStateWithStickyFlag()
+	accountId := "test-account"
+
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, stickyState, accountId)
+	if err != nil {
+		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+	}
+	defer swap.Close(ctx)
+
+	// Resolve the sticky flag WITHOUT providing the required materialization
+	request := &resolver.ResolveFlagsRequest{
+		Flags:        []string{"flags/sticky-test-flag"},
+		Apply:        false,
+		ClientSecret: "test-secret",
+		EvaluationContext: &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"user_id": structpb.NewStringValue("test-user-123"),
+			},
+		},
+	}
+
+	stickyRequest := &resolver.ResolveWithStickyRequest{
+		ResolveRequest: request,
+		// Empty materializations - missing the required "experiment_v1" materialization
+		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
+		FailFastOnSticky:        false,
+		NotProcessSticky:        false,
+	}
+
+	response, err := swap.ResolveWithSticky(stickyRequest)
+	if err != nil {
+		t.Fatalf("Unexpected error from ResolveWithSticky: %v", err)
+	}
+
+	if response == nil {
+		t.Fatal("Expected non-nil response")
+	}
+
+	// The response should be a MissingMaterializations result, not Success
+	missingResult, ok := response.ResolveResult.(*resolver.ResolveWithStickyResponse_MissingMaterializations_)
+	if !ok {
+		t.Fatal("Expected MissingMaterializations result, got Success or other type")
+	}
+
+	if missingResult.MissingMaterializations == nil {
+		t.Fatal("Expected non-nil MissingMaterializations")
+	}
+
+	items := missingResult.MissingMaterializations.Items
+	if len(items) == 0 {
+		t.Fatal("Expected at least one missing materialization item")
+	}
+
+	// Verify the missing materialization details
+	foundExpectedMaterialization := false
+	for _, item := range items {
+		if item.ReadMaterialization == "experiment_v1" {
+			foundExpectedMaterialization = true
+			if item.Unit != "test-user-123" {
+				t.Errorf("Expected unit 'test-user-123', got '%s'", item.Unit)
+			}
+			if item.Rule != "flags/sticky-test-flag/rules/sticky-rule" {
+				t.Errorf("Expected rule 'flags/sticky-test-flag/rules/sticky-rule', got '%s'", item.Rule)
+			}
+			t.Logf("✓ Found missing materialization: unit=%s, rule=%s, read_materialization=%s",
+				item.Unit, item.Rule, item.ReadMaterialization)
+			break
+		}
+	}
+
+	if !foundExpectedMaterialization {
+		t.Error("Expected to find missing materialization 'experiment_v1' in response")
+	}
+
+	t.Logf("✓ ResolveWithSticky correctly returns MissingMaterializations when required materialization is not provided")
 }

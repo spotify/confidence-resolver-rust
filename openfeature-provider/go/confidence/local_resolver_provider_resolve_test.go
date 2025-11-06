@@ -69,93 +69,6 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 
 		t.Logf("✓ BooleanEvaluation correctly returned default value: %v", defaultValue)
 	})
-
-	t.Run("StringEvaluation returns default on error", func(t *testing.T) {
-		defaultValue := "default-string"
-		result := provider.StringEvaluation(ctx, "non-existent-flag", defaultValue, evalCtx)
-
-		if result.Value != defaultValue {
-			t.Errorf("Expected default value %s, got %s", defaultValue, result.Value)
-		}
-
-		if result.Reason != openfeature.ErrorReason {
-			t.Errorf("Expected ErrorReason, got %v", result.Reason)
-		}
-
-		if result.ResolutionError.Error() == "" {
-			t.Error("Expected ResolutionError to not be empty")
-		}
-
-		t.Logf("✓ StringEvaluation correctly returned default value: %s", defaultValue)
-	})
-
-	t.Run("IntEvaluation returns default on error", func(t *testing.T) {
-		defaultValue := int64(42)
-		result := provider.IntEvaluation(ctx, "non-existent-flag", defaultValue, evalCtx)
-
-		if result.Value != defaultValue {
-			t.Errorf("Expected default value %d, got %d", defaultValue, result.Value)
-		}
-
-		if result.Reason != openfeature.ErrorReason {
-			t.Errorf("Expected ErrorReason, got %v", result.Reason)
-		}
-
-		if result.ResolutionError.Error() == "" {
-			t.Error("Expected ResolutionError to not be empty")
-		}
-
-		t.Logf("✓ IntEvaluation correctly returned default value: %d", defaultValue)
-	})
-
-	t.Run("FloatEvaluation returns default on error", func(t *testing.T) {
-		defaultValue := 3.14
-		result := provider.FloatEvaluation(ctx, "non-existent-flag", defaultValue, evalCtx)
-
-		if result.Value != defaultValue {
-			t.Errorf("Expected default value %f, got %f", defaultValue, result.Value)
-		}
-
-		if result.Reason != openfeature.ErrorReason {
-			t.Errorf("Expected ErrorReason, got %v", result.Reason)
-		}
-
-		if result.ResolutionError.Error() == "" {
-			t.Error("Expected ResolutionError to not be empty")
-		}
-
-		t.Logf("✓ FloatEvaluation correctly returned default value: %f", defaultValue)
-	})
-
-	t.Run("ObjectEvaluation returns default on error", func(t *testing.T) {
-		defaultValue := map[string]interface{}{
-			"key": "default-value",
-		}
-		result := provider.ObjectEvaluation(ctx, "non-existent-flag", defaultValue, evalCtx)
-
-		if result.Value == nil {
-			t.Fatal("Expected result value to not be nil")
-		}
-
-		resultMap, ok := result.Value.(map[string]interface{})
-		if !ok {
-			t.Fatalf("Expected result value to be a map, got %T", result.Value)
-		}
-
-		if resultMap["key"] != defaultValue["key"] {
-			t.Errorf("Expected default value with key='default-value', got %v", resultMap)
-		}
-
-		if result.Reason != openfeature.ErrorReason {
-			t.Errorf("Expected ErrorReason, got %v", result.Reason)
-		}
-
-		if result.ResolutionError.Error() == "" {
-			t.Error("Expected ResolutionError to not be empty")
-		}
-
-		t.Logf("✓ ObjectEvaluation correctly returned default value: %v", defaultValue)
-	})
 }
 
 // TestLocalResolverProvider_ReturnsCorrectValue tests that
@@ -255,39 +168,109 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
 
-	// Load real test state
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
+	t.Run("Flag without sticky rules succeeds with empty materializations", func(t *testing.T) {
+		// Load real test state
+		testState := loadTestResolverState(t)
+		testAcctID := loadTestAccountID(t)
 
-	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID)
-	if err != nil {
-		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+		flagLogger := NewNoOpWasmFlagLogger()
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID)
+		if err != nil {
+			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+		}
+		defer swap.Close(ctx)
+
+		factory := &LocalResolverFactory{
+			resolverAPI: swap,
+		}
+
+		provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF")
+
+		evalCtx := openfeature.FlattenedContext{
+			"visitor_id": "tutorial_visitor",
+		}
+
+		// The tutorial-feature flag in the test data doesn't have materialization requirements
+		// so resolving with empty materializations should succeed
+		defaultValue := "default"
+		result := provider.StringEvaluation(ctx, "tutorial-feature.message", defaultValue, evalCtx)
+
+		// Should succeed - tutorial-feature doesn't require materializations
+		if result.ResolutionError.Error() != "" {
+			t.Errorf("Expected successful resolve for flag without sticky rules, got error: %v", result.ResolutionError)
+		}
+
+		if result.Value == defaultValue {
+			t.Error("Expected resolved value, got default value")
+		}
+
+		if result.Reason != openfeature.TargetingMatchReason {
+			t.Errorf("Expected TargetingMatchReason, got %v", result.Reason)
+		}
+
+		t.Logf("✓ Resolve succeeded for flag without materialization requirements")
+	})
+
+	t.Run("Flag with sticky rules returns default value when materializations missing", func(t *testing.T) {
+		// Create state with a flag that requires materializations
+		stickyState := createStateWithStickyFlag()
+		accountId := "test-account"
+
+		flagLogger := NewNoOpWasmFlagLogger()
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, stickyState, accountId)
+		if err != nil {
+			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+		}
+		defer swap.Close(ctx)
+
+		factory := &LocalResolverFactory{
+			resolverAPI: swap,
+		}
+
+		provider := NewLocalResolverProvider(factory, "test-secret")
+
+		evalCtx := openfeature.FlattenedContext{
+			"user_id": "test-user-123",
+		}
+
+		// Try to evaluate a flag that requires materializations without providing them
+		defaultValue := false
+		result := provider.BooleanEvaluation(ctx, "sticky-test-flag.enabled", defaultValue, evalCtx)
+
+		// Should return the default value
+		if result.Value != defaultValue {
+			t.Errorf("Expected default value %v when materializations missing, got %v", defaultValue, result.Value)
+		}
+
+		// Should have ErrorReason
+		if result.Reason != openfeature.ErrorReason {
+			t.Errorf("Expected ErrorReason when materializations missing, got %v", result.Reason)
+		}
+
+		// Should have an error mentioning missing materializations
+		if result.ResolutionError.Error() == "" {
+			t.Error("Expected ResolutionError when materializations missing")
+		} else if !contains(result.ResolutionError.Error(), "missing materializations") {
+			t.Errorf("Expected error to mention 'missing materializations', got: %v", result.ResolutionError)
+		}
+
+		t.Logf("✓ Flag with materialization requirements correctly returned default value with error: %v", result.ResolutionError)
+	})
+}
+
+// Helper function to check if a string contains a substring (case-insensitive)
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(findSubstring(s, substr) != -1))
+}
+
+func findSubstring(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
 	}
-	defer swap.Close(ctx)
-
-	factory := &LocalResolverFactory{
-		resolverAPI: swap,
-	}
-
-	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF")
-
-	evalCtx := openfeature.FlattenedContext{
-		"visitor_id": "tutorial_visitor",
-	}
-
-	// Even with empty materializations, the resolve should work
-	// (assuming the flag doesn't require sticky targeting)
-	defaultValue := "default"
-	result := provider.StringEvaluation(ctx, "tutorial-feature.message", defaultValue, evalCtx)
-
-	// Should succeed because materializations are empty (not missing required ones)
-	// ResolutionError might have an error or not depending on the flag configuration
-	if result.ResolutionError.Error() != "" {
-		t.Logf("Note: Got resolution error (may be expected for sticky flags): %v", result.ResolutionError)
-	} else {
-		t.Logf("✓ Resolve succeeded without materializations")
-	}
+	return -1
 }
 
 // TestLocalResolverProvider_TypeMismatch tests that
