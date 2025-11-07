@@ -44,11 +44,11 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": ["package.json"]
     },
-    "openfeature-provider/go": {
-      "path": "openfeature-provider/go",
+    "openfeature-provider/go/confidence": {
+      "path": "openfeature-provider/go/confidence",
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "initial-version": "0.0.1"
+      "include-component-in-tag": true
     }
   }
 }
