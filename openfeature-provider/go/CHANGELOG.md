@@ -3,10 +3,6 @@
 ## 0.1.0 (2025-11-07)
 
 
-### ⚠ BREAKING CHANGES
-
-* **go:** correct module structure to match declared module path ([#106](https://github.com/spotify/confidence-resolver/issues/106))
-
 ### Features
 
 * add go provider ([#100](https://github.com/spotify/confidence-resolver/issues/100)) ([5c0895b](https://github.com/spotify/confidence-resolver/commit/5c0895bd35edd7daf436be5a64b5a40ba3eb7dab))
