@@ -221,8 +221,16 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	// Get resolver API from factory
 	resolverAPI := p.factory.GetSwapResolverAPI()
 
-	// Resolve flags
-	response, err := resolverAPI.Resolve(request)
+	// Create ResolveWithSticky request
+	stickyRequest := &resolver.ResolveWithStickyRequest{
+		ResolveRequest:          request,
+		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
+		FailFastOnSticky:        true,
+		NotProcessSticky:        false,
+	}
+
+	// Resolve flags with sticky support
+	stickyResponse, err := resolverAPI.ResolveWithSticky(stickyRequest)
 	if err != nil {
 		log.Printf("Failed to resolve flag '%s': %v", flagPath, err)
 		return openfeature.InterfaceResolutionDetail{
@@ -230,6 +238,31 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewGeneralResolutionError(fmt.Sprintf("resolve failed: %v", err)),
+			},
+		}
+	}
+
+	// Extract the actual resolve response from the sticky response
+	var response *resolver.ResolveFlagsResponse
+	switch result := stickyResponse.ResolveResult.(type) {
+	case *resolver.ResolveWithStickyResponse_Success_:
+		response = result.Success.Response
+	case *resolver.ResolveWithStickyResponse_MissingMaterializations_:
+		log.Printf("Missing materializations for flag '%s'", flagPath)
+		return openfeature.InterfaceResolutionDetail{
+			Value: defaultValue,
+			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+				Reason:          openfeature.ErrorReason,
+				ResolutionError: openfeature.NewGeneralResolutionError("missing materializations"),
+			},
+		}
+	default:
+		log.Printf("Unexpected resolve result type for flag '%s'", flagPath)
+		return openfeature.InterfaceResolutionDetail{
+			Value: defaultValue,
+			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+				Reason:          openfeature.ErrorReason,
+				ResolutionError: openfeature.NewGeneralResolutionError("unexpected resolve result"),
 			},
 		}
 	}
