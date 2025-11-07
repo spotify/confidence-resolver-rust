@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.7.2...openfeature-provider-java-v0.7.3) (2025-11-07)
+
+
+### Bug Fixes
+
+* **java:** reload state before creating the initial Resolver ([#104](https://github.com/spotify/confidence-resolver/issues/104)) ([93581bd](https://github.com/spotify/confidence-resolver/commit/93581bd65f5775b9f188a1c9962153428cc76bdc))
+
 ## [0.7.2](https://github.com/spotify/confidence-resolver-rust/compare/openfeature-provider-java-v0.7.1...openfeature-provider-java-v0.7.2) (2025-11-03)
 
 
