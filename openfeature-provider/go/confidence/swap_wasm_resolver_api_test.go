@@ -180,7 +180,7 @@ func createResolveWithStickyRequest(
 func createTutorialFeatureRequest() *resolver.ResolveFlagsRequest {
 	return &resolver.ResolveFlagsRequest{
 		Flags:        []string{"flags/tutorial-feature"},
-		Apply:        false,
+		Apply:        true,
 		ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
 		EvaluationContext: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
@@ -260,7 +260,7 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	request := createResolveWithStickyRequest(
 		createTutorialFeatureRequest(),
 		nil,   // empty materializations
-		false, // failFast
+		true, // failFast
 		false, // notProcessSticky
 	)
 
@@ -360,7 +360,7 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	request := createResolveWithStickyRequest(
 		createTutorialFeatureRequest(),
 		nil,   // empty materializations
-		false, // failFast
+		true, // failFast
 		false, // notProcessSticky
 	)
 
@@ -415,7 +415,7 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 		request := createResolveWithStickyRequest(
 			createTutorialFeatureRequest(),
 			nil,   // empty materializations
-			false, // failFast
+			true, // failFast
 			false, // notProcessSticky
 		)
 
@@ -574,7 +574,7 @@ func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(
 	stickyRequest := createResolveWithStickyRequest(
 		&resolver.ResolveFlagsRequest{
 			Flags:        []string{"flags/sticky-test-flag"},
-			Apply:        false,
+			Apply:        true,
 			ClientSecret: "test-secret",
 			EvaluationContext: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
