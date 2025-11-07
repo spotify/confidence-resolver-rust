@@ -260,7 +260,7 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	request := createResolveWithStickyRequest(
 		createTutorialFeatureRequest(),
 		nil,   // empty materializations
-		true, // failFast
+		true,  // failFast
 		false, // notProcessSticky
 	)
 
@@ -360,7 +360,7 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	request := createResolveWithStickyRequest(
 		createTutorialFeatureRequest(),
 		nil,   // empty materializations
-		true, // failFast
+		true,  // failFast
 		false, // notProcessSticky
 	)
 
@@ -415,7 +415,7 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 		request := createResolveWithStickyRequest(
 			createTutorialFeatureRequest(),
 			nil,   // empty materializations
-			true, // failFast
+			true,  // failFast
 			false, // notProcessSticky
 		)
 

@@ -24,12 +24,12 @@ type ResolverApi struct {
 	runtime  wazero.Runtime
 
 	// WASM exports
-	wasmMsgAlloc                 api.Function
-	wasmMsgFree                  api.Function
-	wasmMsgGuestSetResolverState api.Function
-	wasmMsgGuestResolve          api.Function
+	wasmMsgAlloc                  api.Function
+	wasmMsgFree                   api.Function
+	wasmMsgGuestSetResolverState  api.Function
+	wasmMsgGuestResolve           api.Function
 	wasmMsgGuestResolveWithSticky api.Function
-	wasmMsgGuestResolveSimple    api.Function
+	wasmMsgGuestResolveSimple     api.Function
 }
 
 // NewResolverApi creates a new ResolverApi instance
@@ -81,13 +81,13 @@ func NewResolverApi(ctx context.Context, runtime wazero.Runtime, wasmBytes []byt
 	}
 
 	return &ResolverApi{
-		instance:                     instance,
-		module:                       module,
-		runtime:                      runtime,
-		wasmMsgAlloc:                 wasmMsgAlloc,
-		wasmMsgFree:                  wasmMsgFree,
-		wasmMsgGuestSetResolverState: wasmMsgGuestSetResolverState,
-		wasmMsgGuestResolve:          wasmMsgGuestResolve,
+		instance:                      instance,
+		module:                        module,
+		runtime:                       runtime,
+		wasmMsgAlloc:                  wasmMsgAlloc,
+		wasmMsgFree:                   wasmMsgFree,
+		wasmMsgGuestSetResolverState:  wasmMsgGuestSetResolverState,
+		wasmMsgGuestResolve:           wasmMsgGuestResolve,
 		wasmMsgGuestResolveWithSticky: wasmMsgGuestResolveWithSticky,
 	}
 }
