@@ -11,8 +11,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// TestLocalResolverProvider_ReturnsDefaultOnError tests that
-// default values are returned when resolve fails
 func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
@@ -51,9 +49,9 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 		"user_id": "test-user",
 	}
 
-	t.Run("BooleanEvaluation returns default on error", func(t *testing.T) {
-		defaultValue := true
-		result := provider.BooleanEvaluation(ctx, "non-existent-flag", defaultValue, evalCtx)
+	t.Run("StringEvaluation returns default on error", func(t *testing.T) {
+		defaultValue := "default-value"
+		result := provider.StringEvaluation(ctx, "non-existent-flag.field", defaultValue, evalCtx)
 
 		if result.Value != defaultValue {
 			t.Errorf("Expected default value %v, got %v", defaultValue, result.Value)
@@ -67,12 +65,10 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 			t.Error("Expected ResolutionError to not be empty")
 		}
 
-		t.Logf("✓ BooleanEvaluation correctly returned default value: %v", defaultValue)
+		t.Logf("✓ StringEvaluation correctly returned default value: %s", defaultValue)
 	})
 }
 
-// TestLocalResolverProvider_ReturnsCorrectValue tests that
-// correct values are returned when resolve succeeds with real test data
 func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
@@ -118,8 +114,6 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 		if result.ResolutionError.Error() != "" {
 			t.Errorf("Expected no error, got %v", result.ResolutionError)
 		}
-
-		t.Logf("✓ StringEvaluation correctly returned variant value: %s", result.Value)
 	})
 
 	t.Run("ObjectEvaluation returns correct variant structure", func(t *testing.T) {
@@ -156,13 +150,9 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 		if result.ResolutionError.Error() != "" {
 			t.Errorf("Expected no error, got %v", result.ResolutionError)
 		}
-
-		t.Logf("✓ ObjectEvaluation correctly returned variant structure: %v", resultMap)
 	})
 }
 
-// TestLocalResolverProvider_MissingMaterializations tests
-// that missing materializations are handled correctly
 func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
@@ -195,7 +185,6 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		defaultValue := "default"
 		result := provider.StringEvaluation(ctx, "tutorial-feature.message", defaultValue, evalCtx)
 
-		// Should succeed - tutorial-feature doesn't require materializations
 		if result.ResolutionError.Error() != "" {
 			t.Errorf("Expected successful resolve for flag without sticky rules, got error: %v", result.ResolutionError)
 		}
@@ -207,8 +196,6 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		if result.Reason != openfeature.TargetingMatchReason {
 			t.Errorf("Expected TargetingMatchReason, got %v", result.Reason)
 		}
-
-		t.Logf("✓ Resolve succeeded for flag without materialization requirements")
 	})
 
 	t.Run("Provider returns missing materializations error message", func(t *testing.T) {
@@ -233,21 +220,17 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			"user_id": "test-user-123",
 		}
 
-		// Try to evaluate a flag that requires materializations without providing them
 		defaultValue := false
 		result := provider.BooleanEvaluation(ctx, "sticky-test-flag.enabled", defaultValue, evalCtx)
 
-		// Should return the default value
 		if result.Value != defaultValue {
 			t.Errorf("Expected default value %v when materializations missing, got %v", defaultValue, result.Value)
 		}
 
-		// Should have ErrorReason
 		if result.Reason != openfeature.ErrorReason {
 			t.Errorf("Expected ErrorReason when materializations missing, got %v", result.Reason)
 		}
 
-		// Should have an error with the exact message "missing materializations"
 		if result.ResolutionError.Error() == "" {
 			t.Error("Expected ResolutionError when materializations missing")
 		}
@@ -256,7 +239,5 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		if result.ResolutionError.Error() != "GENERAL: missing materializations" {
 			t.Errorf("Expected error message 'GENERAL: %s', got: %v", expectedErrorMsg, result.ResolutionError)
 		}
-
-		t.Logf("✓ Provider correctly returned default value with 'missing materializations' error message")
 	})
 }

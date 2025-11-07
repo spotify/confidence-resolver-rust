@@ -16,7 +16,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// Helper to load test data from the data directory
 func loadTestResolverState(t *testing.T) []byte {
 	dataPath := filepath.Join("..", "..", "..", "data", "resolver_state_current.pb")
 	data, err := os.ReadFile(dataPath)
@@ -65,7 +64,7 @@ func createMinimalResolverState() []byte {
 	return data
 }
 
-// Helper function to create a resolver state with a flag that requires materializations
+// Helper to create a resolver state with a flag that requires materializations
 func createStateWithStickyFlag() []byte {
 	state := &adminv1.ResolverState{
 		Flags: []*adminv1.Flag{
@@ -159,6 +158,38 @@ func createStateWithStickyFlag() []byte {
 	return data
 }
 
+// Helper function to create a ResolveWithStickyRequest
+func createResolveWithStickyRequest(
+	resolveRequest *resolver.ResolveFlagsRequest,
+	materializations map[string]*resolver.MaterializationMap,
+	failFast bool,
+	notProcessSticky bool,
+) *resolver.ResolveWithStickyRequest {
+	if materializations == nil {
+		materializations = make(map[string]*resolver.MaterializationMap)
+	}
+	return &resolver.ResolveWithStickyRequest{
+		ResolveRequest:          resolveRequest,
+		MaterializationsPerUnit: materializations,
+		FailFastOnSticky:        failFast,
+		NotProcessSticky:        notProcessSticky,
+	}
+}
+
+// Helper function to create a tutorial-feature resolve request with standard test data
+func createTutorialFeatureRequest() *resolver.ResolveFlagsRequest {
+	return &resolver.ResolveFlagsRequest{
+		Flags:        []string{"flags/tutorial-feature"},
+		Apply:        false,
+		ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
+		EvaluationContext: &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"visitor_id": structpb.NewStringValue("tutorial_visitor"),
+			},
+		},
+	}
+}
+
 func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
@@ -226,22 +257,12 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	}
 	defer swap.Close(ctx)
 
-	// Resolve the tutorial-feature flag using the real client secret from the state
-	// The state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
-	// Use "tutorial_visitor" as the visitor_id to match the segment targeting
-	request := &resolver.ResolveWithStickyRequest{
-		ResolveRequest: &resolver.ResolveFlagsRequest{
-			Flags:        []string{"flags/tutorial-feature"},
-			Apply:        false,
-			ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
-			EvaluationContext: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					"visitor_id": structpb.NewStringValue("tutorial_visitor"),
-				},
-			},
-		},
-		MaterializationsPerUnit: map[string]*resolver.MaterializationMap{},
-	}
+	request := createResolveWithStickyRequest(
+		createTutorialFeatureRequest(),
+		nil,   // empty materializations
+		false, // failFast
+		false, // notProcessSticky
+	)
 
 	stickyResponse, err := swap.ResolveWithSticky(request)
 	if err != nil {
@@ -336,19 +357,12 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	}
 
 	// Verify that we can successfully resolve after the state update
-	request := &resolver.ResolveWithStickyRequest{
-		ResolveRequest: &resolver.ResolveFlagsRequest{
-			Flags:        []string{"flags/tutorial-feature"},
-			Apply:        false,
-			ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
-			EvaluationContext: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					"visitor_id": structpb.NewStringValue("tutorial_visitor"),
-				},
-			},
-		},
-		MaterializationsPerUnit: map[string]*resolver.MaterializationMap{},
-	}
+	request := createResolveWithStickyRequest(
+		createTutorialFeatureRequest(),
+		nil,   // empty materializations
+		false, // failFast
+		false, // notProcessSticky
+	)
 
 	stickyResponse, err := swap.ResolveWithSticky(request)
 	if err != nil {
@@ -398,19 +412,12 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 		}
 
 		// Verify that Resolve successfully works after each update
-		request := &resolver.ResolveWithStickyRequest{
-			ResolveRequest: &resolver.ResolveFlagsRequest{
-				Flags:        []string{"flags/tutorial-feature"},
-				Apply:        false,
-				ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
-				EvaluationContext: &structpb.Struct{
-					Fields: map[string]*structpb.Value{
-						"visitor_id": structpb.NewStringValue("tutorial_visitor"),
-					},
-				},
-			},
-			MaterializationsPerUnit: map[string]*resolver.MaterializationMap{},
-		}
+		request := createResolveWithStickyRequest(
+			createTutorialFeatureRequest(),
+			nil,   // empty materializations
+			false, // failFast
+			false, // notProcessSticky
+		)
 
 		stickyResponse, resolveErr := swap.ResolveWithSticky(request)
 		if resolveErr != nil {
@@ -466,43 +473,30 @@ func TestErrInstanceClosed(t *testing.T) {
 	}
 }
 
-func TestSwapWasmResolverApi_ResolveWithSticky(t *testing.T) {
+// State from data sample, flag without sticky rules
+func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-
-	// Load real test state from data directory
 	testState := loadTestResolverState(t)
 	testAcctID := loadTestAccountID(t)
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID)
+	wasmResolver, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID)
 	if err != nil {
-		t.Fatalf("Failed to create SwapWasmResolverApi with real state: %v", err)
+		t.Fatalf("Failed to create SwapWasmResolverApi with sample state: %v", err)
 	}
-	defer swap.Close(ctx)
+	defer wasmResolver.Close(ctx)
 
-	// Create a ResolveWithStickyRequest
-	request := &resolver.ResolveFlagsRequest{
-		Flags:        []string{"flags/tutorial-feature"},
-		Apply:        false,
-		ClientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
-		EvaluationContext: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"visitor_id": structpb.NewStringValue("tutorial_visitor"),
-			},
-		},
-	}
+	stickyRequest := createResolveWithStickyRequest(
+		createTutorialFeatureRequest(),
+		nil,   // empty materializations
+		true,  // failFast
+		false, // notProcessSticky
+	)
 
-	stickyRequest := &resolver.ResolveWithStickyRequest{
-		ResolveRequest:          request,
-		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
-		FailFastOnSticky:        true,
-		NotProcessSticky:        false,
-	}
-
-	response, err := swap.ResolveWithSticky(stickyRequest)
+	response, err := wasmResolver.ResolveWithSticky(stickyRequest)
 	if err != nil {
 		t.Fatalf("Unexpected error resolving tutorial-feature flag with sticky: %v", err)
 	}
@@ -511,7 +505,6 @@ func TestSwapWasmResolverApi_ResolveWithSticky(t *testing.T) {
 		t.Fatal("Expected non-nil response")
 	}
 
-	// Extract the actual resolve response from the sticky response
 	successResult, ok := response.ResolveResult.(*resolver.ResolveWithStickyResponse_Success_)
 	if !ok {
 		t.Fatal("Expected success result from ResolveWithSticky")
@@ -524,23 +517,19 @@ func TestSwapWasmResolverApi_ResolveWithSticky(t *testing.T) {
 
 	resolvedFlag := resolveResponse.ResolvedFlags[0]
 
-	// Verify the exact flag name
 	if resolvedFlag.Flag != "flags/tutorial-feature" {
 		t.Errorf("Expected flag 'flags/tutorial-feature', got '%s'", resolvedFlag.Flag)
 	}
 
-	// Verify the exact variant
 	expectedVariant := "flags/tutorial-feature/variants/exciting-welcome"
 	if resolvedFlag.Variant != expectedVariant {
 		t.Errorf("Expected variant '%s', got '%s'", expectedVariant, resolvedFlag.Variant)
 	}
 
-	// Verify the reason is MATCH (successful targeting match)
 	if resolvedFlag.Reason.String() != "RESOLVE_REASON_MATCH" {
 		t.Errorf("Expected reason RESOLVE_REASON_MATCH, got %v", resolvedFlag.Reason)
 	}
 
-	// Verify the resolved value has the expected structure and content
 	if resolvedFlag.Value == nil {
 		t.Fatal("Expected non-nil value in resolved flag")
 	}
@@ -550,7 +539,6 @@ func TestSwapWasmResolverApi_ResolveWithSticky(t *testing.T) {
 		t.Fatal("Expected fields in resolved value")
 	}
 
-	// Verify the exact message value from the exciting-welcome variant
 	expectedMessage := "We are very excited to welcome you to Confidence! This is a message from the tutorial flag."
 	messageValue, hasMessage := fields["message"]
 	if !hasMessage {
@@ -559,7 +547,6 @@ func TestSwapWasmResolverApi_ResolveWithSticky(t *testing.T) {
 		t.Errorf("Expected message '%s', got '%s'", expectedMessage, messageValue.GetStringValue())
 	}
 
-	// Verify the exact title value from the exciting-welcome variant
 	expectedTitle := "Welcome to Confidence!"
 	titleValue, hasTitle := fields["title"]
 	if !hasTitle {
@@ -567,17 +554,14 @@ func TestSwapWasmResolverApi_ResolveWithSticky(t *testing.T) {
 	} else if titleValue.GetStringValue() != expectedTitle {
 		t.Errorf("Expected title '%s', got '%s'", expectedTitle, titleValue.GetStringValue())
 	}
-
-	t.Logf("✓ Successfully resolved flag with sticky support with correct values")
 }
 
-func TestSwapWasmResolverApi_ResolveWithSticky_MissingMaterializations(t *testing.T) {
+func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 	defer runtime.Close(ctx)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	// Use state with a flag that requires materializations
 	stickyState := createStateWithStickyFlag()
 	accountId := "test-account"
 
@@ -587,25 +571,21 @@ func TestSwapWasmResolverApi_ResolveWithSticky_MissingMaterializations(t *testin
 	}
 	defer swap.Close(ctx)
 
-	// Resolve the sticky flag WITHOUT providing the required materialization
-	request := &resolver.ResolveFlagsRequest{
-		Flags:        []string{"flags/sticky-test-flag"},
-		Apply:        false,
-		ClientSecret: "test-secret",
-		EvaluationContext: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"user_id": structpb.NewStringValue("test-user-123"),
+	stickyRequest := createResolveWithStickyRequest(
+		&resolver.ResolveFlagsRequest{
+			Flags:        []string{"flags/sticky-test-flag"},
+			Apply:        false,
+			ClientSecret: "test-secret",
+			EvaluationContext: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					"user_id": structpb.NewStringValue("test-user-123"),
+				},
 			},
 		},
-	}
-
-	stickyRequest := &resolver.ResolveWithStickyRequest{
-		ResolveRequest: request,
-		// Empty materializations - missing the required "experiment_v1" materialization
-		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
-		FailFastOnSticky:        true,
-		NotProcessSticky:        false,
-	}
+		nil,   // empty materializations - missing the required "experiment_v1" materialization
+		true,  // failFast
+		false, // notProcessSticky
+	)
 
 	response, err := swap.ResolveWithSticky(stickyRequest)
 	if err != nil {
@@ -625,6 +605,4 @@ func TestSwapWasmResolverApi_ResolveWithSticky_MissingMaterializations(t *testin
 	if missingResult.MissingMaterializations == nil {
 		t.Fatal("Expected non-nil MissingMaterializations")
 	}
-
-	t.Logf("✓ ResolveWithSticky correctly returns MissingMaterializations when required materialization is not provided")
 }
