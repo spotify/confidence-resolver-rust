@@ -1,9 +1,10 @@
 {
+  "_comment": "The openfeature-provider/go/confidence key uses the full module path (not just openfeature-provider/go) to ensure release-please creates tags in the format 'openfeature-provider/go/confidence/v{version}', which is required for Go modules in subdirectories to be properly resolved by the go command.",
   "confidence-resolver": "0.6.0",
   "confidence-cloudflare-resolver": "0.3.0",
   "wasm-msg": "0.2.1",
   "wasm/rust-guest": "0.1.9",
   "openfeature-provider/java": "0.7.3",
   "openfeature-provider/js": "0.1.1",
-  "openfeature-provider/go": "0.1.0"
+  "openfeature-provider/go/confidence": "0.1.0"
 }

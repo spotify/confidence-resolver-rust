@@ -44,11 +44,12 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": ["package.json"]
     },
-    "openfeature-provider/go": {
-      "path": "openfeature-provider/go",
+    "openfeature-provider/go/confidence": {
+      "_comment": "The component name and path use the full module path (openfeature-provider/go/confidence) rather than just the directory (openfeature-provider/go). This ensures tags are created as 'openfeature-provider/go/confidence/v{version}', which is the format required by Go for submodule versioning. The include-component-in-tag setting ensures the full path is included in the tag name.",
+      "path": "openfeature-provider/go/confidence",
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "initial-version": "0.0.1"
+      "include-component-in-tag": true
     }
   }
 }
