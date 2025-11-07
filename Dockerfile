@@ -597,7 +597,7 @@ RUN --mount=type=secret,id=gpg_private_key \
 
 RUN --mount=type=secret,id=maven_settings \
     --mount=type=secret,id=gpg_pass,env=MAVEN_GPG_PASSPHRASE \
-    mvn -q -s /run/secrets/maven_settings --batch-mode deploy
+    mvn -q -s /run/secrets/maven_settings --batch-mode -DskipTests deploy
 
 # ==============================================================================
 # All - Build and validate everything (default target)
