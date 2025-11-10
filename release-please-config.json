@@ -49,6 +49,7 @@
       "path": "openfeature-provider/go/confidence",
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
+      "last-release-sha": "107785a16024577045005ecc18825fbc743bd0e8",
       "include-component-in-tag": true,
       "component": "openfeature-provider/go/confidence",
       "tag-separator": "/"
