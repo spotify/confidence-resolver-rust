@@ -73,4 +73,29 @@ clean:
 	$(MAKE) -C openfeature-provider/go clean
 	$(MAKE) -C openfeature-provider/ruby clean
 
+.PHONY: js-build
+js-build:
+	$(MAKE) -C openfeature-provider/js build
+
+.PHONY: go-bench js-bench
+go-bench:
+	@status=0; \
+	docker compose up --build \
+		--abort-on-container-exit \
+		--exit-code-from go-bench \
+		--attach go-bench --attach mock-go \
+		go-bench mock-go || status=$$?; \
+	docker compose down --remove-orphans --volumes; \
+	exit $$status
+
+js-bench: js-build
+	@status=0; \
+	docker compose up --build \
+		--abort-on-container-exit \
+		--exit-code-from js-bench \
+		--attach js-bench --attach mock-js \
+		js-bench mock-js || status=$$?; \
+	docker compose down --remove-orphans --volumes; \
+	exit $$status
+
 .DEFAULT_GOAL := all
