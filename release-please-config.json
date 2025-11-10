@@ -35,7 +35,8 @@
         {
           "type": "pom",
           "path": "pom.xml"
-        }
+        },
+        "README.md"
       ]
     },
     "openfeature-provider/js": {
