@@ -68,6 +68,24 @@ make cloudflare
 
 You can then integrate with Wrangler using `confidence-cloudflare-resolver/wrangler.toml`.
 
+## Benchmarks (WIP)
+
+Small local benchmarks exist for Go and Node.js to validate end-to-end wiring. They are a work-in-progress and do not produce meaningful or representative performance numbers yet.
+
+Run with Docker (streams all logs, cleans up containers afterward):
+
+```bash
+# Go benchmark
+make go-bench
+
+# Node.js benchmark
+make js-bench
+```
+
+Notes:
+- Each target starts a dedicated mock server container and a one-shot bench container, then tears everything down.
+- Use `docker compose up ... go-bench` or `... js-bench` to run them individually without Make.
+
 ## License
 
 See `LICENSE` for details.
