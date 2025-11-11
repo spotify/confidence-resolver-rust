@@ -578,6 +578,13 @@ FROM openfeature-provider-ruby-base AS openfeature-provider-ruby.build
 RUN make build
 
 # ==============================================================================
+# Extract OpenFeature Provider (Ruby) gem artifact
+# ==============================================================================
+FROM scratch AS openfeature-provider-ruby.artifact
+
+COPY --from=openfeature-provider-ruby.build /app/pkg/*.gem /
+
+# ==============================================================================
 # OpenFeature Provider (Java) - Build and test
 # ==============================================================================
 FROM eclipse-temurin:17-jdk AS openfeature-provider-java-base
