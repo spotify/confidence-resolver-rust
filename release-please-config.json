@@ -54,9 +54,9 @@
       "tag-separator": "/"
     },
     "openfeature-provider/ruby": {
-      "path": "openfeature-provider/ruby",
-      "release-type": "rust",
+      "release-type": "ruby",
       "changelog-path": "CHANGELOG.md",
+      "component": "openfeature-provider/ruby",
       "extra-files": [
         "lib/confidence/openfeature/version.rb"
       ]
