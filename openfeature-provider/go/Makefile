@@ -24,30 +24,30 @@ endif
 
 # Install Go dependencies
 install:
-	cd confidence && go mod download
-	cd confidence && go mod verify
+	go mod download
+	go mod verify
 
 # Generate protobuf files
 proto:
 	./scripts/generate_proto.sh
 
 # Build (compile check)
-$(BUILD_STAMP): confidence/go.mod confidence/go.sum $(GO_SRC) $(PROTO_GEN)
-	cd confidence && go build ./...
+$(BUILD_STAMP): go.mod go.sum $(GO_SRC) $(PROTO_GEN)
+	go build ./...
 	@touch $@
 
 build: $(BUILD_STAMP)
 
 # Run tests
 test: $(BUILD_STAMP)
-	cd confidence && go test -v ./...
+	go test -v ./...
 
 # Lint using gofmt and go vet
 lint:
 	@echo "Checking gofmt..."
-	@test -z "$$(cd confidence && gofmt -l . | grep -v '^proto/' | tee /dev/stderr)" || (echo "Files need formatting. Run: cd confidence && gofmt -w ." && exit 1)
+	@test -z "$$(gofmt -l . | grep -v '^proto/' | tee /dev/stderr)" || (echo "Files need formatting. Run: gofmt -w ." && exit 1)
 	@echo "Running go vet..."
-	@cd confidence && go vet ./...
+	@go vet ./...
 	@echo "✅ Lint passed"
 
 # Clean build artifacts

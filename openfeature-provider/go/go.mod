@@ -1,4 +1,4 @@
-module github.com/spotify/confidence-resolver/openfeature-provider/go/confidence
+module github.com/spotify/confidence-resolver/openfeature-provider/go
 
 go 1.24.0
 

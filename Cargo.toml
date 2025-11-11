@@ -8,7 +8,7 @@ members = [
     "confidence-cloudflare-resolver",
     "openfeature-provider/java",
     "openfeature-provider/js",
-    "openfeature-provider/go/confidence"
+    "openfeature-provider/go"
 ]
 
 # Exclude the Java provider from default workspace builds (cargo build --workspace)

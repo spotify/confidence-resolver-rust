@@ -47,7 +47,7 @@ COPY wasm-msg/Cargo.toml ./wasm-msg/
 COPY wasm/rust-guest/Cargo.toml ./wasm/rust-guest/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
-COPY openfeature-provider/go/confidence/Cargo.toml ./openfeature-provider/go/confidence/
+COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
 
 # Copy proto files (needed by build.rs)
 COPY confidence-resolver/protos ./confidence-resolver/protos/
@@ -100,7 +100,7 @@ COPY wasm/rust-guest/ ./wasm/rust-guest/
 COPY wasm/proto/ ./wasm/proto/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
-COPY openfeature-provider/go/confidence/Cargo.toml ./openfeature-provider/go/confidence/
+COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
 
 # Touch files to ensure rebuild (dependencies are cached)
 RUN find . -type f -name "*.rs" -exec touch {} +
@@ -154,7 +154,7 @@ COPY wasm/rust-guest/ ./wasm/rust-guest/
 COPY wasm/proto/ ./wasm/proto/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
-COPY openfeature-provider/go/confidence/Cargo.toml ./openfeature-provider/go/confidence/
+COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
 
 # Copy data directory (needed by confidence-cloudflare-resolver include_str! macros)
 COPY data/ ./data/
@@ -456,10 +456,10 @@ WORKDIR /app
 COPY openfeature-provider/go/Makefile ./
 
 # Copy go.mod for dependency caching from confidence/ subdirectory
-COPY openfeature-provider/go/confidence/go.mod openfeature-provider/go/confidence/go.sum ./confidence/
+COPY openfeature-provider/go/go.mod openfeature-provider/go/go.sum ./
 
 # Download Go dependencies (this layer will be cached)
-RUN cd confidence && go mod download
+RUN go mod download
 
 # Copy pre-generated protobuf files
 COPY openfeature-provider/go/confidence/proto ./confidence/proto/
@@ -677,7 +677,7 @@ COPY --from=openfeature-provider-js.test /app/package.json /markers/test-openfea
 COPY --from=openfeature-provider-js.test_e2e /app/package.json /markers/test-openfeature-js-e2e
 COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeature-java
 COPY --from=openfeature-provider-java.test_e2e /app/pom.xml /markers/test-openfeature-java-e2e
-COPY --from=openfeature-provider-go.test /app/confidence/go.mod /markers/test-openfeature-go
+COPY --from=openfeature-provider-go.test /app/go.mod /markers/test-openfeature-go
 COPY --from=openfeature-provider-ruby.test /app/Gemfile /markers/test-openfeature-ruby
 
 # Force validation stages to run
@@ -693,7 +693,7 @@ COPY --from=python-host.test /app/Makefile /markers/integration-python
 COPY --from=confidence-resolver.lint /workspace/Cargo.toml /markers/lint-resolver
 COPY --from=wasm-msg.lint /workspace/Cargo.toml /markers/lint-wasm-msg
 COPY --from=wasm-rust-guest.lint /workspace/Cargo.toml /markers/lint-guest
-COPY --from=openfeature-provider-go.lint /app/confidence/go.mod /markers/lint-openfeature-go
+COPY --from=openfeature-provider-go.lint /app/go.mod /markers/lint-openfeature-go
 COPY --from=openfeature-provider-ruby.lint /app/Gemfile /markers/lint-openfeature-ruby
 COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
 
