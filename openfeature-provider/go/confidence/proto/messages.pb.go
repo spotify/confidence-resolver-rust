@@ -4,7 +4,7 @@
 // 	protoc        v5.29.3
 // source: messages.proto
 
-package messages
+package proto
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -316,8 +316,8 @@ const file_messages_proto_rawDesc = "" +
 	"\bResponse\x12\x14\n" +
 	"\x04data\x18\x01 \x01(\fH\x00R\x04data\x12\x16\n" +
 	"\x05error\x18\x02 \x01(\tH\x00R\x05errorB\b\n" +
-	"\x06resultBp\n" +
-	"\x1bcom.spotify.confidence.wasmB\bMessagesP\x00ZEgithub.com/spotify/confidence/wasm-resolve-poc/go-host/proto/messagesb\x06proto3"
+	"\x06resultB)\n" +
+	"\x1bcom.spotify.confidence.wasmB\bMessagesP\x00b\x06proto3"
 
 var (
 	file_messages_proto_rawDescOnce sync.Once

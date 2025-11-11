@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package rust_guest;
 
-option go_package = "github.com/spotify/confidence/wasm-resolve-poc/go-host/proto/messages";
-
 import "google/protobuf/struct.proto";
 
 option java_package = "com.spotify.confidence.wasm";

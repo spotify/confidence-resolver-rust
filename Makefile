@@ -37,11 +37,7 @@ test:
 	$(MAKE) -C openfeature-provider/ruby test
 
 integration-test:
-	$(MAKE) -C wasm/node-host run
-	$(MAKE) -C wasm/java-host run
-	$(MAKE) -C wasm/go-host run
 	$(MAKE) -C wasm/python-host run
-	$(MAKE) -C wasm/java-host run
 
 
 lint:
@@ -64,9 +60,6 @@ all: lint test build
 
 clean:
 	cargo clean
-	$(MAKE) -C wasm/node-host clean
-	$(MAKE) -C wasm/java-host clean
-	$(MAKE) -C wasm/go-host clean
 	$(MAKE) -C wasm/python-host clean
 	$(MAKE) -C openfeature-provider/js clean
 	$(MAKE) -C openfeature-provider/java clean
