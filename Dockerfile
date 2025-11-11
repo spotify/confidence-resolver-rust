@@ -201,126 +201,8 @@ FROM wasm-deps AS confidence-cloudflare-resolver.lint
 WORKDIR /workspace/confidence-cloudflare-resolver
 RUN make lint
 
-# ==============================================================================
-# Node.js Host - Run Node.js host example
-# ==============================================================================
-FROM node:20-alpine AS node-host-base
 
-# Install protoc for proto generation
-RUN apk add --no-cache protobuf-dev protoc make
 
-WORKDIR /app
-
-# Enable Corepack for Yarn
-RUN corepack enable
-
-# Copy package files for dependency caching
-COPY wasm/node-host/package.json wasm/node-host/yarn.lock wasm/node-host/.yarnrc.yml ./
-COPY wasm/node-host/Makefile ./
-
-# Copy proto files for generation
-COPY wasm/proto ../proto/
-
-# Build using Makefile (installs deps + generates protos)
-ENV IN_DOCKER_BUILD=1
-RUN make build
-
-# Copy source code
-COPY wasm/node-host/src ./src/
-COPY wasm/node-host/tsconfig.json ./
-
-# Copy WASM module from wasm-rust-guest.artifact
-COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../confidence_resolver.wasm
-
-# Copy resolver state
-COPY wasm/resolver_state.pb ../resolver_state.pb
-
-# ==============================================================================
-# Test Node.js Host (integration test)
-# ==============================================================================
-FROM node-host-base AS node-host.test
-RUN make run
-
-# ==============================================================================
-# Java Host - Run Java host example
-# ==============================================================================
-FROM eclipse-temurin:21-alpine AS java-host-base
-
-# Install Maven and protobuf
-RUN apk add --no-cache maven protobuf-dev protoc make
-
-WORKDIR /app
-
-# Copy pom.xml for dependency caching
-COPY wasm/java-host/pom.xml ./
-COPY wasm/java-host/Makefile ./
-
-# Download dependencies (this layer will be cached)
-RUN mvn dependency:go-offline -q || true
-
-# Copy proto files
-COPY wasm/proto ../proto/
-
-# Copy source code
-COPY wasm/java-host/src ./src/
-
-# Build using Makefile (compiles proto + builds JAR)
-ENV IN_DOCKER_BUILD=1
-RUN make build
-
-# Copy WASM module from wasm-rust-guest.artifact
-COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../confidence_resolver.wasm
-
-# Copy resolver state
-COPY wasm/resolver_state.pb ../resolver_state.pb
-
-# ==============================================================================
-# Test Java Host (integration test)
-# ==============================================================================
-FROM java-host-base AS java-host.test
-RUN make run
-
-# ==============================================================================
-# Go Host - Run Go host example
-# ==============================================================================
-FROM golang:1.23-alpine AS go-host-base
-
-# Install protobuf and protoc-gen-go
-RUN apk add --no-cache protobuf-dev protoc bash make git
-
-WORKDIR /app
-
-# Copy go.mod for dependency caching
-COPY wasm/go-host/go.mod wasm/go-host/go.sum ./
-COPY wasm/go-host/Makefile ./
-
-# Download Go dependencies (this layer will be cached)
-RUN go mod download
-
-# Install protoc-gen-go (pin version for stability)
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34
-
-# Copy proto files
-COPY wasm/proto ../proto/
-
-# Copy source code
-COPY wasm/go-host/*.go wasm/go-host/*.sh ./
-
-# Build using Makefile (generates proto + builds)
-ENV IN_DOCKER_BUILD=1
-RUN make build
-
-# Copy WASM module
-COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ../confidence_resolver.wasm
-
-# Copy resolver state
-COPY wasm/resolver_state.pb ../resolver_state.pb
-
-# ==============================================================================
-# Test Go Host (integration test)
-# ==============================================================================
-FROM go-host-base AS go-host.test
-RUN make run
 
 # ==============================================================================
 # Python Host - Run Python host example
@@ -620,9 +502,6 @@ COPY --from=openfeature-provider-go.test /app/confidence/go.mod /markers/test-op
 COPY --from=openfeature-provider-go.validate-wasm /built/confidence_resolver.wasm /markers/validate-wasm-go
 
 # Force integration test stages to run (host examples)
-COPY --from=node-host.test /app/package.json /markers/integration-node
-COPY --from=java-host.test /app/pom.xml /markers/integration-java
-COPY --from=go-host.test /app/go.mod /markers/integration-go
 COPY --from=python-host.test /app/Makefile /markers/integration-python
 
 # Force lint stages to run by copying marker files

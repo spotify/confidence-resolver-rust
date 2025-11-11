@@ -9,7 +9,7 @@ The Confidence Flag Resolver implemented in Rust, plus example hosts and a Cloud
 - `confidence-resolver`: Core resolver crate
 - `confidence-cloudflare-resolver`: Cloudflare Worker-compatible WASM target
 - `wasm-msg`: Minimal WASM messaging layer shared by hosts
-- `wasm/*-host`: Small host apps (Go, Node.js, Python, Java) calling the resolver. These are only intended to be examples, as well as being used for integration tests.
+- `wasm/python-host`: Python host example calling the resolver. Only intended to be an example and used for integration tests.
 - `data/`: Sample local development data (e.g., resolver state)
 
 ## Prerequisites
@@ -19,7 +19,7 @@ The Confidence Flag Resolver implemented in Rust, plus example hosts and a Cloud
 
 **Option 2: Local development**
 - Rust toolchain (automatically installed via `rust-toolchain.toml`)
-- For host examples: Go, Node.js + Yarn, Python 3, Java + Maven
+- For Python host example: Python 3
 
 ## Quick Start
 
@@ -39,23 +39,17 @@ make test                         # Run tests
 make lint                         # Run linting
 make build                        # Build WASM
 
-# Run host examples
-make run-node
-make run-java
-make run-go
+# Run Python host example
 make run-python
 ```
 
-## Running the example hosts
+## Running the Python host example
 
-There are host implementations for different languages in the `wasm` folder.
-They are used for integration tests, but if you want you manually run them:
+There is a Python host implementation in the `wasm/python-host` folder.
+It is used for integration tests, but you can manually run it:
 
 ```bash
-make run-go-host
-make run-js-host
 make run-python-host
-make run-java-host
 ```
 
 ## Cloudflare Worker build
