@@ -95,4 +95,8 @@ class FakeEvalCtx
     @targeting_key = targeting_key
     @attributes = attributes
   end
+
+  def fields
+    @attributes.merge("targeting_key" => @targeting_key)
+  end
 end
