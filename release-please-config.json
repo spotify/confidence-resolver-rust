@@ -55,7 +55,7 @@
     },
     "openfeature-provider/ruby": {
       "path": "openfeature-provider/ruby",
-      "release-type": "rust",
+      "release-type": "simple",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         "lib/confidence/openfeature/version.rb"
