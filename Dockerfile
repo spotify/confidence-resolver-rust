@@ -585,6 +585,15 @@ FROM scratch AS openfeature-provider-ruby.artifact
 COPY --from=openfeature-provider-ruby.build /app/pkg/*.gem /
 
 # ==============================================================================
+# Publish OpenFeature Provider (Ruby) to RubyGems
+# ==============================================================================
+FROM openfeature-provider-ruby.build AS openfeature-provider-ruby.publish
+
+RUN --mount=type=secret,id=rubygems_api_key \
+    export GEM_HOST_API_KEY=$(cat /run/secrets/rubygems_api_key) && \
+    gem push pkg/*.gem
+
+# ==============================================================================
 # OpenFeature Provider (Java) - Build and test
 # ==============================================================================
 FROM eclipse-temurin:17-jdk AS openfeature-provider-java-base

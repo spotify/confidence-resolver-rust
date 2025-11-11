@@ -184,21 +184,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and extract gem with Docker
+      - name: Write RubyGems API key to file
+        run: |
+          echo "${{ secrets.RUBYGEMS_API_KEY }}" > /tmp/rubygems_api_key.txt
+
+      - name: Publish Ruby gem with Docker
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: openfeature-provider-ruby.artifact
-          outputs: type=local,dest=./artifacts
+          target: openfeature-provider-ruby.publish
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3'
-
-      - name: Publish to RubyGems
-        env:
-          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
-        run: |
-          gem push ./artifacts/*.gem
+          secret-files: |
+            rubygems_api_key=/tmp/rubygems_api_key.txt
