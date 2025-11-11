@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -299,7 +300,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				ResolutionError: openfeature.ResolutionError{},
-				Reason:          openfeature.Reason(resolvedFlag.Reason.String()),
+				Reason:          mapResolveReasonToOpenFeature(resolvedFlag.Reason),
 			},
 		}
 	}
@@ -322,7 +323,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 		ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 			Variant:         resolvedFlag.Variant,
 			ResolutionError: openfeature.ResolutionError{},
-			Reason:          openfeature.Reason(resolvedFlag.Reason.String()),
+			Reason:          mapResolveReasonToOpenFeature(resolvedFlag.Reason),
 		},
 	}
 }
@@ -491,4 +492,22 @@ func getValueForPath(path string, value interface{}) interface{} {
 	}
 
 	return current
+}
+
+// mapResolveReasonToOpenFeature converts Confidence ResolveReason to OpenFeature Reason
+func mapResolveReasonToOpenFeature(reason resolvertypes.ResolveReason) openfeature.Reason {
+	switch reason {
+	case resolvertypes.ResolveReason_RESOLVE_REASON_MATCH:
+		return openfeature.TargetingMatchReason
+	case resolvertypes.ResolveReason_RESOLVE_REASON_NO_SEGMENT_MATCH:
+		return openfeature.DefaultReason
+	case resolvertypes.ResolveReason_RESOLVE_REASON_FLAG_ARCHIVED:
+		return openfeature.DisabledReason
+	case resolvertypes.ResolveReason_RESOLVE_REASON_TARGETING_KEY_ERROR:
+		return openfeature.ErrorReason
+	case resolvertypes.ResolveReason_RESOLVE_REASON_ERROR:
+		return openfeature.ErrorReason
+	default:
+		return openfeature.UnknownReason
+	}
 }

@@ -43,15 +43,22 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	}
 
 	// Use different client secret that won't match
-	provider := NewLocalResolverProvider(factory, "test-secret")
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret"))
+	client := openfeature.NewClient("test-client")
 
-	evalCtx := openfeature.FlattenedContext{
+	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
 		"user_id": "test-user",
-	}
-
+	})
 	t.Run("StringEvaluation returns default on error", func(t *testing.T) {
 		defaultValue := "default-value"
-		result := provider.StringEvaluation(ctx, "non-existent-flag.field", defaultValue, evalCtx)
+		result, err := client.StringValueDetails(ctx, "non-existent-flag.field", defaultValue, evalCtx)
+		// expect the error to be non-nil
+		if err == nil {
+			t.Errorf("Expected error during StringValueDetails, got nil")
+		}
+		if err.Error() != "error code: GENERAL: resolve failed: client secret not found" {
+			t.Errorf("Expected specific error message during StringValueDetails, got %v", err.Error())
+		}
 
 		if result.Value != defaultValue {
 			t.Errorf("Expected default value %v, got %v", defaultValue, result.Value)
@@ -59,10 +66,6 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 
 		if result.Reason != openfeature.ErrorReason {
 			t.Errorf("Expected ErrorReason, got %v", result.Reason)
-		}
-
-		if result.ResolutionError.Error() == "" {
-			t.Error("Expected ResolutionError to not be empty")
 		}
 
 		t.Logf("✓ StringEvaluation correctly returned default value: %s", defaultValue)
@@ -90,16 +93,19 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	}
 
 	// Use the correct client secret from test data
-	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF")
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"))
+	client := openfeature.NewClient("test-client")
 
-	evalCtx := openfeature.FlattenedContext{
+	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
 		"visitor_id": "tutorial_visitor",
-	}
+	})
 
 	t.Run("StringEvaluation returns correct variant value", func(t *testing.T) {
 		defaultValue := "default-message"
-		result := provider.StringEvaluation(ctx, "tutorial-feature.message", defaultValue, evalCtx)
-
+		result, error := client.StringValueDetails(ctx, "tutorial-feature.message", defaultValue, evalCtx)
+		if error != nil {
+			t.Errorf("Error during StringValueDetails: %v", error)
+		}
 		// The exciting-welcome variant has a specific message
 		expectedMessage := "We are very excited to welcome you to Confidence! This is a message from the tutorial flag."
 
@@ -111,9 +117,6 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 			t.Errorf("Expected TargetingMatchReason, got %v", result.Reason)
 		}
 
-		if result.ResolutionError.Error() != "" {
-			t.Errorf("Expected no error, got %v", result.ResolutionError)
-		}
 	})
 
 	t.Run("ObjectEvaluation returns correct variant structure", func(t *testing.T) {
@@ -121,7 +124,10 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 			"message": "default",
 			"title":   "default",
 		}
-		result := provider.ObjectEvaluation(ctx, "tutorial-feature", defaultValue, evalCtx)
+		result, error := client.ObjectValueDetails(ctx, "tutorial-feature", defaultValue, evalCtx)
+		if error != nil {
+			t.Errorf("Error during ObjectValueDetails: %v", error)
+		}
 
 		if result.Value == nil {
 			t.Fatal("Expected result value to not be nil")
@@ -146,19 +152,17 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 		if result.Reason != openfeature.TargetingMatchReason {
 			t.Errorf("Expected TargetingMatchReason, got %v", result.Reason)
 		}
-
-		if result.ResolutionError.Error() != "" {
-			t.Errorf("Expected no error, got %v", result.ResolutionError)
-		}
 	})
 }
 
 func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
-	defer runtime.Close(ctx)
 
 	t.Run("Provider returns resolved value for flag without sticky rules", func(t *testing.T) {
+		// Create runtime for this subtest
+		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+		defer runtime.Close(ctx)
+
 		// Load real test state
 		testState := loadTestResolverState(t)
 		testAcctID := loadTestAccountID(t)
@@ -174,19 +178,19 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			resolverAPI: swap,
 		}
 
-		provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF")
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"))
+		client := openfeature.NewClient("test-client")
 
-		evalCtx := openfeature.FlattenedContext{
+		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
 			"visitor_id": "tutorial_visitor",
-		}
+		})
 
 		// The tutorial-feature flag in the test data doesn't have materialization requirements
 		// so resolving with empty materializations should succeed
 		defaultValue := "default"
-		result := provider.StringEvaluation(ctx, "tutorial-feature.message", defaultValue, evalCtx)
-
-		if result.ResolutionError.Error() != "" {
-			t.Errorf("Expected successful resolve for flag without sticky rules, got error: %v", result.ResolutionError)
+		result, error := client.StringValueDetails(ctx, "tutorial-feature.message", defaultValue, evalCtx)
+		if error != nil {
+			t.Errorf("Error during StringValueDetails: %v", error)
 		}
 
 		if result.Value == defaultValue {
@@ -199,6 +203,10 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	})
 
 	t.Run("Provider returns missing materializations error message", func(t *testing.T) {
+		// Create runtime for this subtest
+		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+		defer runtime.Close(ctx)
+
 		// Create state with a flag that requires materializations
 		stickyState := createStateWithStickyFlag()
 		accountId := "test-account"
@@ -214,14 +222,20 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			resolverAPI: swap,
 		}
 
-		provider := NewLocalResolverProvider(factory, "test-secret")
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret"))
+		client := openfeature.NewClient("test-client")
 
-		evalCtx := openfeature.FlattenedContext{
+		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
 			"user_id": "test-user-123",
-		}
+		})
 
 		defaultValue := false
-		result := provider.BooleanEvaluation(ctx, "sticky-test-flag.enabled", defaultValue, evalCtx)
+		result, error := client.BooleanValueDetails(ctx, "sticky-test-flag.enabled", defaultValue, evalCtx)
+		if error == nil {
+			t.Error("Expected error when materializations missing, got nil")
+		} else if error.Error() != "error code: GENERAL: missing materializations" {
+			t.Errorf("Expected 'error code: GENERAL: missing materializations', got: %v", error.Error())
+		}
 
 		if result.Value != defaultValue {
 			t.Errorf("Expected default value %v when materializations missing, got %v", defaultValue, result.Value)
@@ -229,15 +243,6 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 		if result.Reason != openfeature.ErrorReason {
 			t.Errorf("Expected ErrorReason when materializations missing, got %v", result.Reason)
-		}
-
-		if result.ResolutionError.Error() == "" {
-			t.Error("Expected ResolutionError when materializations missing")
-		}
-
-		expectedErrorMsg := "missing materializations"
-		if result.ResolutionError.Error() != "GENERAL: missing materializations" {
-			t.Errorf("Expected error message 'GENERAL: %s', got: %v", expectedErrorMsg, result.ResolutionError)
 		}
 	})
 }
