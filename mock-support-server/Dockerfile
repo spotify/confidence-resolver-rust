@@ -14,7 +14,7 @@ COPY mock-support-server/genproto ./genproto
 # Build statically linked binary
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/mock-support-server .
+    CGO_ENABLED=0 go build -o /out/mock-support-server .
 
 FROM alpine:3.22
 COPY --from=build /out/mock-support-server /mock-support-server
