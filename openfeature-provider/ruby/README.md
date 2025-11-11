@@ -70,3 +70,39 @@ flag_value = open_feature_client.fetch_boolean_value(
 
 print(flag_value)
 ```
+
+### Ruby on Rails Example
+
+For a complete Rails integration example that you can run, see [`examples/rails_example.rb`](examples/rails_example.rb).
+
+Quick snippet:
+
+```ruby
+# config/initializers/confidence.rb
+require "openfeature/sdk"
+require "confidence/openfeature"
+
+OpenFeature::SDK.configure do |config|
+  api_client = Confidence::OpenFeature::APIClient.new(
+    client_secret: ENV['CONFIDENCE_CLIENT_SECRET'],
+    region: Confidence::OpenFeature::Region::EU
+  )
+  config.provider = Confidence::OpenFeature::Provider.new(api_client: api_client)
+end
+
+# app/controllers/application_controller.rb
+class ApplicationController < ActionController::Base
+  def feature_enabled?(flag_key, default: false)
+    client = OpenFeature::SDK.build_client(name: "rails-app")
+    ctx = OpenFeature::SDK::EvaluationContext.new(
+      targeting_key: current_user&.id || session.id,
+      attributes: {user: {country: request.location&.country_code}}
+    )
+    client.fetch_boolean_value(
+      flag_key: flag_key,
+      default_value: default,
+      evaluation_context: ctx
+    )
+  end
+end
+```

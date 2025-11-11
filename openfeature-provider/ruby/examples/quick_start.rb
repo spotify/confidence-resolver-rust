@@ -8,7 +8,7 @@ require "confidence/openfeature"
 # Quick start example for Confidence OpenFeature Provider
 
 # Get client secret from environment variable
-client_secret = "CLIENT_SECRET"
+client_secret = ENV["CONFIDENCE_CLIENT_SECRET"] || "CONFIDENCE_CLIENT_SECRET"
 
 # Configure OpenFeature with Confidence provider
 OpenFeature::SDK.configure do |config|
@@ -24,11 +24,7 @@ client = OpenFeature::SDK.build_client(domain: "quick-start-app")
 
 # Create evaluation context with user information
 context = OpenFeature::SDK::EvaluationContext.new(
-  user_id: "user-123",
-  user: {
-    country: "SE",
-    email: "user@example.com"
-  }
+  user_id: "user-123"
 )
 
 # Evaluate a boolean flag

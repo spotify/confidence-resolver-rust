@@ -34,6 +34,29 @@ This example demonstrates:
 - Evaluating boolean, string, number, and object flags
 - Using evaluation context with targeting keys and user attributes
 
+### Ruby on Rails Example (`rails_example.rb`)
+
+A Rails-style integration example showing how to use the provider in a Rails application.
+
+**Run it:**
+```bash
+cd examples
+ruby rails_example.rb
+```
+
+Or with your client secret:
+```bash
+export CONFIDENCE_CLIENT_SECRET=your_client_secret_here
+ruby rails_example.rb
+```
+
+This example demonstrates:
+- Rails initializer-style configuration
+- ApplicationController helper methods
+- Building evaluation context from user and request data
+- Different user scenarios (premium, free, anonymous users)
+- Thread-safe usage patterns for Rails servers
+
 ### Full Demo App (`demo_app.rb`)
 
 A comprehensive demonstration of all provider features.
