@@ -186,7 +186,7 @@ jobs:
 
       - name: Write RubyGems API key to file
         run: |
-          echo "${{ secrets.RUBYGEMS_API_KEY }}" > /tmp/rubygems_api_key.txt
+          echo "${{ secrets.RUBYGEM_API_KEY }}" > /tmp/rubygem_api_key.txt
 
       - name: Publish Ruby gem with Docker
         uses: docker/build-push-action@v6
@@ -195,4 +195,4 @@ jobs:
           target: openfeature-provider-ruby.publish
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           secret-files: |
-            rubygems_api_key=/tmp/rubygems_api_key.txt
+            rubygem_api_key=/tmp/rubygem_api_key.txt
