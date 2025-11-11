@@ -5,7 +5,7 @@ go 1.24
 toolchain go1.24.4
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0
 	golang.org/x/net v0.41.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250707201910-8d1bb00bc6a7
