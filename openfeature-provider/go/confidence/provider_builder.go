@@ -5,11 +5,16 @@ import (
 	"fmt"
 
 	"github.com/tetratelabs/wazero"
+	"google.golang.org/grpc"
 )
 
-const (
-	ConfidenceDomain = "edge-grpc.spotify.com"
-)
+// ConnFactory is an advanced/testing hook allowing callers to customize how
+// gRPC connections are created. The provider will pass the computed target and
+// its default DialOptions (TLS and required interceptors where applicable).
+// Implementations may modify options, change targets, or replace the dialing
+// mechanism entirely. Returning a connection with incompatible security/auth
+// can break functionality; use with care.
+type ConnFactory func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error)
 
 // ProviderConfig holds configuration for the Confidence provider
 type ProviderConfig struct {
@@ -18,11 +23,8 @@ type ProviderConfig struct {
 	APIClientSecret string
 	ClientSecret    string
 
-	// Optional: Custom service addresses (for advanced use cases only)
-	// If not provided, defaults to global region
-	ResolverStateServiceAddr string
-	FlagLoggerServiceAddr    string
-	AuthServiceAddr          string
+	// Advanced/testing: override connection creation
+	ConnFactory ConnFactory
 }
 
 // ProviderConfigWithStateProvider holds configuration for the Confidence provider with a custom StateProvider
@@ -61,40 +63,30 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		return nil, fmt.Errorf("ClientSecret is required")
 	}
 
-	// Set service addresses to defaults if not provided
-	resolverStateServiceAddr := config.ResolverStateServiceAddr
-	if resolverStateServiceAddr == "" {
-		resolverStateServiceAddr = ConfidenceDomain
-	}
-
-	flagLoggerServiceAddr := config.FlagLoggerServiceAddr
-	if flagLoggerServiceAddr == "" {
-		flagLoggerServiceAddr = ConfidenceDomain
-	}
-
-	authServiceAddr := config.AuthServiceAddr
-	if authServiceAddr == "" {
-		authServiceAddr = ConfidenceDomain
-	}
-
 	// Use embedded WASM module
 	wasmBytes := defaultWasmBytes
 
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
+	// Build connection factory (use default if none provided)
+	connFactory := config.ConnFactory
+	if connFactory == nil {
+		connFactory = func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
+			return grpc.NewClient(target, defaultOpts...)
+		}
+	}
+
 	// Create LocalResolverFactory (no custom StateProvider)
 	factory, err := NewLocalResolverFactory(
 		ctx,
 		wasmRuntime,
 		wasmBytes,
-		resolverStateServiceAddr,
-		flagLoggerServiceAddr,
-		authServiceAddr,
 		config.APIClientID,
 		config.APIClientSecret,
 		nil, // stateProvider
 		"",  // accountId (will be extracted from token)
+		connFactory,
 	)
 	if err != nil {
 		wasmRuntime.Close(ctx)
@@ -130,19 +122,22 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
+	// Build connection factory (use default)
+	connFactory := func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
+		return grpc.NewClient(target, defaultOpts...)
+	}
+
 	// Create LocalResolverFactory with StateProvider
 	// When using StateProvider, we don't need gRPC service addresses or API credentials
 	factory, err := NewLocalResolverFactory(
 		ctx,
 		wasmRuntime,
 		wasmBytes,
-		"",                   // resolverStateServiceAddr - not used with StateProvider
-		"",                   // flagLoggerServiceAddr - not used with StateProvider
-		"",                   // authServiceAddr - not used with StateProvider
 		"",                   // apiClientID - not used with StateProvider
 		"",                   // apiClientSecret - not used with StateProvider
 		config.StateProvider, // stateProvider
 		config.AccountId,     // accountId - required with StateProvider
+		connFactory,          // connFactory - unused here but passed for consistency
 	)
 	if err != nil {
 		wasmRuntime.Close(ctx)
