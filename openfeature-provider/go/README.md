@@ -15,7 +15,7 @@ A high-performance OpenFeature provider for [Confidence](https://confidence.spot
 ## Installation
 
 ```bash
-go get github.com/spotify/confidence-resolver/openfeature-provider/go/confidence
+go get github.com/spotify/confidence-resolver/openfeature-provider/go
 ```
 
 ## Requirements

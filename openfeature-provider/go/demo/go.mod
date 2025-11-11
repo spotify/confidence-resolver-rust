@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/open-feature/go-sdk v1.16.0
-	github.com/spotify/confidence-resolver/openfeature-provider/go/confidence v0.0.0
+	github.com/spotify/confidence-resolver/openfeature-provider/go v0.0.0
 )
 
 require (
@@ -21,4 +21,4 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
-replace github.com/spotify/confidence-resolver/openfeature-provider/go/confidence => ../confidence
+replace github.com/spotify/confidence-resolver/openfeature-provider/go => ../
