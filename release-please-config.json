@@ -54,6 +54,7 @@
       "tag-separator": "/"
     },
     "openfeature-provider/ruby": {
+      "path": ".",
       "release-type": "simple",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
