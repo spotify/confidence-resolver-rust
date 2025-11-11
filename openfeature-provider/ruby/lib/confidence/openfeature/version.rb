@@ -2,6 +2,6 @@
 
 module Confidence
   module OpenFeature
-    VERSION = "0.0.1"
+    VERSION = "0.0.1" # x-release-please-version
   end
 end
