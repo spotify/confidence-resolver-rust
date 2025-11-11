@@ -16,7 +16,7 @@ COPY openfeature-provider/go/bench ./openfeature-provider/go/bench
 # Build static bench binary
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    CGO_ENABLED=0 \
     go build -C ./openfeature-provider/go/bench -o /out/bench .
 
 FROM alpine:3.22
