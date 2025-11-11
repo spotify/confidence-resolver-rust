@@ -9,6 +9,11 @@ This directory contains example applications demonstrating how to use the Confid
    bundle install
    ```
 
+   If using rbenv, you can install dependencies with:
+   ```bash
+   BUNDLE_USER_CACHE=.bundle/user-cache rbenv exec bundle install
+   ```
+
 2. Get your Confidence client secret from [Confidence](https://confidence.spotify.com/)
 
 3. Set your client secret as an environment variable:
@@ -42,6 +47,11 @@ A Rails-style integration example showing how to use the provider in a Rails app
 ```bash
 cd examples
 ruby rails_example.rb
+```
+
+Or with rbenv:
+```bash
+BUNDLE_USER_CACHE=.bundle/user-cache rbenv exec bundle install && rbenv exec ruby rails_example.rb
 ```
 
 Or with your client secret:
