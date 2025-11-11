@@ -194,6 +194,14 @@ FROM scratch AS wasm-rust-guest.artifact
 COPY --from=wasm-rust-guest.build /workspace/target/wasm32-unknown-unknown/wasm/rust_guest.wasm /confidence_resolver.wasm
 
 # ==============================================================================
+# Build confidence-cloudflare-resolver (WASM target)
+# ==============================================================================
+FROM wasm-deps AS confidence-cloudflare-resolver.build
+
+WORKDIR /workspace/confidence-cloudflare-resolver
+RUN make build
+
+# ==============================================================================
 # Lint confidence-cloudflare-resolver (WASM target)
 # ==============================================================================
 FROM wasm-deps AS confidence-cloudflare-resolver.lint
@@ -577,6 +585,7 @@ COPY --from=openfeature-provider-ruby.lint /app/Gemfile /markers/lint-openfeatur
 COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
 
 # Force build stages to run
+COPY --from=confidence-cloudflare-resolver.build /workspace/Cargo.toml /markers/build-cloudflare
 COPY --from=openfeature-provider-js.build /app/dist/index.node.js /artifacts/openfeature-js/
 COPY --from=openfeature-provider-java.build /app/target/*.jar /artifacts/openfeature-java/
 COPY --from=openfeature-provider-go.build /app/.build.stamp /artifacts/openfeature-go/
