@@ -52,6 +52,14 @@
       "include-component-in-tag": true,
       "component": "openfeature-provider/go/confidence",
       "tag-separator": "/"
+    },
+    "openfeature-provider/ruby": {
+      "path": "openfeature-provider/ruby",
+      "release-type": "ruby",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        "lib/confidence/openfeature/version.rb"
+      ]
     }
   }
 }

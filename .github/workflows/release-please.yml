@@ -16,6 +16,7 @@ jobs:
       cloudflare_resolver_release_created: ${{ steps.releasemanifest.outputs['confidence-cloudflare-resolver--release_created'] }}
       java_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/java--release_created'] }}
       js_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/js--release_created'] }}
+      ruby_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/ruby--release_created'] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -168,3 +169,30 @@ jobs:
 
       - name: Publish to npm with OIDC
         run: npm publish ./artifacts/package.tgz --provenance --access public
+
+  publish-ruby-provider-release:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: deployment
+    permissions:
+      contents: read
+    if: ${{ needs.release.outputs.ruby_provider_release_created == 'true' }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Write RubyGems API key to file
+        run: |
+          echo "${{ secrets.RUBYGEM_API_KEY }}" > /tmp/rubygem_api_key.txt
+
+      - name: Publish Ruby gem with Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: openfeature-provider-ruby.publish
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
+          secret-files: |
+            rubygem_api_key=/tmp/rubygem_api_key.txt

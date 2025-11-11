@@ -531,6 +531,69 @@ FROM openfeature-provider-go-base AS openfeature-provider-go.build
 RUN make build
 
 # ==============================================================================
+# OpenFeature Provider (Ruby) - Build and test
+# ==============================================================================
+FROM ruby:3.3-alpine AS openfeature-provider-ruby-base
+
+# Install build dependencies
+RUN apk add --no-cache make git build-base openssl-dev
+
+WORKDIR /app
+
+# Copy Gemfile for dependency caching
+COPY openfeature-provider/ruby/Gemfile openfeature-provider/ruby/Gemfile.lock ./
+COPY openfeature-provider/ruby/confidence-openfeaure-provider.gemspec ./
+COPY openfeature-provider/ruby/Makefile ./
+
+# Copy lib directory (needed by gemspec to read version)
+COPY openfeature-provider/ruby/lib ./lib/
+
+# Install dependencies (this layer will be cached)
+ENV IN_DOCKER_BUILD=1
+RUN make install
+
+# Copy remaining source code
+COPY openfeature-provider/ruby/spec ./spec/
+COPY openfeature-provider/ruby/Rakefile ./
+
+# ==============================================================================
+# Test OpenFeature Provider (Ruby)
+# ==============================================================================
+FROM openfeature-provider-ruby-base AS openfeature-provider-ruby.test
+
+RUN make test
+
+# ==============================================================================
+# Lint OpenFeature Provider (Ruby)
+# ==============================================================================
+FROM openfeature-provider-ruby-base AS openfeature-provider-ruby.lint
+
+RUN make lint
+
+# ==============================================================================
+# Build OpenFeature Provider (Ruby)
+# ==============================================================================
+FROM openfeature-provider-ruby-base AS openfeature-provider-ruby.build
+
+RUN make build
+
+# ==============================================================================
+# Extract OpenFeature Provider (Ruby) gem artifact
+# ==============================================================================
+FROM scratch AS openfeature-provider-ruby.artifact
+
+COPY --from=openfeature-provider-ruby.build /app/pkg/*.gem /
+
+# ==============================================================================
+# Publish OpenFeature Provider (Ruby) to RubyGems
+# ==============================================================================
+FROM openfeature-provider-ruby.build AS openfeature-provider-ruby.publish
+
+RUN --mount=type=secret,id=rubygem_api_key \
+    export GEM_HOST_API_KEY=$(cat /run/secrets/rubygem_api_key) && \
+    gem push pkg/*.gem
+
+# ==============================================================================
 # OpenFeature Provider (Java) - Build and test
 # ==============================================================================
 FROM eclipse-temurin:17-jdk AS openfeature-provider-java-base
@@ -615,6 +678,7 @@ COPY --from=openfeature-provider-js.test_e2e /app/package.json /markers/test-ope
 COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeature-java
 COPY --from=openfeature-provider-java.test_e2e /app/pom.xml /markers/test-openfeature-java-e2e
 COPY --from=openfeature-provider-go.test /app/confidence/go.mod /markers/test-openfeature-go
+COPY --from=openfeature-provider-ruby.test /app/Gemfile /markers/test-openfeature-ruby
 
 # Force validation stages to run
 COPY --from=openfeature-provider-go.validate-wasm /built/confidence_resolver.wasm /markers/validate-wasm-go
@@ -630,9 +694,11 @@ COPY --from=confidence-resolver.lint /workspace/Cargo.toml /markers/lint-resolve
 COPY --from=wasm-msg.lint /workspace/Cargo.toml /markers/lint-wasm-msg
 COPY --from=wasm-rust-guest.lint /workspace/Cargo.toml /markers/lint-guest
 COPY --from=openfeature-provider-go.lint /app/confidence/go.mod /markers/lint-openfeature-go
+COPY --from=openfeature-provider-ruby.lint /app/Gemfile /markers/lint-openfeature-ruby
 COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
 
 # Force build stages to run
 COPY --from=openfeature-provider-js.build /app/dist/index.node.js /artifacts/openfeature-js/
 COPY --from=openfeature-provider-java.build /app/target/*.jar /artifacts/openfeature-java/
 COPY --from=openfeature-provider-go.build /app/.build.stamp /artifacts/openfeature-go/
+COPY --from=openfeature-provider-ruby.build /app/.build.stamp /artifacts/openfeature-ruby/
