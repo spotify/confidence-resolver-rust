@@ -2,6 +2,10 @@
 
 This repo contains the OpenFeature Ruby flag provider for [Confidence](https://confidence.spotify.com/).
 
+## Architecture
+
+**Note:** This provider uses the **online resolver** approach. Flag evaluations are resolved by making API calls to the Confidence backend for each evaluation request. This is different from the local resolver approach used in other Confidence providers (Java, JavaScript, Go) which use WebAssembly (WASM) for local flag evaluation.
+
 ## OpenFeature
 
 Before starting to use the provider, it can be helpful to read through the general [OpenFeature docs](https://docs.openfeature.dev/)
