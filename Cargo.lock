@@ -759,7 +759,7 @@ dependencies = [
 
 [[package]]
 name = "openfeature-provider-java"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "rust-guest",
 ]

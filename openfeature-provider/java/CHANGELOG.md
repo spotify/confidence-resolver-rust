@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.7.3...openfeature-provider-java-v0.7.4) (2025-11-11)
+
+
+### Bug Fixes
+
+* **openfeature/java:** update readme and fix release please update ([#120](https://github.com/spotify/confidence-resolver/issues/120)) ([7e78391](https://github.com/spotify/confidence-resolver/commit/7e7839143ba7f77007bac554006bc36dade172a3))
+
 ## [0.7.3](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.7.2...openfeature-provider-java-v0.7.3) (2025-11-07)
 
 
