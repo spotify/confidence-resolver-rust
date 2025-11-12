@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/ruby/v0.1.0...openfeature-provider/ruby/v0.1.1) (2025-11-12)
+
+
+### Bug Fixes
+
+* **openfeature-provider/ruby:** bump ruby version ([#137](https://github.com/spotify/confidence-resolver/issues/137)) ([bfe0321](https://github.com/spotify/confidence-resolver/commit/bfe03214dee511f5b1a5a70fbcbb794bde36f3dc))
+
 ## [0.1.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/ruby-v0.0.1...openfeature-provider/ruby/v0.1.0) (2025-11-11)
 
 
