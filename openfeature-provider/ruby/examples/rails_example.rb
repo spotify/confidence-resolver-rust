@@ -46,7 +46,7 @@ class ApplicationController
     user_id = current_user&.fetch(:id, nil) || session[:id]
     OpenFeature::SDK::EvaluationContext.new(
       targeting_key: user_id,
-      user_id: user_id,
+      user_id: user_id
     )
   end
 
@@ -83,7 +83,6 @@ config = controller.open_feature_client.fetch_object_value(
 )
 puts "   Full config: #{config}"
 puts
-
 
 puts "=== Rails Integration Tips ==="
 puts "1. Add configuration in config/initializers/confidence.rb"

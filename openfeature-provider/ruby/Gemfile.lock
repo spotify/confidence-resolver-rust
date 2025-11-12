@@ -1,8 +1,8 @@
 PATH
   remote: .
   specs:
-    confidence-openfeature-provider (0.0.1)
-      openfeature-sdk (~> 0.4.0)
+    confidence-openfeature-provider (0.1.0)
+      openfeature-sdk (~> 0.4.1)
       openssl (~> 3.3)
 
 GEM
@@ -82,6 +82,7 @@ GEM
 PLATFORMS
   arm64-darwin-21
   arm64-darwin-22
+  arm64-darwin-23
   arm64-darwin-24
   x64-mingw-ucrt
   x64-mingw32

@@ -2,7 +2,8 @@
 
 require_relative "lib/confidence/openfeature/version"
 
-GITHUB_URL = "https://github.com/spotify/confidence-openfeature-provider-ruby"
+ROOT_URL = "https://github.com/spotify/confidence-resolver"
+GITHUB_URL = "#{ROOT_URL}/blob/main/openfeature-provider/ruby"
 
 Gem::Specification.new do |spec|
   spec.name = "confidence-openfeature-provider"
@@ -13,18 +14,18 @@ Gem::Specification.new do |spec|
   spec.summary = "Confidence provider for the OpenFeature SDK"
   spec.homepage = GITHUB_URL
   spec.license = "Apache-2.0'"
-  spec.required_ruby_version = ">= 2.7"  # same as openfeature-sdk
+  spec.required_ruby_version = ">= 3.1"
 
   spec.metadata["homepage_uri"] = GITHUB_URL
   spec.metadata["source_code_uri"] = GITHUB_URL
-  spec.metadata["changelog_uri"] = "#{GITHUB_URL}/blob/main/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "#{GITHUB_URL}/issues"
+  spec.metadata["changelog_uri"] = "#{GITHUB_URL}/CHANGELOG.md"
+  spec.metadata["bug_tracker_uri"] = "#{ROOT_URL}/issues"
   spec.metadata["documentation_uri"] = "#{GITHUB_URL}/README.md"
 
   spec.files = Dir["lib/**/*.rb"]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "openfeature-sdk", "~> 0.4.0"
+  spec.add_dependency "openfeature-sdk", "~> 0.4.1"
   spec.add_dependency "openssl", "~> 3.3" # Required for OpenSSL 3.6+ compatibility
 
   spec.add_development_dependency "rake", "~> 13.0"
