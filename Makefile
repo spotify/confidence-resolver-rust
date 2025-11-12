@@ -28,6 +28,17 @@ sync-wasm-go:
 	@echo "  git add openfeature-provider/go/confidence/wasm/confidence_resolver.wasm"
 	@echo "  git commit -m 'chore: sync WASM module for Go provider'"
 
+# Build Cloudflare deployer image using main Dockerfile
+.PHONY: build-deployer
+build-deployer:
+	@echo "Building Cloudflare deployer image with shared cache..."
+	@docker build \
+		--target cloudflare-deployer \
+		--build-arg COMMIT_SHA=$$(git rev-parse HEAD) \
+		-t confidence-cloudflare-deployer:latest \
+		.
+	@echo "✅ Deployer image built: confidence-cloudflare-deployer:latest"
+
 test:
 	$(MAKE) -C confidence-resolver test
 	$(MAKE) -C wasm-msg test

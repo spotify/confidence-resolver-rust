@@ -209,9 +209,6 @@ FROM wasm-deps AS confidence-cloudflare-resolver.lint
 WORKDIR /workspace/confidence-cloudflare-resolver
 RUN make lint
 
-
-
-
 # ==============================================================================
 # Python Host - Run Python host example
 # ==============================================================================
