@@ -1,0 +1,259 @@
+{
+  "dependencies": {
+    "all": [
+      "confidence-cloudflare-resolver.lint",
+      "confidence-resolver.lint",
+      "confidence-resolver.test",
+      "openfeature-provider-go.build",
+      "openfeature-provider-go.lint",
+      "openfeature-provider-go.test",
+      "openfeature-provider-go.validate-wasm",
+      "openfeature-provider-java.build",
+      "openfeature-provider-java.test",
+      "openfeature-provider-java.test_e2e",
+      "openfeature-provider-js.build",
+      "openfeature-provider-js.test",
+      "openfeature-provider-js.test_e2e",
+      "openfeature-provider-ruby.build",
+      "openfeature-provider-ruby.lint",
+      "openfeature-provider-ruby.test",
+      "python-host.test",
+      "wasm-msg.lint",
+      "wasm-msg.test",
+      "wasm-rust-guest.artifact",
+      "wasm-rust-guest.lint"
+    ],
+    "confidence-cloudflare-resolver.lint": [
+      "wasm-deps"
+    ],
+    "confidence-resolver.lint": [
+      "rust-test-base"
+    ],
+    "confidence-resolver.test": [
+      "rust-test-base"
+    ],
+    "openfeature-provider-go-base": [
+      "wasm-rust-guest.artifact"
+    ],
+    "openfeature-provider-go.build": [
+      "openfeature-provider-go-base"
+    ],
+    "openfeature-provider-go.lint": [
+      "openfeature-provider-go-base"
+    ],
+    "openfeature-provider-go.test": [
+      "openfeature-provider-go-base"
+    ],
+    "openfeature-provider-go.validate-wasm": [
+      "wasm-rust-guest.artifact"
+    ],
+    "openfeature-provider-java-base": [
+      "wasm-rust-guest.artifact"
+    ],
+    "openfeature-provider-java.build": [
+      "openfeature-provider-java-base"
+    ],
+    "openfeature-provider-java.publish": [
+      "openfeature-provider-java.build"
+    ],
+    "openfeature-provider-java.test": [
+      "openfeature-provider-java-base"
+    ],
+    "openfeature-provider-java.test_e2e": [
+      "openfeature-provider-java.test"
+    ],
+    "openfeature-provider-js-base": [
+      "wasm-rust-guest.artifact"
+    ],
+    "openfeature-provider-js.artifact": [
+      "openfeature-provider-js.pack"
+    ],
+    "openfeature-provider-js.build": [
+      "openfeature-provider-js-base"
+    ],
+    "openfeature-provider-js.pack": [
+      "openfeature-provider-js.build"
+    ],
+    "openfeature-provider-js.test": [
+      "openfeature-provider-js-base"
+    ],
+    "openfeature-provider-js.test_e2e": [
+      "openfeature-provider-js.test"
+    ],
+    "openfeature-provider-ruby.artifact": [
+      "openfeature-provider-ruby.build"
+    ],
+    "openfeature-provider-ruby.build": [
+      "openfeature-provider-ruby-base"
+    ],
+    "openfeature-provider-ruby.lint": [
+      "openfeature-provider-ruby-base"
+    ],
+    "openfeature-provider-ruby.publish": [
+      "openfeature-provider-ruby.build"
+    ],
+    "openfeature-provider-ruby.test": [
+      "openfeature-provider-ruby-base"
+    ],
+    "python-host-base": [
+      "wasm-rust-guest.artifact"
+    ],
+    "python-host.test": [
+      "python-host-base"
+    ],
+    "rust-deps": [
+      "rust-base"
+    ],
+    "rust-test-base": [
+      "rust-base",
+      "rust-deps"
+    ],
+    "wasm-deps": [
+      "rust-base",
+      "rust-deps"
+    ],
+    "wasm-msg.lint": [
+      "rust-test-base"
+    ],
+    "wasm-msg.test": [
+      "rust-test-base"
+    ],
+    "wasm-rust-guest.artifact": [
+      "wasm-rust-guest.build"
+    ],
+    "wasm-rust-guest.build": [
+      "wasm-deps"
+    ],
+    "wasm-rust-guest.lint": [
+      "wasm-deps"
+    ]
+  },
+  "file_dependencies": {
+    "openfeature-provider-go-base": [
+      "openfeature-provider/go/Makefile",
+      "openfeature-provider/go/confidence/*.go",
+      "openfeature-provider/go/confidence/proto",
+      "openfeature-provider/go/go.mod"
+    ],
+    "openfeature-provider-go.validate-wasm": [
+      "openfeature-provider/go/confidence/wasm/confidence_resolver.wasm"
+    ],
+    "openfeature-provider-java-base": [
+      "confidence-resolver/protos",
+      "openfeature-provider/java/Makefile",
+      "openfeature-provider/java/pom.xml",
+      "openfeature-provider/java/src",
+      "wasm/proto"
+    ],
+    "openfeature-provider-js-base": [
+      "\\",
+      "openfeature-provider/js/Makefile",
+      "openfeature-provider/js/proto",
+      "openfeature-provider/js/src",
+      "openfeature-provider/js/tsconfig.json"
+    ],
+    "openfeature-provider-js.test": [
+      "confidence-resolver/protos",
+      "openfeature-provider/js/.prettierignore",
+      "openfeature-provider/js/prettier.config.cjs",
+      "wasm/resolver_state.pb"
+    ],
+    "openfeature-provider-ruby-base": [
+      "openfeature-provider/ruby/Gemfile",
+      "openfeature-provider/ruby/Makefile",
+      "openfeature-provider/ruby/Rakefile",
+      "openfeature-provider/ruby/confidence-openfeaure-provider.gemspec",
+      "openfeature-provider/ruby/lib",
+      "openfeature-provider/ruby/spec"
+    ],
+    "python-host-base": [
+      "wasm/proto",
+      "wasm/python-host/*.py",
+      "wasm/python-host/Makefile",
+      "wasm/python-host/generate_proto.py",
+      "wasm/resolver_state.pb"
+    ],
+    "rust-base": [
+      "rust-toolchain.toml"
+    ],
+    "rust-deps": [
+      "Cargo.toml",
+      "confidence-cloudflare-resolver/Cargo.toml",
+      "confidence-resolver/Cargo.toml",
+      "confidence-resolver/build.rs",
+      "confidence-resolver/protos",
+      "openfeature-provider/go/Cargo.toml",
+      "openfeature-provider/java/Cargo.toml",
+      "openfeature-provider/js/Cargo.toml",
+      "wasm-msg/Cargo.toml",
+      "wasm-msg/build.rs",
+      "wasm-msg/proto",
+      "wasm/proto",
+      "wasm/rust-guest/Cargo.toml",
+      "wasm/rust-guest/build.rs",
+      "wasm/rust-guest/proto"
+    ],
+    "rust-test-base": [
+      "Cargo.toml",
+      "confidence-cloudflare-resolver/",
+      "confidence-resolver/",
+      "openfeature-provider/go/Cargo.toml",
+      "openfeature-provider/java/Cargo.toml",
+      "openfeature-provider/js/Cargo.toml",
+      "wasm-msg/",
+      "wasm/proto/",
+      "wasm/rust-guest/"
+    ],
+    "wasm-deps": [
+      "Cargo.toml",
+      "confidence-cloudflare-resolver/",
+      "confidence-resolver/",
+      "data/",
+      "openfeature-provider/go/Cargo.toml",
+      "openfeature-provider/java/Cargo.toml",
+      "openfeature-provider/js/Cargo.toml",
+      "wasm-msg/",
+      "wasm/proto/",
+      "wasm/rust-guest/"
+    ]
+  },
+  "stages": {
+    "all": "scratch",
+    "confidence-cloudflare-resolver.lint": "wasm-deps",
+    "confidence-resolver.lint": "rust-test-base",
+    "confidence-resolver.test": "rust-test-base",
+    "openfeature-provider-go-base": "golang:1.24-alpine",
+    "openfeature-provider-go.build": "openfeature-provider-go-base",
+    "openfeature-provider-go.lint": "openfeature-provider-go-base",
+    "openfeature-provider-go.test": "openfeature-provider-go-base",
+    "openfeature-provider-go.validate-wasm": "alpine:3.22",
+    "openfeature-provider-java-base": "eclipse-temurin:17-jdk",
+    "openfeature-provider-java.build": "openfeature-provider-java-base",
+    "openfeature-provider-java.publish": "openfeature-provider-java.build",
+    "openfeature-provider-java.test": "openfeature-provider-java-base",
+    "openfeature-provider-java.test_e2e": "openfeature-provider-java.test",
+    "openfeature-provider-js-base": "node:20-alpine",
+    "openfeature-provider-js.artifact": "scratch",
+    "openfeature-provider-js.build": "openfeature-provider-js-base",
+    "openfeature-provider-js.pack": "openfeature-provider-js.build",
+    "openfeature-provider-js.test": "openfeature-provider-js-base",
+    "openfeature-provider-js.test_e2e": "openfeature-provider-js.test",
+    "openfeature-provider-ruby-base": "ruby:3.3-alpine",
+    "openfeature-provider-ruby.artifact": "scratch",
+    "openfeature-provider-ruby.build": "openfeature-provider-ruby-base",
+    "openfeature-provider-ruby.lint": "openfeature-provider-ruby-base",
+    "openfeature-provider-ruby.publish": "openfeature-provider-ruby.build",
+    "openfeature-provider-ruby.test": "openfeature-provider-ruby-base",
+    "python-host-base": "python:3.11-slim",
+    "python-host.test": "python-host-base",
+    "rust-base": "alpine:3.22",
+    "rust-deps": "rust-base",
+    "rust-test-base": "rust-base",
+    "wasm-deps": "rust-base",
+    "wasm-msg.lint": "rust-test-base",
+    "wasm-msg.test": "rust-test-base",
+    "wasm-rust-guest.artifact": "scratch",
+    "wasm-rust-guest.build": "wasm-deps",
+    "wasm-rust-guest.lint": "wasm-deps"
+  }
+}

@@ -1,0 +1,41 @@
+name: Dockerfile Dependency Validation
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerfile-deps.json'
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-dockerfile-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Dockerfile dependencies
+        id: validate
+        run: |
+          set +e
+          python3 tools/dockerfile-deps.py --validate > report.md
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          exit 0
+
+      - name: Add report to job summary
+        if: always()
+        run: |
+          cat report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if validation failed
+        if: steps.validate.outputs.exit_code != '0'
+        run: |
+          echo "::error::Dockerfile dependencies validation failed. See job summary for details."
+          exit 1
