@@ -6,14 +6,14 @@ This script analyzes a multi-stage Dockerfile to:
 1. Extract build stage dependencies
 2. Generate a dependency graph visualization
 3. Validate build order using topological sort
-4. Compare against a checked-in "facit" (source of truth)
+4. Compare against a checked-in source of truth
 5. Output results suitable for GitHub Actions summaries
 
 Usage:
-    # Generate facit file
-    python3 dockerfile-deps.py --generate-facit
+    # Generate source of truth file
+    python3 dockerfile-deps.py --generate-sot
 
-    # Validate against facit
+    # Validate against source of truth
     python3 dockerfile-deps.py --validate
 
     # Just show the analysis
@@ -154,23 +154,23 @@ class DockerfileAnalyzer:
             "file_dependencies": {k: sorted(list(v)) for k, v in self.file_dependencies.items()}
         }
 
-    def compare_with_facit(self, facit_path: Path) -> Tuple[bool, List[str]]:
-        """Compare current dependencies with facit file"""
-        if not facit_path.exists():
-            return False, [f"❌ Facit file not found: {facit_path}"]
+    def compare_with_source_of_truth(self, sot_path: Path) -> Tuple[bool, List[str]]:
+        """Compare current dependencies with source of truth file"""
+        if not sot_path.exists():
+            return False, [f"❌ Source of truth file not found: {sot_path}"]
 
-        with open(facit_path) as f:
-            facit = json.load(f)
+        with open(sot_path) as f:
+            sot = json.load(f)
 
         errors = []
 
         # Compare stages
-        facit_stages = set(facit.get("stages", {}).keys())
+        sot_stages = set(sot.get("stages", {}).keys())
         current_stages = set(self.stages.keys())
 
-        if facit_stages != current_stages:
-            added = current_stages - facit_stages
-            removed = facit_stages - current_stages
+        if sot_stages != current_stages:
+            added = current_stages - sot_stages
+            removed = sot_stages - current_stages
 
             if added:
                 errors.append(f"❌ New stages added: {', '.join(sorted(added))}")
@@ -178,13 +178,13 @@ class DockerfileAnalyzer:
                 errors.append(f"❌ Stages removed: {', '.join(sorted(removed))}")
 
         # Compare stage dependencies for common stages
-        for stage in facit_stages & current_stages:
-            facit_deps = set(facit.get("dependencies", {}).get(stage, []))
+        for stage in sot_stages & current_stages:
+            sot_deps = set(sot.get("dependencies", {}).get(stage, []))
             current_deps = self.dependencies.get(stage, set())
 
-            if facit_deps != current_deps:
-                added_deps = current_deps - facit_deps
-                removed_deps = facit_deps - current_deps
+            if sot_deps != current_deps:
+                added_deps = current_deps - sot_deps
+                removed_deps = sot_deps - current_deps
 
                 if added_deps or removed_deps:
                     errors.append(f"❌ Stage dependencies changed for '{stage}':")
@@ -194,13 +194,13 @@ class DockerfileAnalyzer:
                         errors.append(f"   Removed stages: {', '.join(sorted(removed_deps))}")
 
         # Compare file dependencies for common stages
-        for stage in facit_stages & current_stages:
-            facit_files = set(facit.get("file_dependencies", {}).get(stage, []))
+        for stage in sot_stages & current_stages:
+            sot_files = set(sot.get("file_dependencies", {}).get(stage, []))
             current_files = self.file_dependencies.get(stage, set())
 
-            if facit_files != current_files:
-                added_files = current_files - facit_files
-                removed_files = facit_files - current_files
+            if sot_files != current_files:
+                added_files = current_files - sot_files
+                removed_files = sot_files - current_files
 
                 if added_files or removed_files:
                     errors.append(f"❌ File dependencies changed for '{stage}':")
@@ -212,8 +212,39 @@ class DockerfileAnalyzer:
         return len(errors) == 0, errors
 
     def generate_mermaid(self) -> str:
-        """Generate Mermaid flowchart from dependencies"""
+        """Generate Mermaid flowchart from dependencies with color coding"""
         lines = ["graph TD"]
+
+        # Define color classes for different stage types
+        lines.append("    classDef base fill:#3b82f6,stroke:#1e40af,color:#fff")
+        lines.append("    classDef deps fill:#06b6d4,stroke:#0891b2,color:#fff")
+        lines.append("    classDef test fill:#10b981,stroke:#059669,color:#fff")
+        lines.append("    classDef lint fill:#f97316,stroke:#ea580c,color:#fff")
+        lines.append("    classDef build fill:#8b5cf6,stroke:#7c3aed,color:#fff")
+        lines.append("    classDef artifact fill:#ec4899,stroke:#db2777,color:#fff")
+        lines.append("    classDef publish fill:#ef4444,stroke:#dc2626,color:#fff")
+        lines.append("    classDef validate fill:#eab308,stroke:#ca8a04,color:#000")
+        lines.append("")
+
+        def get_stage_class(stage: str) -> str:
+            """Determine the CSS class for a stage based on its name"""
+            if stage.endswith("-base") or stage == "rust-base":
+                return "base"
+            elif stage.endswith("-deps"):
+                return "deps"
+            elif ".test" in stage:
+                return "test"
+            elif ".lint" in stage:
+                return "lint"
+            elif ".build" in stage:
+                return "build"
+            elif ".artifact" in stage:
+                return "artifact"
+            elif ".publish" in stage:
+                return "publish"
+            elif "validate" in stage:
+                return "validate"
+            return "base"  # default
 
         # Add nodes (exclude "all" stage as it's just a collection target)
         for stage in self.stages:
@@ -221,7 +252,10 @@ class DockerfileAnalyzer:
                 continue
             # Sanitize stage names for Mermaid
             node_id = stage.replace("-", "_").replace(".", "_")
-            lines.append(f"    {node_id}[\"{stage}\"]")
+            stage_class = get_stage_class(stage)
+            lines.append(f"    {node_id}[\"{stage}\"]:::{stage_class}")
+
+        lines.append("")
 
         # Add edges (dependencies) - skip anything involving "all"
         for stage, deps in self.dependencies.items():
@@ -236,7 +270,7 @@ class DockerfileAnalyzer:
 
         return "\n".join(lines)
 
-    def generate_report(self, facit_path: Path = None) -> str:
+    def generate_report(self, sot_path: Path = None) -> str:
         """Generate a human-readable report"""
         lines = []
         lines.append("# Dockerfile Dependency Analysis")
@@ -245,28 +279,28 @@ class DockerfileAnalyzer:
         lines.append(f"**Total Stages:** {len(self.stages)}")
         lines.append("")
 
-        # Facit validation
-        if facit_path:
-            is_valid, errors = self.compare_with_facit(facit_path)
+        # Source of truth validation
+        if sot_path:
+            is_valid, errors = self.compare_with_source_of_truth(sot_path)
             if is_valid:
-                lines.append("## Facit Validation: ✅ PASS")
+                lines.append("## Source of Truth Validation: ✅ PASS")
                 lines.append("")
-                lines.append(f"Dependencies match the expected structure in `{facit_path}`")
+                lines.append(f"Dependencies match the expected structure in `{sot_path}`")
             else:
-                lines.append("## Facit Validation: ❌ FAIL")
+                lines.append("## Source of Truth Validation: ❌ FAIL")
                 lines.append("")
                 for error in errors:
                     lines.append(error)
                 lines.append("")
-                lines.append("**Action required:** Update the facit file or fix the Dockerfile:")
+                lines.append("**Action required:** Update the source of truth or fix the Dockerfile:")
                 lines.append("")
                 lines.append("```bash")
-                lines.append("# If changes are intentional, update facit:")
-                lines.append("python3 tools/dockerfile-deps.py --generate-facit")
+                lines.append("# If changes are intentional, update source of truth:")
+                lines.append("python3 tools/dockerfile-deps.py --generate-sot")
                 lines.append("")
-                lines.append("# Then commit the updated facit:")
+                lines.append("# Then commit the updated source of truth:")
                 lines.append("git add .dockerfile-deps.json")
-                lines.append("git commit -m 'chore: update dockerfile dependencies facit'")
+                lines.append("git commit -m 'chore: update dockerfile dependencies source of truth'")
                 lines.append("```")
             lines.append("")
 
@@ -324,7 +358,7 @@ class DockerfileAnalyzer:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Analyze Dockerfile dependencies and validate against facit"
+        description="Analyze Dockerfile dependencies and validate against source of truth"
     )
     parser.add_argument(
         "--dockerfile",
@@ -332,19 +366,19 @@ def main():
         help="Path to Dockerfile (default: Dockerfile)"
     )
     parser.add_argument(
-        "--facit",
+        "--sot",
         default=".dockerfile-deps.json",
-        help="Path to facit file (default: .dockerfile-deps.json)"
+        help="Path to source of truth file (default: .dockerfile-deps.json)"
     )
     parser.add_argument(
-        "--generate-facit",
+        "--generate-sot",
         action="store_true",
-        help="Generate facit file from current Dockerfile"
+        help="Generate source of truth file from current Dockerfile"
     )
     parser.add_argument(
         "--validate",
         action="store_true",
-        help="Validate Dockerfile against facit"
+        help="Validate Dockerfile against source of truth"
     )
     parser.add_argument(
         "--mermaid-only",
@@ -355,7 +389,7 @@ def main():
     args = parser.parse_args()
 
     dockerfile = Path(args.dockerfile)
-    facit_path = Path(args.facit)
+    sot_path = Path(args.sot)
 
     if not dockerfile.exists():
         print(f"Error: {dockerfile} not found", file=sys.stderr)
@@ -364,11 +398,11 @@ def main():
     analyzer = DockerfileAnalyzer(str(dockerfile))
     analyzer.parse()
 
-    if args.generate_facit:
-        # Generate and save facit
-        with open(facit_path, 'w') as f:
+    if args.generate_sot:
+        # Generate and save source of truth
+        with open(sot_path, 'w') as f:
             json.dump(analyzer.to_dict(), f, indent=2, sort_keys=True)
-        print(f"✅ Generated facit file: {facit_path}")
+        print(f"✅ Generated source of truth file: {sot_path}")
         sys.exit(0)
 
     if args.mermaid_only:
@@ -380,13 +414,13 @@ def main():
 
     # Generate report
     if args.validate:
-        report = analyzer.generate_report(facit_path)
+        report = analyzer.generate_report(sot_path)
         print(report)
 
         # Exit with error if validation failed
-        facit_valid, _ = analyzer.compare_with_facit(facit_path)
+        sot_valid, _ = analyzer.compare_with_source_of_truth(sot_path)
         topo_valid, _ = analyzer.validate_dependencies()
-        sys.exit(0 if (facit_valid and topo_valid) else 1)
+        sys.exit(0 if (sot_valid and topo_valid) else 1)
     else:
         report = analyzer.generate_report()
         print(report)
