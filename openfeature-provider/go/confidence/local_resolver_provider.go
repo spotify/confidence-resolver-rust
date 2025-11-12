@@ -3,7 +3,7 @@ package confidence
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/open-feature/go-sdk/openfeature"
@@ -17,13 +17,15 @@ import (
 type LocalResolverProvider struct {
 	factory      *LocalResolverFactory
 	clientSecret string
+	logger       *slog.Logger
 }
 
 // NewLocalResolverProvider creates a new LocalResolverProvider
-func NewLocalResolverProvider(factory *LocalResolverFactory, clientSecret string) *LocalResolverProvider {
+func NewLocalResolverProvider(factory *LocalResolverFactory, clientSecret string, logger *slog.Logger) *LocalResolverProvider {
 	return &LocalResolverProvider{
 		factory:      factory,
 		clientSecret: clientSecret,
+		logger:       logger,
 	}
 }
 
@@ -200,7 +202,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	// Convert evaluation context to protobuf Struct
 	protoCtx, err := flattenedContextToProto(processedCtx)
 	if err != nil {
-		log.Printf("Failed to convert evaluation context to proto: %v", err)
+		p.logger.Error("Failed to convert evaluation context to proto", "error", err)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -233,7 +235,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	// Resolve flags with sticky support
 	stickyResponse, err := resolverAPI.ResolveWithSticky(stickyRequest)
 	if err != nil {
-		log.Printf("Failed to resolve flag '%s': %v", flagPath, err)
+		p.logger.Error("Failed to resolve flag", "flag", flagPath, "error", err)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -249,7 +251,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	case *resolver.ResolveWithStickyResponse_Success_:
 		response = result.Success.Response
 	case *resolver.ResolveWithStickyResponse_MissingMaterializations_:
-		log.Printf("Missing materializations for flag '%s'", flagPath)
+		p.logger.Error("Missing materializations for flag", "flag", flagPath)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -258,7 +260,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 			},
 		}
 	default:
-		log.Printf("Unexpected resolve result type for flag '%s'", flagPath)
+		p.logger.Error("Unexpected resolve result type for flag", "flag", flagPath)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -270,7 +272,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 
 	// Check if flag was found
 	if len(response.ResolvedFlags) == 0 {
-		log.Printf("No active flag '%s' was found", flagPath)
+		p.logger.Info("No active flag was found", "flag", flagPath)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -284,7 +286,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 
 	// Verify flag name matches
 	if resolvedFlag.Flag != requestFlagName {
-		log.Printf("Unexpected flag '%s' from resolver", resolvedFlag.Flag)
+		p.logger.Error("Unexpected flag from resolver", "expected", requestFlagName, "got", resolvedFlag.Flag)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{

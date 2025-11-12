@@ -84,6 +84,7 @@ The `ProviderConfig` struct contains all configuration options for the provider:
 
 #### Optional Fields
 
+- `Logger` (*slog.Logger): Custom logger for provider operations. If not provided, a default text logger is created. See [Logging](#logging) for details.
 - `ResolverStateServiceAddr` (string): Custom address for the resolver state service. Defaults to `edge-grpc.spotify.com`
 - `FlagLoggerServiceAddr` (string): Custom address for the flag logger service. Defaults to `edge-grpc.spotify.com`
 - `AuthServiceAddr` (string): Custom address for the auth service. Defaults to `edge-grpc.spotify.com`
@@ -144,6 +145,30 @@ ratio, err := client.FloatValue(ctx, "feature.sampling_ratio", 0.5, evalCtx)
 // Object/structured flags
 config, err := client.ObjectValue(ctx, "feature", map[string]interface{}{}, evalCtx)
 ```
+
+## Logging
+
+The provider uses `log/slog` for structured logging. By default, logs at `Info` level and above are written to `stderr`.
+
+You can provide a custom logger to control log level, format, and destination:
+
+```go
+import "log/slog"
+
+// JSON logger with debug level
+logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+    Level: slog.LevelDebug,
+}))
+
+provider, err := confidence.NewProvider(ctx, confidence.ProviderConfig{
+    APIClientID:     "your-api-client-id",
+    APIClientSecret: "your-api-client-secret",
+    ClientSecret:    "your-client-secret",
+    Logger:          logger,
+})
+```
+
+The provider logs at different levels: `Debug` (flag resolution details), `Info` (state updates), `Warn` (non-critical issues), and `Error` (failures).
 
 ## Troubleshooting
 

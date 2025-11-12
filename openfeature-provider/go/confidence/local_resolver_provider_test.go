@@ -2,6 +2,8 @@ package confidence
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
@@ -11,7 +13,8 @@ import (
 
 func TestNewLocalResolverProvider(t *testing.T) {
 	factory := &LocalResolverFactory{}
-	provider := NewLocalResolverProvider(factory, "test-secret")
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	provider := NewLocalResolverProvider(factory, "test-secret", testLogger)
 
 	if provider == nil {
 		t.Fatal("Expected provider to be created, got nil")
@@ -25,7 +28,8 @@ func TestNewLocalResolverProvider(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Metadata(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret")
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret", testLogger)
 	metadata := provider.Metadata()
 
 	if metadata.Name != "confidence-sdk-go-local" {
@@ -34,7 +38,8 @@ func TestLocalResolverProvider_Metadata(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Hooks(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret")
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret", testLogger)
 	hooks := provider.Hooks()
 
 	if hooks == nil {
@@ -402,7 +407,8 @@ func TestLocalResolverProvider_Shutdown(t *testing.T) {
 		},
 	}
 
-	provider := NewLocalResolverProvider(factory, "secret")
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	provider := NewLocalResolverProvider(factory, "secret", testLogger)
 	provider.Shutdown()
 
 	// Note: The actual shutdown behavior depends on the factory implementation
@@ -433,7 +439,8 @@ func TestLocalResolverProvider_ShutdownFlushesLogs(t *testing.T) {
 		},
 	}
 
-	provider := NewLocalResolverProvider(factory, "secret")
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	provider := NewLocalResolverProvider(factory, "secret", testLogger)
 
 	// Shutdown should propagate to the factory
 	provider.Shutdown()

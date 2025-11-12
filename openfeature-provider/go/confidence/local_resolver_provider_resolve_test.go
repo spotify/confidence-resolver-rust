@@ -2,6 +2,8 @@ package confidence
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
@@ -43,7 +45,8 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	}
 
 	// Use different client secret that won't match
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret"))
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret", testLogger))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -93,7 +96,8 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	}
 
 	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"))
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", testLogger))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -178,7 +182,8 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			resolverAPI: swap,
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"))
+		testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", testLogger))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -222,7 +227,8 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			resolverAPI: swap,
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret"))
+		testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret", testLogger))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{

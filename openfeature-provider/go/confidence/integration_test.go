@@ -2,6 +2,8 @@ package confidence
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -101,7 +103,8 @@ func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
 	mockStub := &mockGrpcStubForIntegration{
 		onCallReceived: make(chan struct{}, 100), // Buffer to prevent blocking
 	}
-	actualGrpcLogger := NewGrpcWasmFlagLogger(mockStub)
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	actualGrpcLogger := NewGrpcWasmFlagLogger(mockStub, testLogger)
 
 	trackingLogger := &trackingFlagLogger{
 		actualLogger:       actualGrpcLogger,
@@ -189,7 +192,8 @@ func createProviderWithTestState(
 
 	// Create provider with the client secret from test state
 	// The test state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
-	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF")
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", testLogger)
 	return provider, nil
 }
 
@@ -215,11 +219,13 @@ func NewLocalResolverFactoryWithStateProviderAndLogger(
 	}
 
 	// Create factory
+	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	factory := &LocalResolverFactory{
 		resolverAPI:     resolverAPI,
 		stateProvider:   stateProvider,
 		accountId:       accountId,
 		flagLogger:      flagLogger,
+		logger:          testLogger,
 		logPollInterval: getPollIntervalSeconds(),
 	}
 
