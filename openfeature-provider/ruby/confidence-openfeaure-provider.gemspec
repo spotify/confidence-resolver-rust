@@ -2,7 +2,8 @@
 
 require_relative "lib/confidence/openfeature/version"
 
-GITHUB_URL = "https://github.com/spotify/confidence-openfeature-provider-ruby"
+ROOT_URL = "https://github.com/spotify/confidence-resolver"
+GITHUB_URL = "#{ROOT_URL}/blob/main/openfeature-provider/ruby"
 
 Gem::Specification.new do |spec|
   spec.name = "confidence-openfeature-provider"
@@ -17,8 +18,8 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = GITHUB_URL
   spec.metadata["source_code_uri"] = GITHUB_URL
-  spec.metadata["changelog_uri"] = "#{GITHUB_URL}/blob/main/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "#{GITHUB_URL}/issues"
+  spec.metadata["changelog_uri"] = "#{GITHUB_URL}/CHANGELOG.md"
+  spec.metadata["bug_tracker_uri"] = "#{ROOT_URL}/issues"
   spec.metadata["documentation_uri"] = "#{GITHUB_URL}/README.md"
 
   spec.files = Dir["lib/**/*.rb"]
