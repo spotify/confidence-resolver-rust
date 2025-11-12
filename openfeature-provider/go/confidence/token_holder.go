@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -31,17 +31,19 @@ type TokenHolder struct {
 	apiClientID     string
 	apiClientSecret string
 	stub            iamv1.AuthServiceClient
+	logger          *slog.Logger
 
 	mu    sync.RWMutex
 	token *Token
 }
 
 // NewTokenHolder creates a new TokenHolder
-func NewTokenHolder(apiClientID, apiClientSecret string, stub iamv1.AuthServiceClient) *TokenHolder {
+func NewTokenHolder(apiClientID, apiClientSecret string, stub iamv1.AuthServiceClient, logger *slog.Logger) *TokenHolder {
 	return &TokenHolder{
 		apiClientID:     apiClientID,
 		apiClientSecret: apiClientSecret,
 		stub:            stub,
+		logger:          logger,
 	}
 }
 
@@ -98,7 +100,7 @@ func (h *TokenHolder) requestAccessToken(ctx context.Context) (*Token, error) {
 	// Decode JWT to extract account name
 	account, err := extractAccountFromJWT(accessToken)
 	if err != nil {
-		log.Printf("Warning: failed to extract account from JWT: %v", err)
+		h.logger.Error("Failed to extract account from JWT", "error", err)
 		account = "unknown"
 	}
 

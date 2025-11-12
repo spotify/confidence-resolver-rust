@@ -104,7 +104,7 @@ func NewLocalResolverFactory(
 		authService := iamv1.NewAuthServiceClient(unauthConn)
 
 		// Create token holder
-		tokenHolder := NewTokenHolder(apiClientID, apiClientSecret, authService)
+		tokenHolder := NewTokenHolder(apiClientID, apiClientSecret, authService, logger)
 
 		// Create JWT auth interceptor
 		authInterceptor := NewJwtAuthInterceptor(tokenHolder)
@@ -133,7 +133,7 @@ func NewLocalResolverFactory(
 		flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(authConnection)
 
 		// Create state fetcher (which implements StateProvider)
-		stateFetcher := NewFlagsAdminStateFetcher(resolverStateService, accountName)
+		stateFetcher := NewFlagsAdminStateFetcher(resolverStateService, accountName, logger)
 		stateProvider = stateFetcher
 
 		// Get initial state using StateProvider interface
@@ -156,7 +156,7 @@ func NewLocalResolverFactory(
 	}
 
 	// Create SwapWasmResolverApi with initial state
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, resolvedAccountId)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, resolvedAccountId, logger)
 	if err != nil {
 		return nil, err
 	}

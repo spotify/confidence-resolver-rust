@@ -3,7 +3,7 @@ package confidence
 import (
 	"context"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -23,16 +23,19 @@ type FlagsAdminStateFetcher struct {
 	refreshTime          atomic.Value // stores time.Time
 	accountID            string
 	httpClient           *http.Client
+	logger               *slog.Logger
 }
 
 // NewFlagsAdminStateFetcher creates a new FlagsAdminStateFetcher
 func NewFlagsAdminStateFetcher(
 	resolverStateService adminv1.ResolverStateServiceClient,
 	accountName string,
+	logger *slog.Logger,
 ) *FlagsAdminStateFetcher {
 	f := &FlagsAdminStateFetcher{
 		resolverStateService: resolverStateService,
 		accountName:          accountName,
+		logger:               logger,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -61,7 +64,7 @@ func (f *FlagsAdminStateFetcher) GetAccountID() string {
 // Reload fetches and updates the state if it has changed
 func (f *FlagsAdminStateFetcher) Reload(ctx context.Context) error {
 	if err := f.fetchAndUpdateStateIfChanged(ctx); err != nil {
-		log.Printf("Failed to reload, ignoring reload: %v", err)
+		f.logger.Warn("Failed to reload, ignoring reload", "account", f.accountName, "error", err)
 		return err
 	}
 	return nil
@@ -161,7 +164,7 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 	// Update the raw state
 	f.rawResolverState.Store(bytes)
 
-	log.Printf("Loaded resolver state for %s, etag=%s", f.accountName, etag)
+	f.logger.Info("Loaded resolver state", "account", f.accountName, "etag", etag)
 
 	return nil
 }

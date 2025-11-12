@@ -2,6 +2,8 @@ package confidence
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,7 +27,7 @@ func (m *mockAuthServiceClient) RequestAccessToken(ctx context.Context, req *iam
 
 func TestNewTokenHolder(t *testing.T) {
 	mockStub := &mockAuthServiceClient{}
-	holder := NewTokenHolder("client-id", "client-secret", mockStub)
+	holder := NewTokenHolder("client-id", "client-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	if holder == nil {
 		t.Fatal("Expected TokenHolder to be created, got nil")
@@ -52,7 +54,7 @@ func TestTokenHolder_GetToken_FirstTime(t *testing.T) {
 		},
 	}
 
-	holder := NewTokenHolder("client-id", "client-secret", mockStub)
+	holder := NewTokenHolder("client-id", "client-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	token, err := holder.GetToken(ctx)
@@ -84,7 +86,7 @@ func TestTokenHolder_GetToken_CachedToken(t *testing.T) {
 		},
 	}
 
-	holder := NewTokenHolder("client-id", "client-secret", mockStub)
+	holder := NewTokenHolder("client-id", "client-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// First call - should request new token
@@ -123,7 +125,7 @@ func TestTokenHolder_GetToken_ExpiredToken(t *testing.T) {
 		},
 	}
 
-	holder := NewTokenHolder("client-id", "client-secret", mockStub)
+	holder := NewTokenHolder("client-id", "client-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// First call
@@ -201,7 +203,7 @@ func TestTokenHolder_ConcurrentAccess(t *testing.T) {
 		},
 	}
 
-	holder := NewTokenHolder("client-id", "client-secret", mockStub)
+	holder := NewTokenHolder("client-id", "client-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// Launch multiple goroutines that all try to get token at the same time

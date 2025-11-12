@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -35,6 +35,9 @@ type ResolverApi struct {
 
 	// Flag logger for writing logs
 	flagLogger WasmFlagLogger
+
+	// Logger for structured logging
+	logger *slog.Logger
 
 	// Mutex to protect concurrent access to WASM instance
 	// All WASM operations require exclusive access
@@ -102,7 +105,7 @@ func InitializeWasmRuntime(ctx context.Context, runtime wazero.Runtime, wasmByte
 }
 
 // NewResolverApiFromCompiled creates a new ResolverApi instance from a pre-compiled module
-func NewResolverApiFromCompiled(ctx context.Context, runtime wazero.Runtime, compiledModule wazero.CompiledModule, flagLogger WasmFlagLogger) *ResolverApi {
+func NewResolverApiFromCompiled(ctx context.Context, runtime wazero.Runtime, compiledModule wazero.CompiledModule, flagLogger WasmFlagLogger, logger *slog.Logger) *ResolverApi {
 	// Instantiate the module with a unique name to allow multiple instances
 	// wazero requires unique module names for multiple instantiations
 	config := wazero.NewModuleConfig().WithName("")
@@ -132,6 +135,7 @@ func NewResolverApiFromCompiled(ctx context.Context, runtime wazero.Runtime, com
 		wasmMsgGuestFlushLogs:         wasmMsgGuestFlushLogs,
 		wasmMsgGuestResolveWithSticky: wasmMsgGuestResolveWithSticky,
 		flagLogger:                    flagLogger,
+		logger:                        logger,
 		firstResolve:                  true,
 	}
 }
@@ -173,10 +177,10 @@ func (r *ResolverApi) FlushLogs() error {
 	// Write logs via the flag logger
 	if r.flagLogger != nil && (len(logRequest.FlagAssigned) > 0 || len(logRequest.ClientResolveInfo) > 0 || len(logRequest.FlagResolveInfo) > 0) {
 		if err := r.flagLogger.Write(ctx, logRequest); err != nil {
-			log.Printf("Failed to write flushed logs: %v", err)
+			r.logger.Warn("Failed to write flushed logs", "error", err)
 		}
 	} else {
-		log.Printf("No flag logs were found")
+		r.logger.Debug("No flag logs were found")
 	}
 
 	return nil
@@ -185,10 +189,10 @@ func (r *ResolverApi) FlushLogs() error {
 // Close closes the WASM instance
 // Note: This does NOT close the compiled module, as it may be shared across instances
 func (r *ResolverApi) Close(ctx context.Context) {
-	log.Printf("Flushing WASM instance")
+	r.logger.Debug("Flushing WASM instance")
 	err := r.FlushLogs()
 	if err != nil {
-		log.Printf("Flushing failed: %v", err)
+		r.logger.Warn("Flushing failed", "error", err)
 		return
 	}
 	if r.instance != nil {
@@ -206,7 +210,7 @@ func (r *ResolverApi) SetResolverState(state []byte, accountId string) error {
 	defer r.mu.Unlock()
 
 	ctx := context.Background()
-	log.Printf("Setting resolver state for account %s", accountId)
+	r.logger.Debug("Setting resolver state", "account", accountId)
 
 	// Create SetResolverStateRequest
 	setStateRequest := &messages.SetResolverStateRequest{
@@ -266,7 +270,7 @@ func (r *ResolverApi) ResolveWithSticky(request *resolver.ResolveWithStickyReque
 	response := &resolver.ResolveWithStickyResponse{}
 	err = r.consumeResponse(respPtr, response)
 	if err != nil {
-		log.Printf("ResolveWithSticky failed with error: %v", err)
+		r.logger.Warn("ResolveWithSticky failed", "error", err)
 		return nil, err
 	}
 
@@ -341,8 +345,7 @@ func (r *ResolverApi) transfer(data []byte) uint32 {
 		// Log memory size when allocation fails
 		if r.instance != nil && r.instance.Memory() != nil {
 			memorySize := r.instance.Memory().Size()
-			log.Printf("Failed to allocate %d bytes. Current WASM memory size: %d bytes (%d pages). Error: %v",
-				len(data), memorySize, memorySize/65536, err)
+			r.logger.Error("Failed to allocate memory", "requested_bytes", len(data), "memory_size", memorySize, "memory_pages", memorySize/65536, "error", err)
 		}
 		panic(fmt.Sprintf("Failed to allocate memory: %v", err))
 	}

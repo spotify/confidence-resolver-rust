@@ -3,6 +3,7 @@ package confidence
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
@@ -24,6 +25,7 @@ type SwapWasmResolverApi struct {
 	runtime        wazero.Runtime
 	compiledModule wazero.CompiledModule
 	flagLogger     WasmFlagLogger
+	logger         *slog.Logger
 }
 
 // NewSwapWasmResolverApi creates a new SwapWasmResolverApi with an initial state
@@ -34,6 +36,7 @@ func NewSwapWasmResolverApi(
 	flagLogger WasmFlagLogger,
 	initialState []byte,
 	accountId string,
+	logger *slog.Logger,
 ) (*SwapWasmResolverApi, error) {
 	// Initialize host functions and compile module once
 	compiledModule, err := InitializeWasmRuntime(ctx, runtime, wasmBytes)
@@ -45,10 +48,11 @@ func NewSwapWasmResolverApi(
 		runtime:        runtime,
 		compiledModule: compiledModule,
 		flagLogger:     flagLogger,
+		logger:         logger,
 	}
 
 	// Create initial instance
-	initialInstance := NewResolverApiFromCompiled(ctx, runtime, compiledModule, flagLogger)
+	initialInstance := NewResolverApiFromCompiled(ctx, runtime, compiledModule, flagLogger, logger)
 	if err := initialInstance.SetResolverState(initialState, accountId); err != nil {
 		return nil, err
 	}
@@ -65,8 +69,8 @@ func (s *SwapWasmResolverApi) UpdateStateAndFlushLogs(state []byte, accountId st
 
 	ctx := context.Background()
 
-	// Create a new instance with the updated state
-	newInstance := NewResolverApiFromCompiled(ctx, s.runtime, s.compiledModule, s.flagLogger)
+	// Create new instance with updated state
+	newInstance := NewResolverApiFromCompiled(ctx, s.runtime, s.compiledModule, s.flagLogger, s.logger)
 	if err := newInstance.SetResolverState(state, accountId); err != nil {
 		return err
 	}

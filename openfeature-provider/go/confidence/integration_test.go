@@ -103,8 +103,7 @@ func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
 	mockStub := &mockGrpcStubForIntegration{
 		onCallReceived: make(chan struct{}, 100), // Buffer to prevent blocking
 	}
-	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	actualGrpcLogger := NewGrpcWasmFlagLogger(mockStub, testLogger)
+	actualGrpcLogger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	trackingLogger := &trackingFlagLogger{
 		actualLogger:       actualGrpcLogger,
@@ -192,8 +191,7 @@ func createProviderWithTestState(
 
 	// Create provider with the client secret from test state
 	// The test state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
-	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", testLogger)
+	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return provider, nil
 }
 
@@ -212,20 +210,21 @@ func NewLocalResolverFactoryWithStateProviderAndLogger(
 		initialState = []byte{}
 	}
 
+	// Create test logger for integration tests
+
 	// Create SwapWasmResolverApi with initial state
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, accountId)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		return nil, err
 	}
 
 	// Create factory
-	testLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	factory := &LocalResolverFactory{
 		resolverAPI:     resolverAPI,
 		stateProvider:   stateProvider,
 		accountId:       accountId,
 		flagLogger:      flagLogger,
-		logger:          testLogger,
+		logger:          slog.New(slog.NewTextHandler(os.Stderr, nil)),
 		logPollInterval: getPollIntervalSeconds(),
 	}
 
