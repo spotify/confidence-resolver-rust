@@ -18,4 +18,7 @@ wasm/confidence_resolver.wasm
 # Ignore e2e test environment files (contain credentials)
 .env.test
 
+# Ignore Dockerfile dependency source of truth (stored as GitHub artifact)
+.dockerfile-deps.json
+
 

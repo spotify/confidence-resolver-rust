@@ -1,0 +1,114 @@
+name: Dockerfile Dependency Validation
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+
+jobs:
+  validate-dockerfile-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # On main: generate and upload source of truth
+      - name: Generate source of truth
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          python3 tools/dockerfile-deps.py --generate-sot
+          echo "✅ Generated source of truth"
+
+      - name: Upload source of truth artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerfile-deps-sot
+          path: .dockerfile-deps.json
+          retention-days: 90
+
+      # On PR: download source of truth and validate
+      - name: Download source of truth from main
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: dockerfile-deps.yml
+          name: dockerfile-deps-sot
+          path: .
+          branch: main
+          search_artifacts: true
+        continue-on-error: true
+
+      - name: Validate Dockerfile dependencies
+        if: github.event_name == 'pull_request'
+        id: validate
+        run: |
+          if [ ! -f .dockerfile-deps.json ]; then
+            echo "⚠️  No source of truth found from main branch. Generating report without validation."
+            python3 tools/dockerfile-deps.py > report.md
+            echo "has_sot=false" >> $GITHUB_OUTPUT
+          else
+            set +e
+            python3 tools/dockerfile-deps.py --validate > report.md
+            EXIT_CODE=$?
+            echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+            echo "has_sot=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add report to job summary
+        if: github.event_name == 'pull_request'
+        run: |
+          cat report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR with changes
+        if: github.event_name == 'pull_request' && steps.validate.outputs.has_sot == 'true' && steps.validate.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('report.md', 'utf8');
+
+            // Extract only the validation sections
+            const lines = report.split('\n');
+            let output = [];
+            let inValidationSection = false;
+
+            for (const line of lines) {
+              if (line.startsWith('## Build Order') || line.startsWith('## Dependency Graph')) {
+                break;
+              }
+              if (line.startsWith('# Dockerfile Dependency Analysis') ||
+                  line.startsWith('**Dockerfile:**') ||
+                  line.startsWith('**Total Stages:**')) {
+                output.push(line);
+                continue;
+              }
+              if (line.startsWith('## Source of Truth Validation') ||
+                  line.startsWith('## Topological Validation')) {
+                inValidationSection = true;
+              }
+              if (inValidationSection) {
+                output.push(line);
+              }
+            }
+
+            const shortReport = output.join('\n').trim();
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `${shortReport}\n\n---\n*This is informational only - your PR will not be blocked. The source of truth will be updated when this PR merges to main.*`
+            });
