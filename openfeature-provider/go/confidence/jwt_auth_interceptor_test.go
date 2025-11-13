@@ -3,6 +3,8 @@ package confidence
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"os"
 	"testing"
 
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
@@ -34,7 +36,7 @@ func TestJwtAuthInterceptor_UnaryClientInterceptor_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub)
+	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	interceptor := NewJwtAuthInterceptor(tokenHolder)
 	unaryInterceptor := interceptor.UnaryClientInterceptor()
@@ -87,7 +89,7 @@ func TestJwtAuthInterceptor_UnaryClientInterceptor_TokenError(t *testing.T) {
 			return nil, errors.New("auth service unavailable")
 		},
 	}
-	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub)
+	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	interceptor := NewJwtAuthInterceptor(tokenHolder)
 	unaryInterceptor := interceptor.UnaryClientInterceptor()
@@ -122,7 +124,7 @@ func TestJwtAuthInterceptor_UnaryClientInterceptor_MergesMetadata(t *testing.T) 
 			}, nil
 		},
 	}
-	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub)
+	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	interceptor := NewJwtAuthInterceptor(tokenHolder)
 	unaryInterceptor := interceptor.UnaryClientInterceptor()
@@ -175,7 +177,7 @@ func TestJwtAuthInterceptor_UnaryClientInterceptor_InvokerError(t *testing.T) {
 			}, nil
 		},
 	}
-	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub)
+	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	interceptor := NewJwtAuthInterceptor(tokenHolder)
 	unaryInterceptor := interceptor.UnaryClientInterceptor()
@@ -205,7 +207,7 @@ func TestJwtAuthInterceptor_StreamClientInterceptor_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub)
+	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	interceptor := NewJwtAuthInterceptor(tokenHolder)
 	streamInterceptor := interceptor.StreamClientInterceptor()
@@ -255,7 +257,7 @@ func TestJwtAuthInterceptor_StreamClientInterceptor_TokenError(t *testing.T) {
 			return nil, errors.New("auth service unavailable")
 		},
 	}
-	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub)
+	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	interceptor := NewJwtAuthInterceptor(tokenHolder)
 	streamInterceptor := interceptor.StreamClientInterceptor()
@@ -289,7 +291,7 @@ func TestJwtAuthInterceptor_StreamClientInterceptor_MergesMetadata(t *testing.T)
 			}, nil
 		},
 	}
-	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub)
+	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	interceptor := NewJwtAuthInterceptor(tokenHolder)
 	streamInterceptor := interceptor.StreamClientInterceptor()
@@ -342,7 +344,7 @@ func TestJwtAuthInterceptor_StreamClientInterceptor_StreamerError(t *testing.T) 
 			}, nil
 		},
 	}
-	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub)
+	tokenHolder := NewTokenHolder("test-client", "test-secret", mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	interceptor := NewJwtAuthInterceptor(tokenHolder)
 	streamInterceptor := interceptor.StreamClientInterceptor()

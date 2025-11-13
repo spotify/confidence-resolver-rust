@@ -3,6 +3,8 @@ package confidence
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,7 +30,7 @@ func (m *mockInternalFlagLoggerServiceClient) WriteFlagLogs(ctx context.Context,
 
 func TestNewGrpcWasmFlagLogger(t *testing.T) {
 	mockStub := &mockInternalFlagLoggerServiceClient{}
-	logger := NewGrpcWasmFlagLogger(mockStub)
+	logger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	if logger == nil {
 		t.Fatal("Expected logger to be created, got nil")
@@ -50,7 +52,7 @@ func TestGrpcWasmFlagLogger_Write_Empty(t *testing.T) {
 		},
 	}
 
-	logger := NewGrpcWasmFlagLogger(mockStub)
+	logger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// Empty request should be skipped
@@ -80,7 +82,7 @@ func TestGrpcWasmFlagLogger_Write_SmallRequest(t *testing.T) {
 		},
 	}
 
-	logger := NewGrpcWasmFlagLogger(mockStub)
+	logger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// Create a small request (below chunk threshold)
@@ -119,7 +121,7 @@ func TestGrpcWasmFlagLogger_Write_Chunking(t *testing.T) {
 		},
 	}
 
-	logger := NewGrpcWasmFlagLogger(mockStub)
+	logger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// Create a large request (above chunk threshold)
@@ -190,7 +192,7 @@ func TestGrpcWasmFlagLogger_Write_Chunking(t *testing.T) {
 
 func TestGrpcWasmFlagLogger_CreateChunks(t *testing.T) {
 	mockStub := &mockInternalFlagLoggerServiceClient{}
-	logger := NewGrpcWasmFlagLogger(mockStub)
+	logger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	// Create request with metadata
 	request := &resolverv1.WriteFlagLogsRequest{
@@ -238,7 +240,7 @@ func TestGrpcWasmFlagLogger_WithCustomWriter(t *testing.T) {
 		return nil
 	}
 
-	logger := NewGrpcWasmFlagLoggerWithWriter(mockStub, customWriter)
+	logger := NewGrpcWasmFlagLoggerWithWriter(mockStub, customWriter, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	request := &resolverv1.WriteFlagLogsRequest{
@@ -267,7 +269,7 @@ func TestGrpcWasmFlagLogger_ErrorHandling(t *testing.T) {
 		},
 	}
 
-	logger := NewGrpcWasmFlagLogger(mockStub)
+	logger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	request := &resolverv1.WriteFlagLogsRequest{
@@ -299,7 +301,7 @@ func TestGrpcWasmFlagLogger_Shutdown(t *testing.T) {
 		},
 	}
 
-	logger := NewGrpcWasmFlagLogger(mockStub)
+	logger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// Send multiple requests

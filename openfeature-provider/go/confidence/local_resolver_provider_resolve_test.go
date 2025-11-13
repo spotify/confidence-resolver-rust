@@ -2,6 +2,8 @@ package confidence
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
@@ -32,18 +34,19 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	stateBytes, _ := proto.Marshal(state)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, stateBytes, "test-account")
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, stateBytes, "test-account", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
 	defer swap.Close(ctx)
 
+	// Use different client secret that won't match
+
 	factory := &LocalResolverFactory{
 		resolverAPI: swap,
+		logger:      slog.New(slog.NewTextHandler(os.Stderr, nil)),
 	}
-
-	// Use different client secret that won't match
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret"))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -82,18 +85,19 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	testAcctID := loadTestAccountID(t)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
 	defer swap.Close(ctx)
 
+	// Use the correct client secret from test data
+
 	factory := &LocalResolverFactory{
 		resolverAPI: swap,
+		logger:      slog.New(slog.NewTextHandler(os.Stderr, nil)),
 	}
-
-	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -168,7 +172,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		testAcctID := loadTestAccountID(t)
 
 		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID)
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 		if err != nil {
 			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 		}
@@ -176,9 +180,9 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 		factory := &LocalResolverFactory{
 			resolverAPI: swap,
+			logger:      slog.New(slog.NewTextHandler(os.Stderr, nil)),
 		}
-
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -212,7 +216,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		accountId := "test-account"
 
 		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, stickyState, accountId)
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, stickyState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 		if err != nil {
 			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 		}
@@ -220,9 +224,9 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 		factory := &LocalResolverFactory{
 			resolverAPI: swap,
+			logger:      slog.New(slog.NewTextHandler(os.Stderr, nil)),
 		}
-
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret"))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{

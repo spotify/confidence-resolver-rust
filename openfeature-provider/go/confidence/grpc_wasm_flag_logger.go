@@ -2,7 +2,7 @@ package confidence
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -28,41 +28,44 @@ type FlagLogWriter func(ctx context.Context, request *resolverv1.WriteFlagLogsRe
 type GrpcWasmFlagLogger struct {
 	stub   resolverv1.InternalFlagLoggerServiceClient
 	writer FlagLogWriter
+	logger *slog.Logger
 	wg     sync.WaitGroup
 }
 
 // NewGrpcWasmFlagLogger creates a new GrpcWasmFlagLogger
-func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient) *GrpcWasmFlagLogger {
-	logger := &GrpcWasmFlagLogger{
-		stub: stub,
+func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, logger *slog.Logger) *GrpcWasmFlagLogger {
+	flagLogger := &GrpcWasmFlagLogger{
+		stub:   stub,
+		logger: logger,
 	}
 
 	// Set up the default writer that sends requests asynchronously
-	logger.writer = func(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
-		logger.wg.Add(1)
+	flagLogger.writer = func(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+		flagLogger.wg.Add(1)
 		go func() {
-			defer logger.wg.Done()
+			defer flagLogger.wg.Done()
 			// Create a context with timeout for the RPC
 			rpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
 			if _, err := stub.WriteFlagLogs(rpcCtx, request); err != nil {
-				log.Printf("Failed to write flag logs: %v", err)
+				logger.Error("Failed to write flag logs", "error", err)
 			} else {
-				log.Printf("Successfully sent flag log with %d entries", len(request.FlagAssigned))
+				logger.Info("Successfully sent flag log", "entries", len(request.FlagAssigned))
 			}
 		}()
 		return nil
 	}
 
-	return logger
+	return flagLogger
 }
 
 // NewGrpcWasmFlagLoggerWithWriter creates a new GrpcWasmFlagLogger with a custom writer (for testing)
-func NewGrpcWasmFlagLoggerWithWriter(stub resolverv1.InternalFlagLoggerServiceClient, writer FlagLogWriter) *GrpcWasmFlagLogger {
+func NewGrpcWasmFlagLoggerWithWriter(stub resolverv1.InternalFlagLoggerServiceClient, writer FlagLogWriter, logger *slog.Logger) *GrpcWasmFlagLogger {
 	return &GrpcWasmFlagLogger{
 		stub:   stub,
 		writer: writer,
+		logger: logger,
 	}
 }
 
@@ -73,13 +76,15 @@ func (g *GrpcWasmFlagLogger) Write(ctx context.Context, request *resolverv1.Writ
 	flagResolveCount := len(request.FlagResolveInfo)
 
 	if clientResolveCount == 0 && flagAssignedCount == 0 && flagResolveCount == 0 {
-		log.Printf("Skipping empty flag log request")
+		g.logger.Debug("Skipping empty flag log request")
 		return nil
 	}
 
 	// Log total counts
-	log.Printf("Writing flag logs: %d flag_assigned, %d client_resolve_info, %d flag_resolve_info",
-		flagAssignedCount, clientResolveCount, flagResolveCount)
+	g.logger.Debug("Writing flag logs",
+		"flag_assigned", flagAssignedCount,
+		"client_resolve_info", clientResolveCount,
+		"flag_resolve_info", flagResolveCount)
 
 	// If flag_assigned list is small enough, send everything as-is
 	if flagAssignedCount <= MaxFlagAssignedPerChunk {
@@ -87,12 +92,14 @@ func (g *GrpcWasmFlagLogger) Write(ctx context.Context, request *resolverv1.Writ
 	}
 
 	// Split flag_assigned into chunks and send each chunk asynchronously
-	log.Printf("Splitting %d flag_assigned entries into chunks of %d",
-		flagAssignedCount, MaxFlagAssignedPerChunk)
+	g.logger.Debug("Splitting flag_assigned entries into chunks",
+		"total_entries", flagAssignedCount,
+		"chunk_size", MaxFlagAssignedPerChunk)
 
 	chunks := g.createFlagAssignedChunks(request)
 	for _, chunk := range chunks {
 		if err := g.sendAsync(ctx, chunk); err != nil {
+			g.logger.Error("Failed to send flag log chunk", "error", err)
 			return err
 		}
 	}

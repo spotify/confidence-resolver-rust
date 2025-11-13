@@ -3,6 +3,8 @@ package confidence
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/tetratelabs/wazero"
 	"google.golang.org/grpc"
@@ -22,6 +24,10 @@ type ProviderConfig struct {
 	APIClientID     string
 	APIClientSecret string
 	ClientSecret    string
+
+	// Optional: Custom logger for provider operations
+	// If not provided, a default slog.Logger will be created
+	Logger *slog.Logger
 
 	// Advanced/testing: override connection creation
 	ConnFactory ConnFactory
@@ -45,6 +51,10 @@ type ProviderConfigWithStateProvider struct {
 	// Required: Account ID
 	AccountId string
 
+	// Optional: Custom logger for provider operations
+	// If not provided, a default slog.Logger will be created
+	Logger *slog.Logger
+
 	// Optional: Custom WASM bytes (for advanced use cases only)
 	// If not provided, loads from default location
 	WasmBytes []byte
@@ -61,6 +71,14 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	}
 	if config.ClientSecret == "" {
 		return nil, fmt.Errorf("ClientSecret is required")
+	}
+
+	// Create logger if not provided
+	logger := config.Logger
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
 	}
 
 	// Use embedded WASM module
@@ -87,6 +105,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		nil, // stateProvider
 		"",  // accountId (will be extracted from token)
 		connFactory,
+		logger,
 	)
 	if err != nil {
 		wasmRuntime.Close(ctx)
@@ -94,7 +113,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	}
 
 	// Create provider
-	provider := NewLocalResolverProvider(factory, config.ClientSecret)
+	provider := NewLocalResolverProvider(factory, config.ClientSecret, logger)
 
 	return provider, nil
 }
@@ -111,6 +130,14 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 	}
 	if config.AccountId == "" {
 		return nil, fmt.Errorf("AccountId is required")
+	}
+
+	// Create logger if not provided
+	logger := config.Logger
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
 	}
 
 	// Use custom WASM bytes if provided, otherwise use embedded default
@@ -138,6 +165,7 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 		config.StateProvider, // stateProvider
 		config.AccountId,     // accountId - required with StateProvider
 		connFactory,          // connFactory - unused here but passed for consistency
+		logger,
 	)
 	if err != nil {
 		wasmRuntime.Close(ctx)
@@ -145,7 +173,7 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 	}
 
 	// Create provider
-	provider := NewLocalResolverProvider(factory, config.ClientSecret)
+	provider := NewLocalResolverProvider(factory, config.ClientSecret, logger)
 
 	return provider, nil
 }

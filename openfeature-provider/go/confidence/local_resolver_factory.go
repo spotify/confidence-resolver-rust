@@ -3,7 +3,7 @@ package confidence
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"sync"
@@ -33,6 +33,7 @@ type LocalResolverFactory struct {
 	stateProvider   StateProvider
 	accountId       string
 	flagLogger      WasmFlagLogger
+	logger          *slog.Logger
 	cancelFunc      context.CancelFunc
 	logPollInterval time.Duration
 	wg              sync.WaitGroup
@@ -52,6 +53,7 @@ func NewLocalResolverFactory(
 	customStateProvider StateProvider,
 	accountId string,
 	connFactory ConnFactory,
+	logger *slog.Logger,
 ) (*LocalResolverFactory, error) {
 	logPollInterval := getPollIntervalSeconds()
 
@@ -73,7 +75,7 @@ func NewLocalResolverFactory(
 		var err error
 		initialState, err = customStateProvider.Provide(ctx)
 		if err != nil {
-			log.Printf("Initial state fetch from provider failed, using empty state: %v", err)
+			logger.Warn("Initial state fetch from provider failed, using empty state", "error", err)
 			initialState = []byte{}
 		}
 
@@ -102,7 +104,7 @@ func NewLocalResolverFactory(
 		authService := iamv1.NewAuthServiceClient(unauthConn)
 
 		// Create token holder
-		tokenHolder := NewTokenHolder(apiClientID, apiClientSecret, authService)
+		tokenHolder := NewTokenHolder(apiClientID, apiClientSecret, authService, logger)
 
 		// Create JWT auth interceptor
 		authInterceptor := NewJwtAuthInterceptor(tokenHolder)
@@ -118,7 +120,7 @@ func NewLocalResolverFactory(
 		// Get account name from token
 		token, err := tokenHolder.GetToken(ctx)
 		if err != nil {
-			log.Printf("Warning: failed to get initial token, account name will be unknown: %v", err)
+			logger.Warn("Failed to get initial token, account name will be unknown", "error", err)
 			// TODO should we return an error here?
 			// return nil, fmt.Errorf("failed to get initial token: %w", err)
 		}
@@ -131,13 +133,13 @@ func NewLocalResolverFactory(
 		flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(authConnection)
 
 		// Create state fetcher (which implements StateProvider)
-		stateFetcher := NewFlagsAdminStateFetcher(resolverStateService, accountName)
+		stateFetcher := NewFlagsAdminStateFetcher(resolverStateService, accountName, logger)
 		stateProvider = stateFetcher
 
 		// Get initial state using StateProvider interface
 		initialState, err = stateProvider.Provide(ctx)
 		if err != nil {
-			log.Printf("Initial state fetch failed, using empty state: %v", err)
+			logger.Warn("Initial state fetch failed, using empty state", "error", err)
 			// TODO should we return an error here?
 			// return nil, fmt.Errorf("failed to get initial state: %w", err)
 		}
@@ -150,11 +152,11 @@ func NewLocalResolverFactory(
 			resolvedAccountId = "unknown"
 		}
 
-		flagLogger = NewGrpcWasmFlagLogger(flagLoggerService)
+		flagLogger = NewGrpcWasmFlagLogger(flagLoggerService, logger)
 	}
 
 	// Create SwapWasmResolverApi with initial state
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, resolvedAccountId)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, resolvedAccountId, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -165,6 +167,7 @@ func NewLocalResolverFactory(
 		stateProvider:   stateProvider,
 		accountId:       resolvedAccountId,
 		flagLogger:      flagLogger,
+		logger:          logger,
 		logPollInterval: logPollInterval,
 	}
 
@@ -194,15 +197,15 @@ func (f *LocalResolverFactory) startScheduledTasks(parentCtx context.Context) {
 				// Fetch latest state
 				state, err := f.stateProvider.Provide(ctx)
 				if err != nil {
-					log.Printf("State fetch failed: %v", err)
+					f.logger.Error("State fetch failed", "error", err)
 				}
 
 				// Update state and flush logs (even if state fetch failed, use cached state)
 				if state != nil && f.accountId != "" {
 					if err := f.resolverAPI.UpdateStateAndFlushLogs(state, f.accountId); err != nil {
-						log.Printf("Failed to update state and flush logs: %v", err)
+						f.logger.Error("Failed to update state and flush logs", "error", err)
 					} else {
-						log.Printf("Updated resolver state and flushed logs for account %s", f.accountId)
+						f.logger.Debug("Updated resolver state and flushed logs", "account", f.accountId)
 					}
 				}
 			case <-ctx.Done():
@@ -217,28 +220,28 @@ func (f *LocalResolverFactory) Shutdown(ctx context.Context) {
 	// lock to prevent concurrent shutdowns
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	log.Println("Shutting down local resolver factory")
+	f.logger.Debug("Shutting down local resolver factory")
 	if f.cancelFunc == nil {
-		log.Println("Scheduled tasks already cancelled")
+		f.logger.Info("Scheduled tasks already cancelled")
 		return
 	}
 	f.cancelFunc()
 	f.cancelFunc = nil
-	log.Println("Cancelled scheduled tasks")
+	f.logger.Debug("Cancelled scheduled tasks")
 
 	// Wait for background goroutines to exit
 	f.wg.Wait()
 	// Close resolver API first (which flushes final logs)
 	if f.resolverAPI != nil {
 		f.resolverAPI.Close(ctx)
-		log.Println("Closed resolver API")
+		f.logger.Debug("Closed resolver API")
 	}
 	// Then shutdown flag logger (which waits for log sends to complete)
 	if f.flagLogger != nil {
 		f.flagLogger.Shutdown()
-		log.Println("Shut down flag logger")
+		f.logger.Debug("Shut down flag logger")
 	}
-	log.Println("Local resolver factory shut down")
+	f.logger.Info("Local resolver factory shut down")
 }
 
 // GetSwapResolverAPI returns the SwapWasmResolverApi
