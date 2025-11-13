@@ -194,6 +194,14 @@ FROM scratch AS wasm-rust-guest.artifact
 COPY --from=wasm-rust-guest.build /workspace/target/wasm32-unknown-unknown/wasm/rust_guest.wasm /confidence_resolver.wasm
 
 # ==============================================================================
+# Build confidence-cloudflare-resolver (WASM target)
+# ==============================================================================
+FROM wasm-deps AS confidence-cloudflare-resolver.build
+
+WORKDIR /workspace/confidence-cloudflare-resolver
+RUN make build
+
+# ==============================================================================
 # Lint confidence-cloudflare-resolver (WASM target)
 # ==============================================================================
 FROM wasm-deps AS confidence-cloudflare-resolver.lint
@@ -201,8 +209,36 @@ FROM wasm-deps AS confidence-cloudflare-resolver.lint
 WORKDIR /workspace/confidence-cloudflare-resolver
 RUN make lint
 
+# ==============================================================================
+# CloudFlare Deployer - Runtime image for deploying to CloudFlare Workers
+# ==============================================================================
+FROM confidence-cloudflare-resolver.build AS confidence-cloudflare-resolver.deployer
 
+# Install Node.js, npm, jq, and git for deployment
+RUN apk add --no-cache nodejs npm jq git
 
+# Install Wrangler CLI
+RUN npm install -g wrangler@latest
+
+# Install worker-build (Rust WASM build tool used by Wrangler)
+ARG WORKER_BUILD_VERSION="0.1.11"
+RUN cargo install worker-build --locked --version ${WORKER_BUILD_VERSION}
+
+# Optionally pass the commit SHA at build time
+ARG COMMIT_SHA=""
+ENV COMMIT_SHA=${COMMIT_SHA}
+
+# Return to workspace root
+WORKDIR /workspace
+
+# Clean sample/runtime data to avoid leaking into image
+RUN rm -rf data/*
+
+# Ensure deploy script is executable
+RUN chmod +x confidence-cloudflare-resolver/deployer/script.sh
+
+# Default command runs the deployer script
+CMD ["./confidence-cloudflare-resolver/deployer/script.sh"]
 
 # ==============================================================================
 # Python Host - Run Python host example
@@ -577,6 +613,7 @@ COPY --from=openfeature-provider-ruby.lint /app/Gemfile /markers/lint-openfeatur
 COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
 
 # Force build stages to run
+COPY --from=confidence-cloudflare-resolver.build /workspace/Cargo.toml /markers/build-cloudflare
 COPY --from=openfeature-provider-js.build /app/dist/index.node.js /artifacts/openfeature-js/
 COPY --from=openfeature-provider-java.build /app/target/*.jar /artifacts/openfeature-java/
 COPY --from=openfeature-provider-go.build /app/.build.stamp /artifacts/openfeature-go/
