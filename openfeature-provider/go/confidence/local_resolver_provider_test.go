@@ -2,20 +2,14 @@ package confidence
 
 import (
 	"context"
-	"log/slog"
-	"os"
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
-	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestNewLocalResolverProvider(t *testing.T) {
-	factory := &LocalResolverFactory{
-		logger: slog.New(slog.NewTextHandler(os.Stderr, nil)),
-	}
-	provider := NewLocalResolverProvider(factory, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	provider := NewLocalResolverProvider(nil, nil, nil, "test-secret", nil)
 
 	if provider == nil {
 		t.Fatal("Expected provider to be created, got nil")
@@ -23,13 +17,10 @@ func TestNewLocalResolverProvider(t *testing.T) {
 	if provider.clientSecret != "test-secret" {
 		t.Errorf("Expected client secret to be 'test-secret', got %s", provider.clientSecret)
 	}
-	if provider.factory != factory {
-		t.Error("Expected factory to be set correctly")
-	}
 }
 
 func TestLocalResolverProvider_Metadata(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil)
 	metadata := provider.Metadata()
 
 	if metadata.Name != "confidence-sdk-go-local" {
@@ -38,7 +29,7 @@ func TestLocalResolverProvider_Metadata(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Hooks(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil)
 	hooks := provider.Hooks()
 
 	if hooks == nil {
@@ -400,56 +391,31 @@ func TestFlattenedContextToProto_InvalidValue(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Shutdown(t *testing.T) {
-	factory := &LocalResolverFactory{
-		logger: slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		cancelFunc: func() {
-			// Shutdown called
-		},
-	}
-
-	provider := NewLocalResolverProvider(factory, "secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil)
 	provider.Shutdown()
 
-	// Note: The actual shutdown behavior depends on the factory implementation
-	// This just verifies the method exists and can be called without panicking
+	// Verify the method can be called without panicking even with nil components
+	// The provider manages its own lifecycle now
 }
 
-// mockWasmFlagLogger is a mock implementation for testing shutdown behavior
-type mockWasmFlagLogger struct {
-	shutdownCalled bool
-}
+func TestLocalResolverProvider_ShutdownWithCancelFunc(t *testing.T) {
+	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil)
 
-func (m *mockWasmFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
-	return nil
-}
-
-func (m *mockWasmFlagLogger) Shutdown() {
-	m.shutdownCalled = true
-}
-
-func TestLocalResolverProvider_ShutdownFlushesLogs(t *testing.T) {
-	mockLogger := &mockWasmFlagLogger{}
+	// Simulate Init having been called by setting cancelFunc
 	cancelCalled := false
-
-	factory := &LocalResolverFactory{
-		logger:     slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		flagLogger: mockLogger,
-		cancelFunc: func() {
-			cancelCalled = true
-		},
+	_, cancel := context.WithCancel(context.Background())
+	provider.mu.Lock()
+	provider.cancelFunc = func() {
+		cancelCalled = true
+		cancel()
 	}
+	provider.mu.Unlock()
 
-	provider := NewLocalResolverProvider(factory, "secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-
-	// Shutdown should propagate to the factory
+	// Shutdown should call cancel
 	provider.Shutdown()
 
-	// Verify that shutdown was called on all components
+	// Verify that cancel was called
 	if !cancelCalled {
 		t.Error("Expected cancel function to be called")
-	}
-
-	if !mockLogger.shutdownCalled {
-		t.Error("Expected flag logger Shutdown to be called, which flushes pending logs")
 	}
 }

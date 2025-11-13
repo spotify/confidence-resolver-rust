@@ -46,10 +46,8 @@ type ProviderConfigWithStateProvider struct {
 	ClientSecret string
 
 	// Required: State provider for fetching resolver state
+	// The StateProvider must implement GetAccountID() to provide the account ID
 	StateProvider StateProvider
-
-	// Required: Account ID
-	AccountId string
 
 	// Optional: Custom logger for provider operations
 	// If not provided, a default slog.Logger will be created
@@ -95,25 +93,29 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		}
 	}
 
-	// Create LocalResolverFactory (no custom StateProvider)
-	factory, err := NewLocalResolverFactory(
+	// Create gRPC StateProvider and FlagLogger
+	stateProvider, flagLogger, err := NewGrpcStateProvider(
 		ctx,
-		wasmRuntime,
-		wasmBytes,
 		config.APIClientID,
 		config.APIClientSecret,
-		nil, // stateProvider
-		"",  // accountId (will be extracted from token)
 		connFactory,
 		logger,
 	)
 	if err != nil {
 		wasmRuntime.Close(ctx)
-		return nil, fmt.Errorf("failed to create resolver factory: %w", err)
+		return nil, fmt.Errorf("failed to create gRPC state provider: %w", err)
+	}
+
+	// Create SwapWasmResolverApi without initial state (lazy initialization)
+	// State will be set during Provider.Init()
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, wasmBytes, flagLogger, logger)
+	if err != nil {
+		wasmRuntime.Close(ctx)
+		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
 	// Create provider
-	provider := NewLocalResolverProvider(factory, config.ClientSecret, logger)
+	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger)
 
 	return provider, nil
 }
@@ -127,9 +129,6 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 	}
 	if config.StateProvider == nil {
 		return nil, fmt.Errorf("StateProvider is required")
-	}
-	if config.AccountId == "" {
-		return nil, fmt.Errorf("AccountId is required")
 	}
 
 	// Create logger if not provided
@@ -149,31 +148,20 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
-	// Build connection factory (use default)
-	connFactory := func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
-		return grpc.NewClient(target, defaultOpts...)
-	}
+	// When using custom StateProvider, no gRPC logger service is available
+	// Exposure logging is disabled
+	flagLogger := NewNoOpWasmFlagLogger()
 
-	// Create LocalResolverFactory with StateProvider
-	// When using StateProvider, we don't need gRPC service addresses or API credentials
-	factory, err := NewLocalResolverFactory(
-		ctx,
-		wasmRuntime,
-		wasmBytes,
-		"",                   // apiClientID - not used with StateProvider
-		"",                   // apiClientSecret - not used with StateProvider
-		config.StateProvider, // stateProvider
-		config.AccountId,     // accountId - required with StateProvider
-		connFactory,          // connFactory - unused here but passed for consistency
-		logger,
-	)
+	// Create SwapWasmResolverApi without initial state (lazy initialization)
+	// State will be set during Provider.Init()
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, wasmBytes, flagLogger, logger)
 	if err != nil {
 		wasmRuntime.Close(ctx)
-		return nil, fmt.Errorf("failed to create resolver factory with provider: %w", err)
+		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
 	// Create provider
-	provider := NewLocalResolverProvider(factory, config.ClientSecret, logger)
+	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, flagLogger, config.ClientSecret, logger)
 
 	return provider, nil
 }

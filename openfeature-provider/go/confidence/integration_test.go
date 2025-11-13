@@ -17,11 +17,19 @@ import (
 
 // mockStateProvider provides test state for integration testing
 type mockStateProvider struct {
-	state []byte
+	state     []byte
+	accountID string
 }
 
 func (m *mockStateProvider) Provide(ctx context.Context) ([]byte, error) {
 	return m.state, nil
+}
+
+func (m *mockStateProvider) GetAccountID() string {
+	if m.accountID == "" {
+		return "test-account"
+	}
+	return m.accountID
 }
 
 // trackingFlagLogger wraps a real GrpcWasmFlagLogger with a mocked connection
@@ -176,60 +184,14 @@ func createProviderWithTestState(
 	runtimeConfig := wazero.NewRuntimeConfig()
 	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
-	// Create factory with custom state provider and logger
-	factory, err := NewLocalResolverFactoryWithStateProviderAndLogger(
-		ctx,
-		runtime,
-		defaultWasmBytes,
-		stateProvider,
-		accountID,
-		logger,
-	)
+	// Create SwapWasmResolverApi without initial state (lazy initialization)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, logger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		return nil, err
 	}
 
 	// Create provider with the client secret from test state
 	// The test state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
-	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	provider := NewLocalResolverProvider(resolverAPI, stateProvider, logger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return provider, nil
-}
-
-// NewLocalResolverFactoryWithStateProviderAndLogger creates a factory with custom state provider and logger for testing
-func NewLocalResolverFactoryWithStateProviderAndLogger(
-	ctx context.Context,
-	runtime wazero.Runtime,
-	wasmBytes []byte,
-	stateProvider StateProvider,
-	accountId string,
-	flagLogger WasmFlagLogger,
-) (*LocalResolverFactory, error) {
-	// Get initial state from provider
-	initialState, err := stateProvider.Provide(ctx)
-	if err != nil {
-		initialState = []byte{}
-	}
-
-	// Create test logger for integration tests
-
-	// Create SwapWasmResolverApi with initial state
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	if err != nil {
-		return nil, err
-	}
-
-	// Create factory
-	factory := &LocalResolverFactory{
-		resolverAPI:     resolverAPI,
-		stateProvider:   stateProvider,
-		accountId:       accountId,
-		flagLogger:      flagLogger,
-		logger:          slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		logPollInterval: getPollIntervalSeconds(),
-	}
-
-	// Start scheduled tasks
-	factory.startScheduledTasks(ctx)
-
-	return factory, nil
 }
