@@ -9,23 +9,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func TestNewLocalResolverProvider(t *testing.T) {
-	factory := &LocalResolverFactory{}
-	provider := NewLocalResolverProvider(factory, "test-secret")
-
-	if provider == nil {
-		t.Fatal("Expected provider to be created, got nil")
-	}
-	if provider.clientSecret != "test-secret" {
-		t.Errorf("Expected client secret to be 'test-secret', got %s", provider.clientSecret)
-	}
-	if provider.factory != factory {
-		t.Error("Expected factory to be set correctly")
-	}
-}
-
 func TestLocalResolverProvider_Metadata(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret")
+	// Create minimal provider just for metadata test
+	provider := &LocalResolverProvider{
+		clientSecret: "secret",
+	}
 	metadata := provider.Metadata()
 
 	if metadata.Name != "confidence-sdk-go-local" {
@@ -34,7 +22,10 @@ func TestLocalResolverProvider_Metadata(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Hooks(t *testing.T) {
-	provider := NewLocalResolverProvider(&LocalResolverFactory{}, "secret")
+	// Create minimal provider just for hooks test
+	provider := &LocalResolverProvider{
+		clientSecret: "secret",
+	}
 	hooks := provider.Hooks()
 
 	if hooks == nil {
@@ -396,16 +387,14 @@ func TestFlattenedContextToProto_InvalidValue(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Shutdown(t *testing.T) {
-	factory := &LocalResolverFactory{
-		cancelFunc: func() {
-			// Shutdown called
-		},
+	// Create uninitialized provider
+	provider := &LocalResolverProvider{
+		clientSecret: "secret",
 	}
 
-	provider := NewLocalResolverProvider(factory, "secret")
+	// Shutdown on uninitialized provider should not panic
 	provider.Shutdown()
 
-	// Note: The actual shutdown behavior depends on the factory implementation
 	// This just verifies the method exists and can be called without panicking
 }
 
@@ -426,16 +415,16 @@ func TestLocalResolverProvider_ShutdownFlushesLogs(t *testing.T) {
 	mockLogger := &mockWasmFlagLogger{}
 	cancelCalled := false
 
-	factory := &LocalResolverFactory{
-		flagLogger: mockLogger,
+	provider := &LocalResolverProvider{
+		clientSecret: "secret",
+		flagLogger:   mockLogger,
+		initialized:  true,
 		cancelFunc: func() {
 			cancelCalled = true
 		},
 	}
 
-	provider := NewLocalResolverProvider(factory, "secret")
-
-	// Shutdown should propagate to the factory
+	// Shutdown should cleanup all components
 	provider.Shutdown()
 
 	// Verify that shutdown was called on all components

@@ -38,12 +38,14 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	}
 	defer swap.Close(ctx)
 
-	factory := &LocalResolverFactory{
-		resolverAPI: swap,
+	// Create provider with pre-initialized resolverAPI
+	provider := &LocalResolverProvider{
+		resolverAPI:  swap,
+		clientSecret: "test-secret",
+		initialized:  true,
 	}
 
-	// Use different client secret that won't match
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret"))
+	openfeature.SetProviderAndWait(provider)
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -88,12 +90,14 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	}
 	defer swap.Close(ctx)
 
-	factory := &LocalResolverFactory{
-		resolverAPI: swap,
+	// Create provider with pre-initialized resolverAPI
+	provider := &LocalResolverProvider{
+		resolverAPI:  swap,
+		clientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
+		initialized:  true,
 	}
 
-	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"))
+	openfeature.SetProviderAndWait(provider)
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -174,11 +178,14 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		}
 		defer swap.Close(ctx)
 
-		factory := &LocalResolverFactory{
-			resolverAPI: swap,
+		// Create provider with pre-initialized resolverAPI
+		provider := &LocalResolverProvider{
+			resolverAPI:  swap,
+			clientSecret: "mkjJruAATQWjeY7foFIWfVAcBWnci2YF",
+			initialized:  true,
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"))
+		openfeature.SetProviderAndWait(provider)
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -218,11 +225,14 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		}
 		defer swap.Close(ctx)
 
-		factory := &LocalResolverFactory{
-			resolverAPI: swap,
+		// Create provider with pre-initialized resolverAPI
+		provider := &LocalResolverProvider{
+			resolverAPI:  swap,
+			clientSecret: "test-secret",
+			initialized:  true,
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(factory, "test-secret"))
+		openfeature.SetProviderAndWait(provider)
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{

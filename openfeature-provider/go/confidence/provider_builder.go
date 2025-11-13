@@ -77,24 +77,17 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		}
 	}
 
-	// Create LocalResolverFactory (no custom StateProvider)
-	factory, err := NewLocalResolverFactory(
-		ctx,
+	// Create provider (initialization happens in Init())
+	provider := NewLocalResolverProvider(
 		wasmRuntime,
 		wasmBytes,
 		config.APIClientID,
 		config.APIClientSecret,
-		nil, // stateProvider
+		nil, // customStateProvider
 		"",  // accountId (will be extracted from token)
 		connFactory,
+		config.ClientSecret,
 	)
-	if err != nil {
-		wasmRuntime.Close(ctx)
-		return nil, fmt.Errorf("failed to create resolver factory: %w", err)
-	}
-
-	// Create provider
-	provider := NewLocalResolverProvider(factory, config.ClientSecret)
 
 	return provider, nil
 }
@@ -127,25 +120,18 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 		return grpc.NewClient(target, defaultOpts...)
 	}
 
-	// Create LocalResolverFactory with StateProvider
+	// Create provider (initialization happens in Init())
 	// When using StateProvider, we don't need gRPC service addresses or API credentials
-	factory, err := NewLocalResolverFactory(
-		ctx,
+	provider := NewLocalResolverProvider(
 		wasmRuntime,
 		wasmBytes,
 		"",                   // apiClientID - not used with StateProvider
 		"",                   // apiClientSecret - not used with StateProvider
-		config.StateProvider, // stateProvider
+		config.StateProvider, // customStateProvider
 		config.AccountId,     // accountId - required with StateProvider
 		connFactory,          // connFactory - unused here but passed for consistency
+		config.ClientSecret,
 	)
-	if err != nil {
-		wasmRuntime.Close(ctx)
-		return nil, fmt.Errorf("failed to create resolver factory with provider: %w", err)
-	}
-
-	// Create provider
-	provider := NewLocalResolverProvider(factory, config.ClientSecret)
 
 	return provider, nil
 }

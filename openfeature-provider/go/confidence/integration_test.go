@@ -174,57 +174,22 @@ func createProviderWithTestState(
 	runtimeConfig := wazero.NewRuntimeConfig()
 	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
-	// Create factory with custom state provider and logger
-	factory, err := NewLocalResolverFactoryWithStateProviderAndLogger(
-		ctx,
+	// Build connection factory (won't be used with StateProvider, but required for constructor)
+	connFactory := func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
+		return grpc.NewClient(target, defaultOpts...)
+	}
+
+	// Create provider with custom state provider (initialization happens in Init())
+	provider := NewLocalResolverProviderWithLogger(
 		runtime,
 		defaultWasmBytes,
 		stateProvider,
 		accountID,
 		logger,
+		"mkjJruAATQWjeY7foFIWfVAcBWnci2YF", // client secret from test state
+		connFactory,
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	// Create provider with the client secret from test state
-	// The test state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
-	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF")
 	return provider, nil
 }
 
-// NewLocalResolverFactoryWithStateProviderAndLogger creates a factory with custom state provider and logger for testing
-func NewLocalResolverFactoryWithStateProviderAndLogger(
-	ctx context.Context,
-	runtime wazero.Runtime,
-	wasmBytes []byte,
-	stateProvider StateProvider,
-	accountId string,
-	flagLogger WasmFlagLogger,
-) (*LocalResolverFactory, error) {
-	// Get initial state from provider
-	initialState, err := stateProvider.Provide(ctx)
-	if err != nil {
-		initialState = []byte{}
-	}
-
-	// Create SwapWasmResolverApi with initial state
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, accountId)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create factory
-	factory := &LocalResolverFactory{
-		resolverAPI:     resolverAPI,
-		stateProvider:   stateProvider,
-		accountId:       accountId,
-		flagLogger:      flagLogger,
-		logPollInterval: getPollIntervalSeconds(),
-	}
-
-	// Start scheduled tasks
-	factory.startScheduledTasks(ctx)
-
-	return factory, nil
-}

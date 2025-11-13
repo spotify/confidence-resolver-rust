@@ -38,9 +38,9 @@ $(BUILD_STAMP): go.mod go.sum $(GO_SRC) $(PROTO_GEN)
 
 build: $(BUILD_STAMP)
 
-# Run tests
+# Run tests (excluding proto directory)
 test: $(BUILD_STAMP)
-	go test -v ./...
+	go test -v $$(go list ./... | grep -v '/proto')
 
 # Lint using gofmt and go vet
 lint:
