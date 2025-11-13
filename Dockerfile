@@ -423,6 +423,7 @@ RUN apk add --no-cache make git build-base openssl-dev
 WORKDIR /app
 
 # Copy Gemfile for dependency caching
+COPY openfeature-provider/ruby/Gemfile ./
 COPY openfeature-provider/ruby/confidence-openfeaure-provider.gemspec ./
 COPY openfeature-provider/ruby/Makefile ./
 
