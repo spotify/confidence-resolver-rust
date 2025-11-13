@@ -3,10 +3,7 @@ use std::sync::{
     Arc, RwLock,
 };
 
-use crate::{
-    schema_util::{DerivedClientSchema, SchemaFromEvaluationContext},
-    FlagToApply,
-};
+use crate::schema_util::{DerivedClientSchema, SchemaFromEvaluationContext};
 use arc_swap::ArcSwap;
 use papaya::{HashMap, HashSet};
 
@@ -14,20 +11,8 @@ mod pb {
     pub use crate::proto::confidence::flags::admin::v1::{
         client_resolve_info, flag_resolve_info, ClientResolveInfo, FlagResolveInfo,
     };
-    pub use crate::proto::confidence::flags::resolver::v1::{events::FlagAssigned, ResolveReason};
-    pub use crate::proto::{
-        confidence::flags::resolver::v1::{
-            events::{
-                flag_assigned::{
-                    self, applied_flag::Assignment, AppliedFlag, AssignmentInfo, DefaultAssignment,
-                },
-                ClientInfo,
-            },
-            WriteFlagLogsRequest,
-        },
-        google::Struct,
-    };
-    pub use flag_assigned::default_assignment::DefaultAssignmentReason;
+
+    pub use crate::proto::{confidence::flags::resolver::v1::WriteFlagLogsRequest, google::Struct};
 }
 
 #[derive(Debug)]
@@ -125,73 +110,6 @@ impl ResolveLogger {
         })
     }
 
-    pub fn log_assigns(
-        &self,
-        resolve_id: &str,
-        _evaluation_context: &pb::Struct,
-        assigned_flags: &[crate::FlagToApply],
-        client: &crate::Client,
-        sdk: &Option<crate::flags_resolver::Sdk>,
-    ) {
-        self.with_state(|state: &ResolveInfoState| {
-            let client_info = Some(pb::ClientInfo {
-                client: client.client_name.to_string(),
-                client_credential: client.client_credential_name.to_string(),
-                sdk: sdk.clone(),
-            });
-            let flags = assigned_flags
-                .iter()
-                .map(
-                    |FlagToApply {
-                         assigned_flag: f,
-                         skew_adjusted_applied_time,
-                     }| {
-                        let assignment = if !f.variant.is_empty() {
-                            let assignment_info = pb::AssignmentInfo {
-                                segment: f.segment.clone(),
-                                variant: f.variant.clone(),
-                            };
-                            Some(pb::Assignment::AssignmentInfo(assignment_info))
-                        } else {
-                            let default_reason: pb::DefaultAssignmentReason =
-                                match pb::ResolveReason::try_from(f.reason) {
-                                    Ok(pb::ResolveReason::NoSegmentMatch) => {
-                                        pb::DefaultAssignmentReason::NoSegmentMatch
-                                    }
-                                    Ok(pb::ResolveReason::NoTreatmentMatch) => {
-                                        pb::DefaultAssignmentReason::NoTreatmentMatch
-                                    }
-                                    Ok(pb::ResolveReason::FlagArchived) => {
-                                        pb::DefaultAssignmentReason::FlagArchived
-                                    }
-                                    _ => pb::DefaultAssignmentReason::Unspecified,
-                                };
-                            Some(pb::Assignment::DefaultAssignment(pb::DefaultAssignment {
-                                reason: default_reason.into(),
-                            }))
-                        };
-                        pb::AppliedFlag {
-                            flag: f.flag.clone(),
-                            targeting_key: f.targeting_key.clone(),
-                            targeting_key_selector: f.targeting_key_selector.clone(),
-                            assignment_id: f.assignment_id.clone(),
-                            rule: f.rule.clone(),
-                            fallthrough_assignments: f.fallthrough_assignments.clone(),
-                            apply_time: Some(skew_adjusted_applied_time.clone()),
-                            assignment,
-                        }
-                    },
-                )
-                .collect();
-
-            state.flag_assigned.push(pb::FlagAssigned {
-                resolve_id: resolve_id.to_string(),
-                client_info,
-                flags,
-            });
-        })
-    }
-
     pub fn checkpoint(&self) -> pb::WriteFlagLogsRequest {
         let lock = self
             .state
@@ -210,7 +128,9 @@ impl ResolveLogger {
                 pb::WriteFlagLogsRequest {
                     flag_resolve_info,
                     client_resolve_info,
-                    flag_assigned: state.flag_assigned.into_iter().collect(),
+                    // Assignment events are handled by `AssignLogger`, so this logger
+                    // only returns schema/counter data here.
+                    flag_assigned: Vec::new(),
                     telemetry_data: None,
                 }
             })
@@ -238,7 +158,6 @@ struct ClientResolveInfo {
 struct ResolveInfoState {
     flag_resolve_info: HashMap<String, FlagResolveInfo>,
     client_resolve_info: HashMap<String, ClientResolveInfo>,
-    flag_assigned: crossbeam_queue::SegQueue<pb::FlagAssigned>,
 }
 
 fn extract_client(credential: &str) -> String {

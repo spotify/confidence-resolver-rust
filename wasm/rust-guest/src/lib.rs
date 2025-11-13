@@ -4,6 +4,7 @@ use std::sync::LazyLock;
 
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
+use confidence_resolver::assign_logger::AssignLogger;
 use prost::Message;
 
 use confidence_resolver::proto::confidence::flags::resolver::v1::{
@@ -56,7 +57,8 @@ const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
 // TODO simplify by assuming single threaded?
 static RESOLVER_STATE: ArcSwapOption<ResolverState> = ArcSwapOption::const_empty();
-static LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
+static RESOLVE_LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
+static ASSIGN_LOGGER: LazyLock<AssignLogger> = LazyLock::new(AssignLogger::new);
 
 thread_local! {
     static RNG: RefCell<SmallRng> = RefCell::new({
@@ -135,7 +137,7 @@ impl Host for WasmHost {
         client: &Client,
         _sdk: &Option<Sdk>,
     ) {
-        LOGGER.log_resolve(
+        RESOLVE_LOGGER.log_resolve(
             resolve_id,
             evaluation_context,
             &client.client_credential_name,
@@ -150,7 +152,7 @@ impl Host for WasmHost {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
+        ASSIGN_LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
     }
 
     fn encrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
@@ -197,8 +199,14 @@ wasm_msg_guest! {
         resolver.resolve_flags(&request)
     }
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
-        let response = LOGGER.checkpoint();
-        Ok(response)
+        let resolve = RESOLVE_LOGGER.checkpoint();
+        let assign = ASSIGN_LOGGER.checkpoint();
+        Ok(WriteFlagLogsRequest {
+            flag_assigned: assign.flag_assigned,
+            telemetry_data: None,
+            client_resolve_info: resolve.client_resolve_info,
+            flag_resolve_info: resolve.flag_resolve_info
+        })
     }
 
 }
