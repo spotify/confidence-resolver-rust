@@ -78,6 +78,11 @@ The provider periodically:
 
 ---
 
+## Migration from 
+If you're currently using the ["online resolver"](https://github.com/spotify/confidence-sdk-js/tree/main/packages/openfeature-server-provider) and wants to improve the resolve latency, [migration](MIGRATION.md) is easy!
+
+---
+
 ## Sticky Assignments
 
 Confidence supports "sticky" flag assignments to ensure users receive consistent variant assignments even when their context changes or flag configurations are updated. This SDK falls back to a cloud resolve in these cases.
