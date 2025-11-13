@@ -13,7 +13,7 @@ GEMSPEC := confidence-openfeaure-provider.gemspec
 .PHONY: install build test lint clean
 
 # Install dependencies only when Gemfile changes
-$(INSTALL_STAMP): Gemfile Gemfile.lock
+$(INSTALL_STAMP): Gemfile
 	bundle install
 	@touch $@
 

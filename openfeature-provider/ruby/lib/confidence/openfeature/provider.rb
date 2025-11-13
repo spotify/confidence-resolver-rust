@@ -27,7 +27,7 @@ module Confidence
           flag_key: flag_key,
           default_value: default_value,
           evaluation_context: evaluation_context,
-          validator: lambda { |v| (v === true || v === false) }
+          validator: lambda { |v| v === true || v === false }
         )
       end
 
