@@ -33,7 +33,7 @@ sync-wasm-go:
 build-deployer:
 	@echo "Building Cloudflare deployer image with shared cache..."
 	@docker build \
-		--target cloudflare-deployer \
+		--target confidence-cloudflare-resolver.deployer \
 		--build-arg COMMIT_SHA=$$(git rev-parse HEAD) \
 		-t confidence-cloudflare-deployer:latest \
 		.

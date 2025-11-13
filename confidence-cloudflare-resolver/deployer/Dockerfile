@@ -1,7 +1,7 @@
 # ==============================================================================
 # DEPRECATED: This Dockerfile is kept for reference but is no longer used.
 # The deployer image is now built from the root Dockerfile using the
-# 'cloudflare-deployer' target to share the Rust dependency cache.
+# 'confidence-cloudflare-resolver.deployer' target to share the Rust dependency cache.
 #
 # To build: make build-deployer
 # ==============================================================================
