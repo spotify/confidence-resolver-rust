@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/go/v0.1.0...openfeature-provider/go/v0.2.0) (2025-11-13)
+
+
+### Features
+
+* **openfeature-provider/go:** add slog-based logging ([#134](https://github.com/spotify/confidence-resolver/issues/134)) ([10362d9](https://github.com/spotify/confidence-resolver/commit/10362d9d6d80f25e63e12ba8c6257eb7e996a2c2))
+
 ## [0.1.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/go/v0.0.1...openfeature-provider/go/v0.1.0) (2025-11-11)
 
 
