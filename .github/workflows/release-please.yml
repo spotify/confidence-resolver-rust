@@ -81,7 +81,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: cloudflare-deployer
+          target: confidence-cloudflare-resolver.deployer
           push: true
           build-args: |
             COMMIT_SHA=${{ github.sha }}

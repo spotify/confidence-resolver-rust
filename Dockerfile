@@ -210,6 +210,37 @@ WORKDIR /workspace/confidence-cloudflare-resolver
 RUN make lint
 
 # ==============================================================================
+# CloudFlare Deployer - Runtime image for deploying to CloudFlare Workers
+# ==============================================================================
+FROM confidence-cloudflare-resolver.build AS confidence-cloudflare-resolver.deployer
+
+# Install Node.js, npm, jq, and git for deployment
+RUN apk add --no-cache nodejs npm jq git
+
+# Install Wrangler CLI
+RUN npm install -g wrangler@latest
+
+# Install worker-build (Rust WASM build tool used by Wrangler)
+ARG WORKER_BUILD_VERSION="0.1.11"
+RUN cargo install worker-build --locked --version ${WORKER_BUILD_VERSION}
+
+# Optionally pass the commit SHA at build time
+ARG COMMIT_SHA=""
+ENV COMMIT_SHA=${COMMIT_SHA}
+
+# Return to workspace root
+WORKDIR /workspace
+
+# Clean sample/runtime data to avoid leaking into image
+RUN rm -rf data/*
+
+# Ensure deploy script is executable
+RUN chmod +x confidence-cloudflare-resolver/deployer/script.sh
+
+# Default command runs the deployer script
+CMD ["./confidence-cloudflare-resolver/deployer/script.sh"]
+
+# ==============================================================================
 # Python Host - Run Python host example
 # ==============================================================================
 FROM python:3.11-slim AS python-host-base
