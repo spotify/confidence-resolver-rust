@@ -78,7 +78,7 @@ The provider periodically:
 
 ---
 
-## Migration from 
+## Migration from online resolver
 If you're currently using the ["online resolver"](https://github.com/spotify/confidence-sdk-js/tree/main/packages/openfeature-server-provider) and wants to improve the resolve latency, [migration](MIGRATION.md) is easy!
 
 ---

@@ -6,11 +6,11 @@ This should guide you from moving from `@spotify-confidence/openfeature-server-p
 
 This migration moves from an **"online" evaluation model** (network call per flag) to a **"local" evaluation model** (WebAssembly-based evaluation with background state sync). This provides:
 
-- **Near-zero latency** for flag evaluations (vs 20-200ms per call)
+- **Near-zero latency** for flag evaluations (vs 50-100ms per call)
 - **Higher throughput** for high-traffic applications
 - **Better resilience** (continues working with cached state if temporarily disconnected)
 
-The main change is adding two new credentials (`apiClientId` and `apiClientSecret`) that require workspace admin access to create.
+The main change is adding two new credentials (`apiClientId` and `apiClientSecret`) that require someone with workspace admin access to create an API client.
 
 ## Dependencies
 
@@ -70,8 +70,6 @@ You must now provide two additional credentials:
 - `apiClientId`: Confidence API Client ID
 - `apiClientSecret`: Confidence API Client Secret
 
-These require workspace admin access to create (see "Obtaining the new credentials" section below).
-
 ### What happened to the `timeout` parameter?
 
 The old provider used `timeout` to control network request timeouts for each flag evaluation. When exceeded, default values were returned.
@@ -84,7 +82,7 @@ The new provider works differently:
 **Migration**: Remove the `timeout` parameter. If you need to control initialization wait time, use `initializeTimeout` instead.
 
 ## Usage
-Since this is just another Provider meant to be used with the OpenFeature SDK; the integration when accessing flag values remain the same.
+Since this is just another Provider meant to be used with the OpenFeature SDK, the integration when accessing flag values remain the same.
 
 ## Obtaining the new credentials
 
@@ -112,22 +110,6 @@ The credentials need to be accessible from your application, for example as envi
 
 <img src="../../img/create-policy.png" alt="create policy" width="300" />
 
-## Key Differences: Online vs Local Provider
-
-### Performance
-- **Old (online) provider**: Makes a network call to Confidence for every flag evaluation (20-200ms per call)
-- **New (local) provider**: Evaluates flags locally in WebAssembly with near-zero latency
-
-The local provider fetches resolver state in the background every 30 seconds and evaluates flags quickly, in-process.
-
-### Credentials
-- **Old provider**: 1 credential (`clientSecret`)
-- **New provider**: 3 credentials (`flagClientSecret`, `apiClientId`, `apiClientSecret`)
-
-### Trade-offs
-- **Pros**: Dramatically faster evaluations, higher throughput, works offline with cached state
-- **Cons**: More complex setup, requires admin to create API client with specific policies
-- **Note**: Sticky assignments still require a network call as a fallback
 
 ## Testing and verifying
 
