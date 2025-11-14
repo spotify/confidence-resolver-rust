@@ -13,6 +13,16 @@ import (
 
 var ErrNotInitialized = errors.New("resolver not initialized: call UpdateStateAndFlushLogs first")
 
+// WasmResolverApi is an interface for resolver API operations
+type WasmResolverApi interface {
+	// UpdateStateAndFlushLogs updates the resolver with new state and flushes any pending logs
+	UpdateStateAndFlushLogs(state []byte, accountId string) error
+	// ResolveWithSticky resolves flags with sticky assignment support
+	ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
+	// Close closes the resolver and flushes any pending logs
+	Close(ctx context.Context)
+}
+
 // SwapWasmResolverApi wraps ResolverApi and allows atomic swapping of instances
 // Similar to Java's SwapWasmResolverApi, it creates a new instance on each state update,
 // swaps it atomically, and closes the old one (which flushes logs)

@@ -121,20 +121,29 @@ func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
 
+	client := openfeature.NewClient("integration-test")
+
+	state := client.State()
+	if state != "NOT_READY" {
+		t.Fatalf("Expected client state to be NOT_READY before initialization, was %+v", state)
+	}
 	// Register with OpenFeature
 	err = openfeature.SetProviderAndWait(provider)
 	if err != nil {
 		t.Fatalf("Failed to set provider: %v", err)
 	}
 
-	// Create client and evaluate flags
-	client := openfeature.NewClient("integration-test")
 	evalCtx := openfeature.NewEvaluationContext(
 		"tutorial_visitor",
 		map[string]interface{}{
 			"visitor_id": "tutorial_visitor",
 		},
 	)
+
+	state = client.State()
+	if state != "READY" {
+		t.Fatalf("Expected client state to be READY after initialization, was %+v", state)
+	}
 
 	// Evaluate the tutorial-feature flag (this should generate logs)
 	// This flag exists in the test state and should resolve successfully

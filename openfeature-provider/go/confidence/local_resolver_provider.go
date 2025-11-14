@@ -21,7 +21,7 @@ const defaultPollIntervalSeconds = 10
 // LocalResolverProvider implements the OpenFeature FeatureProvider interface
 // for local flag resolution using the Confidence WASM resolver
 type LocalResolverProvider struct {
-	resolverAPI   *SwapWasmResolverApi
+	resolverAPI   WasmResolverApi
 	stateProvider StateProvider
 	flagLogger    WasmFlagLogger
 	clientSecret  string
@@ -34,7 +34,7 @@ type LocalResolverProvider struct {
 
 // NewLocalResolverProvider creates a new LocalResolverProvider
 func NewLocalResolverProvider(
-	resolverAPI *SwapWasmResolverApi,
+	resolverAPI WasmResolverApi,
 	stateProvider StateProvider,
 	flagLogger WasmFlagLogger,
 	clientSecret string,
