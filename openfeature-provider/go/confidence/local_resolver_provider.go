@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 
 	"github.com/open-feature/go-sdk/openfeature"
 	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
@@ -12,20 +13,46 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// ErrorCode represents OpenFeature-aligned error codes for telemetry
+type ErrorCode int32
+
+const (
+	ErrorCodeUnspecified          ErrorCode = 0
+	ErrorCodeProviderNotReady     ErrorCode = 1
+	ErrorCodeFlagNotFound         ErrorCode = 2
+	ErrorCodeParseError           ErrorCode = 3
+	ErrorCodeTypeMismatch         ErrorCode = 4
+	ErrorCodeTargetingKeyMissing  ErrorCode = 5
+	ErrorCodeInvalidContext       ErrorCode = 6
+	ErrorCodeGeneral              ErrorCode = 7
+	ErrorCodeProviderFatal        ErrorCode = 8
+	ErrorCodeStaleFlag            ErrorCode = 9
+)
+
+// ErrorCodeMetric represents an error code with its occurrence count
+type ErrorCodeMetric struct {
+	Code  ErrorCode
+	Count int64
+}
+
 // LocalResolverProvider implements the OpenFeature FeatureProvider interface
 // for local flag resolution using the Confidence WASM resolver
 type LocalResolverProvider struct {
 	factory      *LocalResolverFactory
 	clientSecret string
 	logger       *slog.Logger
+	// Error tracking for telemetry
+	errorCodeMutex  sync.Mutex
+	errorCodeCounts map[ErrorCode]int64
 }
 
 // NewLocalResolverProvider creates a new LocalResolverProvider
 func NewLocalResolverProvider(factory *LocalResolverFactory, clientSecret string, logger *slog.Logger) *LocalResolverProvider {
 	return &LocalResolverProvider{
-		factory:      factory,
-		clientSecret: clientSecret,
-		logger:       logger,
+		factory:         factory,
+		clientSecret:    clientSecret,
+		logger:          logger,
+		errorCodeCounts: make(map[ErrorCode]int64),
 	}
 }
 
@@ -34,6 +61,38 @@ func (p *LocalResolverProvider) Metadata() openfeature.Metadata {
 	return openfeature.Metadata{
 		Name: "confidence-sdk-go-local",
 	}
+}
+
+// trackErrorCode records an error occurrence for telemetry
+func (p *LocalResolverProvider) trackErrorCode(code ErrorCode) {
+	p.errorCodeMutex.Lock()
+	defer p.errorCodeMutex.Unlock()
+
+	p.errorCodeCounts[code]++
+}
+
+// GetAndResetErrorCounts returns current error counts and resets them
+// This is called when flushing telemetry data
+func (p *LocalResolverProvider) GetAndResetErrorCounts() []ErrorCodeMetric {
+	p.errorCodeMutex.Lock()
+	defer p.errorCodeMutex.Unlock()
+
+	if len(p.errorCodeCounts) == 0 {
+		return nil
+	}
+
+	metrics := make([]ErrorCodeMetric, 0, len(p.errorCodeCounts))
+	for code, count := range p.errorCodeCounts {
+		metrics = append(metrics, ErrorCodeMetric{
+			Code:  code,
+			Count: count,
+		})
+	}
+
+	// Reset counts after reading
+	p.errorCodeCounts = make(map[ErrorCode]int64)
+
+	return metrics
 }
 
 // BooleanEvaluation evaluates a boolean flag
@@ -57,11 +116,14 @@ func (p *LocalResolverProvider) BooleanEvaluation(
 
 	boolVal, ok := result.Value.(bool)
 	if !ok {
+		// Track type mismatch error
+		p.trackErrorCode(ErrorCodeTypeMismatch)
+		typeMismatchErr := openfeature.NewTypeMismatchResolutionError("value is not a boolean")
 		return openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a boolean"),
+				ResolutionError: typeMismatchErr,
 			},
 		}
 	}
@@ -93,11 +155,14 @@ func (p *LocalResolverProvider) StringEvaluation(
 
 	strVal, ok := result.Value.(string)
 	if !ok {
+		// Track type mismatch error
+		p.trackErrorCode(ErrorCodeTypeMismatch)
+		typeMismatchErr := openfeature.NewTypeMismatchResolutionError("value is not a string")
 		return openfeature.StringResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a string"),
+				ResolutionError: typeMismatchErr,
 			},
 		}
 	}
@@ -129,11 +194,14 @@ func (p *LocalResolverProvider) FloatEvaluation(
 
 	floatVal, ok := result.Value.(float64)
 	if !ok {
+		// Track type mismatch error
+		p.trackErrorCode(ErrorCodeTypeMismatch)
+		typeMismatchErr := openfeature.NewTypeMismatchResolutionError("value is not a float")
 		return openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a float"),
+				ResolutionError: typeMismatchErr,
 			},
 		}
 	}
@@ -176,11 +244,14 @@ func (p *LocalResolverProvider) IntEvaluation(
 			ProviderResolutionDetail: result.ProviderResolutionDetail,
 		}
 	default:
+		// Track type mismatch error
+		p.trackErrorCode(ErrorCodeTypeMismatch)
+		typeMismatchErr := openfeature.NewTypeMismatchResolutionError("value is not an integer")
 		return openfeature.IntResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not an integer"),
+				ResolutionError: typeMismatchErr,
 			},
 		}
 	}
@@ -203,11 +274,13 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	protoCtx, err := flattenedContextToProto(processedCtx)
 	if err != nil {
 		p.logger.Error("Failed to convert evaluation context to proto", "error", err)
+		p.trackErrorCode(ErrorCodeGeneral)
+		generalErr := openfeature.NewGeneralResolutionError(fmt.Sprintf("failed to convert context: %v", err))
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewGeneralResolutionError(fmt.Sprintf("failed to convert context: %v", err)),
+				ResolutionError: generalErr,
 			},
 		}
 	}
@@ -236,11 +309,13 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	stickyResponse, err := resolverAPI.ResolveWithSticky(stickyRequest)
 	if err != nil {
 		p.logger.Error("Failed to resolve flag", "flag", flagPath, "error", err)
+		p.trackErrorCode(ErrorCodeGeneral)
+		generalErr := openfeature.NewGeneralResolutionError(fmt.Sprintf("resolve failed: %v", err))
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewGeneralResolutionError(fmt.Sprintf("resolve failed: %v", err)),
+				ResolutionError: generalErr,
 			},
 		}
 	}
@@ -252,20 +327,24 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 		response = result.Success.Response
 	case *resolver.ResolveWithStickyResponse_MissingMaterializations_:
 		p.logger.Error("Missing materializations for flag", "flag", flagPath)
+		p.trackErrorCode(ErrorCodeGeneral)
+		generalErr := openfeature.NewGeneralResolutionError("missing materializations")
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewGeneralResolutionError("missing materializations"),
+				ResolutionError: generalErr,
 			},
 		}
 	default:
 		p.logger.Error("Unexpected resolve result type for flag", "flag", flagPath)
+		p.trackErrorCode(ErrorCodeGeneral)
+		generalErr := openfeature.NewGeneralResolutionError("unexpected resolve result")
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewGeneralResolutionError("unexpected resolve result"),
+				ResolutionError: generalErr,
 			},
 		}
 	}
@@ -273,11 +352,13 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	// Check if flag was found
 	if len(response.ResolvedFlags) == 0 {
 		p.logger.Info("No active flag was found", "flag", flagPath)
+		p.trackErrorCode(ErrorCodeFlagNotFound)
+		flagNotFoundErr := openfeature.NewFlagNotFoundResolutionError(fmt.Sprintf("flag '%s' not found", flagPath))
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewFlagNotFoundResolutionError(fmt.Sprintf("flag '%s' not found", flagPath)),
+				ResolutionError: flagNotFoundErr,
 			},
 		}
 	}
@@ -287,11 +368,13 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	// Verify flag name matches
 	if resolvedFlag.Flag != requestFlagName {
 		p.logger.Error("Unexpected flag from resolver", "expected", requestFlagName, "got", resolvedFlag.Flag)
+		p.trackErrorCode(ErrorCodeFlagNotFound)
+		flagNotFoundErr := openfeature.NewFlagNotFoundResolutionError("unexpected flag returned")
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewFlagNotFoundResolutionError("unexpected flag returned"),
+				ResolutionError: flagNotFoundErr,
 			},
 		}
 	}
