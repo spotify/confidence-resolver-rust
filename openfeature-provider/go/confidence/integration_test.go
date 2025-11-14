@@ -17,16 +17,21 @@ import (
 
 // mockStateProvider provides test state for integration testing
 type mockStateProvider struct {
-	state []byte
+	state     []byte
+	accountID string
 }
 
-func (m *mockStateProvider) Provide(ctx context.Context) ([]byte, error) {
-	return m.state, nil
+func (m *mockStateProvider) Provide(ctx context.Context) ([]byte, string, error) {
+	accountID := m.accountID
+	if accountID == "" {
+		accountID = "test-account"
+	}
+	return m.state, accountID, nil
 }
 
 // trackingFlagLogger wraps a real GrpcWasmFlagLogger with a mocked connection
 type trackingFlagLogger struct {
-	actualLogger   WasmFlagLogger
+	actualLogger   FlagLogger
 	logsSentCount  int32
 	shutdownCalled bool
 	mu             sync.Mutex
@@ -116,20 +121,29 @@ func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
 
+	client := openfeature.NewClient("integration-test")
+
+	state := client.State()
+	if state != "NOT_READY" {
+		t.Fatalf("Expected client state to be NOT_READY before initialization, was %+v", state)
+	}
 	// Register with OpenFeature
 	err = openfeature.SetProviderAndWait(provider)
 	if err != nil {
 		t.Fatalf("Failed to set provider: %v", err)
 	}
 
-	// Create client and evaluate flags
-	client := openfeature.NewClient("integration-test")
 	evalCtx := openfeature.NewEvaluationContext(
 		"tutorial_visitor",
 		map[string]interface{}{
 			"visitor_id": "tutorial_visitor",
 		},
 	)
+
+	state = client.State()
+	if state != "READY" {
+		t.Fatalf("Expected client state to be READY after initialization, was %+v", state)
+	}
 
 	// Evaluate the tutorial-feature flag (this should generate logs)
 	// This flag exists in the test state and should resolve successfully
@@ -170,66 +184,20 @@ func createProviderWithTestState(
 	ctx context.Context,
 	stateProvider StateProvider,
 	accountID string,
-	logger WasmFlagLogger,
+	logger FlagLogger,
 ) (*LocalResolverProvider, error) {
 	// Create wazero runtime
 	runtimeConfig := wazero.NewRuntimeConfig()
 	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
-	// Create factory with custom state provider and logger
-	factory, err := NewLocalResolverFactoryWithStateProviderAndLogger(
-		ctx,
-		runtime,
-		defaultWasmBytes,
-		stateProvider,
-		accountID,
-		logger,
-	)
+	// Create SwapWasmResolverApi without initial state (lazy initialization)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, logger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		return nil, err
 	}
 
 	// Create provider with the client secret from test state
 	// The test state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
-	provider := NewLocalResolverProvider(factory, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	provider := NewLocalResolverProvider(resolverAPI, stateProvider, logger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return provider, nil
-}
-
-// NewLocalResolverFactoryWithStateProviderAndLogger creates a factory with custom state provider and logger for testing
-func NewLocalResolverFactoryWithStateProviderAndLogger(
-	ctx context.Context,
-	runtime wazero.Runtime,
-	wasmBytes []byte,
-	stateProvider StateProvider,
-	accountId string,
-	flagLogger WasmFlagLogger,
-) (*LocalResolverFactory, error) {
-	// Get initial state from provider
-	initialState, err := stateProvider.Provide(ctx)
-	if err != nil {
-		initialState = []byte{}
-	}
-
-	// Create test logger for integration tests
-
-	// Create SwapWasmResolverApi with initial state
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, wasmBytes, flagLogger, initialState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	if err != nil {
-		return nil, err
-	}
-
-	// Create factory
-	factory := &LocalResolverFactory{
-		resolverAPI:     resolverAPI,
-		stateProvider:   stateProvider,
-		accountId:       accountId,
-		flagLogger:      flagLogger,
-		logger:          slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		logPollInterval: getPollIntervalSeconds(),
-	}
-
-	// Start scheduled tasks
-	factory.startScheduledTasks(ctx)
-
-	return factory, nil
 }

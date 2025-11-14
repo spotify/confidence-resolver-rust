@@ -5,12 +5,10 @@ ROOT := $(realpath $(CURDIR)/../..)
 
 # Stamps and directories
 BUILD_STAMP := .build.stamp
-PROTO_DIR := confidence/proto
 WASM_ARTIFACT := $(ROOT)/wasm/confidence_resolver.wasm
 
 # Source files
-GO_SRC := $(shell find confidence -name '*.go' -not -path './confidence/proto/*')
-PROTO_GEN := $(shell find $(PROTO_DIR) -name '*.pb.go' 2>/dev/null)
+GO_SRC := $(shell find confidence -name '*.go')
 
 .PHONY: install build test lint clean proto
 
@@ -27,12 +25,12 @@ install:
 	go mod download
 	go mod verify
 
-# Generate protobuf files
+# Regenerate protobuf files
 proto:
 	./scripts/generate_proto.sh
 
 # Build (compile check)
-$(BUILD_STAMP): go.mod go.sum $(GO_SRC) $(PROTO_GEN)
+$(BUILD_STAMP): go.mod go.sum $(GO_SRC)
 	go build ./...
 	@touch $@
 
@@ -52,7 +50,6 @@ lint:
 
 # Clean build artifacts
 clean:
-	rm -rf $(PROTO_DIR)
 	rm -f $(BUILD_STAMP)
 	cd confidence && go clean -cache -testcache -modcache
 

@@ -34,7 +34,7 @@ type ResolverApi struct {
 	wasmMsgGuestResolveWithSticky api.Function
 
 	// Flag logger for writing logs
-	flagLogger WasmFlagLogger
+	flagLogger FlagLogger
 
 	// Logger for structured logging
 	logger *slog.Logger
@@ -105,7 +105,7 @@ func InitializeWasmRuntime(ctx context.Context, runtime wazero.Runtime, wasmByte
 }
 
 // NewResolverApiFromCompiled creates a new ResolverApi instance from a pre-compiled module
-func NewResolverApiFromCompiled(ctx context.Context, runtime wazero.Runtime, compiledModule wazero.CompiledModule, flagLogger WasmFlagLogger, logger *slog.Logger) *ResolverApi {
+func NewResolverApiFromCompiled(ctx context.Context, runtime wazero.Runtime, compiledModule wazero.CompiledModule, flagLogger FlagLogger, logger *slog.Logger) *ResolverApi {
 	// Instantiate the module with a unique name to allow multiple instances
 	// wazero requires unique module names for multiple instantiations
 	config := wazero.NewModuleConfig().WithName("")

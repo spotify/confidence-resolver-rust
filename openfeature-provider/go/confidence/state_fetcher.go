@@ -13,28 +13,33 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// StateProvider is an interface for providing resolver state and account ID
+type StateProvider interface {
+	Provide(ctx context.Context) ([]byte, string, error)
+}
+
 // FlagsAdminStateFetcher fetches and updates the resolver state from the admin service
 type FlagsAdminStateFetcher struct {
 	resolverStateService adminv1.ResolverStateServiceClient
-	accountName          string
 	etag                 atomic.Value // stores string
 	rawResolverState     atomic.Value // stores []byte
 	resolverStateURI     atomic.Value // stores *adminv1.ResolverStateUriResponse
 	refreshTime          atomic.Value // stores time.Time
-	accountID            string
+	accountID            atomic.Value // stores string
 	httpClient           *http.Client
 	logger               *slog.Logger
 }
 
+// Compile-time interface conformance check
+var _ StateProvider = (*FlagsAdminStateFetcher)(nil)
+
 // NewFlagsAdminStateFetcher creates a new FlagsAdminStateFetcher
 func NewFlagsAdminStateFetcher(
 	resolverStateService adminv1.ResolverStateServiceClient,
-	accountName string,
 	logger *slog.Logger,
 ) *FlagsAdminStateFetcher {
 	f := &FlagsAdminStateFetcher{
 		resolverStateService: resolverStateService,
-		accountName:          accountName,
 		logger:               logger,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -58,27 +63,30 @@ func (f *FlagsAdminStateFetcher) GetRawState() []byte {
 
 // GetAccountID returns the account ID
 func (f *FlagsAdminStateFetcher) GetAccountID() string {
-	return f.accountID
+	if accountID := f.accountID.Load(); accountID != nil {
+		return accountID.(string)
+	}
+	return ""
 }
 
 // Reload fetches and updates the state if it has changed
 func (f *FlagsAdminStateFetcher) Reload(ctx context.Context) error {
 	if err := f.fetchAndUpdateStateIfChanged(ctx); err != nil {
-		f.logger.Warn("Failed to reload, ignoring reload", "account", f.accountName, "error", err)
+		f.logger.Warn("Failed to reload, ignoring reload", "error", err)
 		return err
 	}
 	return nil
 }
 
 // Provide implements the StateProvider interface
-// Returns the latest resolver state, fetching it if needed
+// Returns the latest resolver state and account ID, fetching it if needed
 // On error, returns cached state (if available) to maintain availability
-func (f *FlagsAdminStateFetcher) Provide(ctx context.Context) ([]byte, error) {
+func (f *FlagsAdminStateFetcher) Provide(ctx context.Context) ([]byte, string, error) {
 	// Try to fetch the latest state
 	err := f.Reload(ctx)
-	// Always return the current state (cached or fresh)
+	// Always return the current state and accountID (cached or fresh)
 	// This ensures availability even if fetch fails
-	return f.GetRawState(), err
+	return f.GetRawState(), f.GetAccountID(), err
 }
 
 // getResolverFileURI gets the signed URI for downloading the resolver state
@@ -122,7 +130,7 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 		return err
 	}
 
-	f.accountID = response.Account
+	f.accountID.Store(response.Account)
 	uri := response.SignedUri
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
@@ -164,7 +172,7 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 	// Update the raw state
 	f.rawResolverState.Store(bytes)
 
-	f.logger.Info("Loaded resolver state", "account", f.accountName, "etag", etag)
+	f.logger.Info("Loaded resolver state", "etag", etag)
 
 	return nil
 }
