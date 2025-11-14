@@ -52,10 +52,6 @@ type ProviderConfigWithStateProvider struct {
 	// Optional: Custom logger for provider operations
 	// If not provided, a default slog.Logger will be created
 	Logger *slog.Logger
-
-	// Optional: Custom WASM bytes (for advanced use cases only)
-	// If not provided, loads from default location
-	WasmBytes []byte
 }
 
 // NewProvider creates a new Confidence OpenFeature provider with simple configuration
@@ -78,9 +74,6 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 			Level: slog.LevelInfo,
 		}))
 	}
-
-	// Use embedded WASM module
-	wasmBytes := defaultWasmBytes
 
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
@@ -108,7 +101,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
 	// State will be set during Provider.Init()
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, wasmBytes, flagLogger, logger)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
@@ -139,12 +132,6 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 		}))
 	}
 
-	// Use custom WASM bytes if provided, otherwise use embedded default
-	wasmBytes := config.WasmBytes
-	if wasmBytes == nil {
-		wasmBytes = defaultWasmBytes
-	}
-
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
@@ -154,7 +141,7 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
 	// State will be set during Provider.Init()
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, wasmBytes, flagLogger, logger)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
