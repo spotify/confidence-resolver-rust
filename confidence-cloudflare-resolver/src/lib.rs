@@ -1,7 +1,5 @@
 use confidence_resolver::{
-    flag_logger,
-    proto::{confidence, google::Struct},
-    FlagToApply, Host, ResolvedValue, ResolverState,
+    FlagToApply, Host, ResolvedValue, ResolverState, assign_logger::AssignLogger, flag_logger, proto::{confidence, google::Struct}
 };
 use worker::*;
 
@@ -13,7 +11,8 @@ use serde_json::json;
 
 use confidence::flags::resolver::v1::{ApplyFlagsRequest, ApplyFlagsResponse, ResolveFlagsRequest};
 
-static LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
+static RESOLVE_LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
+static ASSIGN_LOGGER: LazyLock<AssignLogger> = LazyLock::new(AssignLogger::new);
 
 use confidence_resolver::Client;
 use once_cell::sync::Lazy;
@@ -52,7 +51,7 @@ impl Host for H {
         client: &Client,
         _sdk: &Option<Sdk>,
     ) {
-        LOGGER.log_resolve(
+        RESOLVE_LOGGER.log_resolve(
             resolve_id,
             evaluation_context,
             client.client_credential_name.as_str(),
@@ -67,7 +66,7 @@ impl Host for H {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
+        ASSIGN_LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
     }
 }
 
@@ -214,7 +213,7 @@ pub async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
     // Use ctx.waitUntil to run logging after response is returned
     ctx.wait_until(async move {
         let aggregated: confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest
-            = LOGGER.checkpoint();
+            = checkpoint();
         if let Ok(converted) = serde_json::to_string(&aggregated) {
             if let Some(queue) = FLAGS_LOGS_QUEUE.get() {
                 let _ = queue.send(converted).await;
@@ -256,6 +255,13 @@ pub async fn consume_flag_logs_queue(
 
     Ok(())
 }
+
+fn checkpoint() -> WriteFlagLogsRequest {
+    let mut req = RESOLVE_LOGGER.checkpoint();
+    ASSIGN_LOGGER.checkpoint_fill(&mut req);
+    req
+}
+
 fn get_token(client_id: &str, client_secret: &str) -> String {
     let combined = format!("{}:{}", client_id, client_secret);
     let encoded = STANDARD.encode(combined.as_bytes());

@@ -1,5 +1,9 @@
+use std::collections::VecDeque;
+use std::sync::Mutex;
+
 use crate::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest;
 use crate::FlagToApply;
+use prost::{length_delimiter_len, Message};
 
 mod pb {
     pub use crate::proto::confidence::flags::resolver::v1::events::{
@@ -13,13 +17,22 @@ mod pb {
 }
 
 #[derive(Debug, Default)]
+struct State {
+    pending: VecDeque<(pb::FlagAssigned, usize)>,
+    pending_bytes: usize,
+}
+
+#[derive(Debug, Default)]
 pub struct AssignLogger {
     assigned: crossbeam_queue::SegQueue<pb::FlagAssigned>,
+    state: Mutex<State>,
 }
 
 impl AssignLogger {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            ..Default::default()
+        }
     }
 
     pub fn log_assigns(
@@ -88,15 +101,133 @@ impl AssignLogger {
     }
 
     pub fn checkpoint(&self) -> WriteFlagLogsRequest {
-        let mut assigned = Vec::new();
-        while let Some(ev) = self.assigned.pop() {
-            assigned.push(ev);
+        let mut req = WriteFlagLogsRequest::default();
+        self.checkpoint_fill(&mut req);
+        req
+    }
+    pub fn checkpoint_fill(&self, req: &mut WriteFlagLogsRequest) -> usize {
+        self.checkpoint_fill_with_limit(req, usize::MAX, false)
+    }
+
+    pub fn checkpoint_with_limit(
+        &self,
+        limit_bytes: usize,
+        require_full: bool,
+    ) -> WriteFlagLogsRequest {
+        let mut req = WriteFlagLogsRequest::default();
+        self.checkpoint_fill_with_limit(&mut req, limit_bytes, require_full);
+        req
+    }
+    pub fn checkpoint_fill_with_limit(
+        &self,
+        req: &mut WriteFlagLogsRequest,
+        limit_bytes: usize,
+        require_full: bool,
+    ) -> usize {
+        let mut state = match self.state.lock() {
+            Ok(g) => g,
+            // lock errors if another holder panics, still we acquire the lock
+            Err(err) => err.into_inner(),
+        };
+        let start = req.encoded_len();
+        let limit_bytes = limit_bytes.saturating_sub(start);
+        while state.pending_bytes < limit_bytes {
+            if let Some(assigned) = self.assigned.pop() {
+                let len = AssignLogger::encoded_len(&assigned);
+                state.pending.push_back((assigned, len));
+                state.pending_bytes = state.pending_bytes.saturating_add(len);
+            } else {
+                break;
+            }
         }
-        WriteFlagLogsRequest {
-            flag_resolve_info: Vec::new(),
-            client_resolve_info: Vec::new(),
-            flag_assigned: assigned,
-            telemetry_data: None,
+        let mut written: usize = 0;
+        if state.pending_bytes >= limit_bytes || !require_full {
+            while let Some((_, len)) = state.pending.front() {
+                // special case for first event being larger than limit_bytes
+                if written.saturating_add(*len) <= limit_bytes || written == 0 && start == 0 {
+                    written = written.saturating_add(*len);
+                    let assigned = unsafe { state.pending.pop_front().unwrap_unchecked().0 };
+                    req.flag_assigned.push(assigned);
+                } else {
+                    break;
+                }
+            }
+            state.pending_bytes = state.pending_bytes.saturating_sub(written);
         }
+        written
+    }
+
+    fn encoded_len(assigned: &pb::FlagAssigned) -> usize {
+        let len = assigned.encoded_len();
+        // the extra one is for the proto type and field id
+        len.saturating_add(length_delimiter_len(len))
+            .saturating_add(1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_event() -> pb::FlagAssigned {
+        pb::FlagAssigned {
+            resolve_id: "rid".to_string(),
+            client_info: None,
+            flags: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn event_size_is_correctly_calculated() {
+        let ev = make_event();
+        let ev_size = AssignLogger::encoded_len(&ev);
+        let req = WriteFlagLogsRequest {
+            flag_assigned: vec![ev.clone(), ev],
+            ..Default::default()
+        };
+        assert_eq!(2 * ev_size, req.encoded_len())
+    }
+
+    #[test]
+    fn can_allow_less() {
+        let logger = AssignLogger::new();
+        // push a small event directly
+        logger.assigned.push(make_event());
+
+        let r = logger.checkpoint_with_limit(10_000, false);
+        assert_eq!(r.flag_assigned.len(), 1);
+    }
+
+    #[test]
+    fn flushes_until_reaching_target() {
+        let ev_size = AssignLogger::encoded_len(&make_event());
+
+        let logger = AssignLogger::new(); // tiny target forces immediate flush
+                                          // two events
+        logger.assigned.push(make_event());
+        logger.assigned.push(make_event());
+        logger.assigned.push(make_event());
+        let r = logger.checkpoint_with_limit(3 * ev_size - 1, true);
+        // At least one event should be flushed; with target 0, implementation may flush one
+        assert_eq!(r.flag_assigned.len(), 2);
+    }
+
+    #[test]
+    fn first_event_exceeding_target_is_sent_alone() {
+        // Target smaller than single event size
+        let logger = AssignLogger::new();
+        logger.assigned.push(make_event());
+        logger.assigned.push(make_event());
+
+        let r = logger.checkpoint_with_limit(1, true);
+        assert_eq!(r.flag_assigned.len(), 1);
+    }
+
+    #[test]
+    fn returns_none_when_under_target_and_not_allowed() {
+        let logger = AssignLogger::new();
+        // no events queued, target positive, allow_less = false
+        let r = logger.checkpoint_with_limit(10_000, true);
+        assert!(r.flag_assigned.is_empty());
     }
 }
