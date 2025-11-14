@@ -15,8 +15,8 @@ const (
 	MaxFlagAssignedPerChunk = 1000
 )
 
-// WasmFlagLogger is an interface for writing flag logs
-type WasmFlagLogger interface {
+// FlagLogger is an interface for writing flag logs
+type FlagLogger interface {
 	Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error
 	Shutdown()
 }
@@ -24,8 +24,7 @@ type WasmFlagLogger interface {
 // FlagLogWriter is a function type for writing flag logs
 type FlagLogWriter func(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error
 
-// GrpcWasmFlagLogger implements WasmFlagLogger using gRPC
-type GrpcWasmFlagLogger struct {
+type GrpcFlagLogger struct {
 	stub   resolverv1.InternalFlagLoggerServiceClient
 	writer FlagLogWriter
 	logger *slog.Logger
@@ -33,11 +32,11 @@ type GrpcWasmFlagLogger struct {
 }
 
 // Compile-time interface conformance check
-var _ WasmFlagLogger = (*GrpcWasmFlagLogger)(nil)
+var _ FlagLogger = (*GrpcFlagLogger)(nil)
 
 // NewGrpcWasmFlagLogger creates a new GrpcWasmFlagLogger
-func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, logger *slog.Logger) *GrpcWasmFlagLogger {
-	flagLogger := &GrpcWasmFlagLogger{
+func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, logger *slog.Logger) *GrpcFlagLogger {
+	flagLogger := &GrpcFlagLogger{
 		stub:   stub,
 		logger: logger,
 	}
@@ -64,8 +63,8 @@ func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, logg
 }
 
 // NewGrpcWasmFlagLoggerWithWriter creates a new GrpcWasmFlagLogger with a custom writer (for testing)
-func NewGrpcWasmFlagLoggerWithWriter(stub resolverv1.InternalFlagLoggerServiceClient, writer FlagLogWriter, logger *slog.Logger) *GrpcWasmFlagLogger {
-	return &GrpcWasmFlagLogger{
+func NewGrpcWasmFlagLoggerWithWriter(stub resolverv1.InternalFlagLoggerServiceClient, writer FlagLogWriter, logger *slog.Logger) *GrpcFlagLogger {
+	return &GrpcFlagLogger{
 		stub:   stub,
 		writer: writer,
 		logger: logger,
@@ -73,7 +72,7 @@ func NewGrpcWasmFlagLoggerWithWriter(stub resolverv1.InternalFlagLoggerServiceCl
 }
 
 // Write writes flag logs, splitting into chunks if necessary
-func (g *GrpcWasmFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
 	flagAssignedCount := len(request.FlagAssigned)
 	clientResolveCount := len(request.ClientResolveInfo)
 	flagResolveCount := len(request.FlagResolveInfo)
@@ -111,7 +110,7 @@ func (g *GrpcWasmFlagLogger) Write(ctx context.Context, request *resolverv1.Writ
 }
 
 // createFlagAssignedChunks splits the WriteFlagLogsRequest into chunks
-func (g *GrpcWasmFlagLogger) createFlagAssignedChunks(request *resolverv1.WriteFlagLogsRequest) []*resolverv1.WriteFlagLogsRequest {
+func (g *GrpcFlagLogger) createFlagAssignedChunks(request *resolverv1.WriteFlagLogsRequest) []*resolverv1.WriteFlagLogsRequest {
 	chunks := make([]*resolverv1.WriteFlagLogsRequest, 0)
 	totalFlags := len(request.FlagAssigned)
 
@@ -141,12 +140,12 @@ func (g *GrpcWasmFlagLogger) createFlagAssignedChunks(request *resolverv1.WriteF
 }
 
 // sendAsync sends the request asynchronously using the writer
-func (g *GrpcWasmFlagLogger) sendAsync(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+func (g *GrpcFlagLogger) sendAsync(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
 	return g.writer(ctx, request)
 }
 
 // Shutdown waits for all pending async writes to complete
-func (g *GrpcWasmFlagLogger) Shutdown() {
+func (g *GrpcFlagLogger) Shutdown() {
 	g.wg.Wait()
 }
 
@@ -154,7 +153,7 @@ func (g *GrpcWasmFlagLogger) Shutdown() {
 type NoOpWasmFlagLogger struct{}
 
 // Compile-time interface conformance check
-var _ WasmFlagLogger = (*NoOpWasmFlagLogger)(nil)
+var _ FlagLogger = (*NoOpWasmFlagLogger)(nil)
 
 // NewNoOpWasmFlagLogger creates a new NoOpWasmFlagLogger
 func NewNoOpWasmFlagLogger() *NoOpWasmFlagLogger {

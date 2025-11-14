@@ -35,18 +35,13 @@ type ProviderConfig struct {
 
 // ProviderConfigWithStateProvider holds configuration for the Confidence provider with a custom StateProvider
 // WARNING: This configuration is intended for testing and advanced use cases ONLY.
-// For production deployments, use NewProvider() with ProviderConfig instead, which provides:
-//   - Automatic state fetching from Confidence backend
-//   - Built-in authentication and secure connections
-//   - Exposure event logging for analytics
-//
+// For production deployments, use NewProvider() with ProviderConfig instead.
 // Only use this when you need to provide a custom state source (e.g., local file cache for testing).
 type ProviderConfigWithStateProvider struct {
 	// Required: Client secret for signing evaluations
 	ClientSecret string
 
 	// Required: State provider for fetching resolver state
-	// The StateProvider must implement GetAccountID() to provide the account ID
 	StateProvider StateProvider
 
 	// Optional: Custom logger for provider operations
@@ -54,9 +49,8 @@ type ProviderConfigWithStateProvider struct {
 	Logger *slog.Logger
 }
 
-// NewProvider creates a new Confidence OpenFeature provider with simple configuration
+// NewProvider creates a new Confidence OpenFeature provider
 func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProvider, error) {
-	// Validate required fields
 	if config.APIClientID == "" {
 		return nil, fmt.Errorf("APIClientID is required")
 	}
@@ -67,7 +61,6 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		return nil, fmt.Errorf("ClientSecret is required")
 	}
 
-	// Create logger if not provided
 	logger := config.Logger
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
@@ -78,7 +71,6 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
-	// Build connection factory (use default if none provided)
 	connFactory := config.ConnFactory
 	if connFactory == nil {
 		connFactory = func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
@@ -86,8 +78,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		}
 	}
 
-	// Create gRPC StateProvider and FlagLogger
-	stateProvider, flagLogger, err := NewGrpcStateProvider(
+	stateProvider, flagLogger, err := NewGrpcClients(
 		ctx,
 		config.APIClientID,
 		config.APIClientSecret,
@@ -96,7 +87,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	)
 	if err != nil {
 		wasmRuntime.Close(ctx)
-		return nil, fmt.Errorf("failed to create gRPC state provider: %w", err)
+		return nil, fmt.Errorf("failed to create gRPC clients: %w", err)
 	}
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
@@ -107,16 +98,14 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
-	// Create provider
 	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger)
 
 	return provider, nil
 }
 
 // NewProviderWithStateProvider creates a new Confidence OpenFeature provider with a custom StateProvider
-// Should only be used for testing purposes. Will not emit exposure logging.
+// Should only be used for testing purposes. _Will not emit exposure logging._
 func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWithStateProvider) (*LocalResolverProvider, error) {
-	// Validate required fields
 	if config.ClientSecret == "" {
 		return nil, fmt.Errorf("ClientSecret is required")
 	}
@@ -124,7 +113,6 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 		return nil, fmt.Errorf("StateProvider is required")
 	}
 
-	// Create logger if not provided
 	logger := config.Logger
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
@@ -147,7 +135,6 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
-	// Create provider
 	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, flagLogger, config.ClientSecret, logger)
 
 	return provider, nil

@@ -23,7 +23,7 @@ const defaultPollIntervalSeconds = 10
 type LocalResolverProvider struct {
 	resolverAPI   WasmResolverApi
 	stateProvider StateProvider
-	flagLogger    WasmFlagLogger
+	flagLogger    FlagLogger
 	clientSecret  string
 	logger        *slog.Logger
 	cancelFunc    context.CancelFunc
@@ -42,7 +42,7 @@ var (
 func NewLocalResolverProvider(
 	resolverAPI WasmResolverApi,
 	stateProvider StateProvider,
-	flagLogger WasmFlagLogger,
+	flagLogger FlagLogger,
 	clientSecret string,
 	logger *slog.Logger,
 ) *LocalResolverProvider {

@@ -31,7 +31,7 @@ func (m *mockStateProvider) Provide(ctx context.Context) ([]byte, string, error)
 
 // trackingFlagLogger wraps a real GrpcWasmFlagLogger with a mocked connection
 type trackingFlagLogger struct {
-	actualLogger   WasmFlagLogger
+	actualLogger   FlagLogger
 	logsSentCount  int32
 	shutdownCalled bool
 	mu             sync.Mutex
@@ -184,7 +184,7 @@ func createProviderWithTestState(
 	ctx context.Context,
 	stateProvider StateProvider,
 	accountID string,
-	logger WasmFlagLogger,
+	logger FlagLogger,
 ) (*LocalResolverProvider, error) {
 	// Create wazero runtime
 	runtimeConfig := wazero.NewRuntimeConfig()

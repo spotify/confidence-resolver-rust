@@ -36,7 +36,7 @@ type SwapWasmResolverApi struct {
 	// Dependencies needed to create new instances
 	runtime        wazero.Runtime
 	compiledModule wazero.CompiledModule
-	flagLogger     WasmFlagLogger
+	flagLogger     FlagLogger
 	logger         *slog.Logger
 }
 
@@ -50,7 +50,7 @@ func NewSwapWasmResolverApi(
 	ctx context.Context,
 	runtime wazero.Runtime,
 	wasmBytes []byte,
-	flagLogger WasmFlagLogger,
+	flagLogger FlagLogger,
 	logger *slog.Logger,
 ) (*SwapWasmResolverApi, error) {
 	// Initialize host functions and compile module once

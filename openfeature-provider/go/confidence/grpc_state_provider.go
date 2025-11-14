@@ -14,15 +14,15 @@ import (
 
 const confidenceDomain = "edge-grpc.spotify.com"
 
-// NewGrpcStateProvider creates a StateProvider and FlagLogger backed by Confidence gRPC services
+// NewGrpcClients creates a StateProvider and FlagLogger backed by Confidence gRPC services
 // Returns the StateProvider and FlagLogger
-func NewGrpcStateProvider(
+func NewGrpcClients(
 	ctx context.Context,
 	apiClientID string,
 	apiClientSecret string,
 	connFactory ConnFactory,
 	logger *slog.Logger,
-) (StateProvider, WasmFlagLogger, error) {
+) (StateProvider, FlagLogger, error) {
 	// Create TLS credentials for secure connections
 	tlsCreds := credentials.NewTLS(nil)
 
