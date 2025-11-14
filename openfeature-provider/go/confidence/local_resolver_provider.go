@@ -374,16 +374,13 @@ func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationCon
 		return fmt.Errorf("resolver API is nil, cannot initialize")
 	}
 
-	// Fetch initial state from StateProvider
-	// This also populates the accountID within the StateProvider
-	initialState, err := p.stateProvider.Provide(ctx)
+	// Fetch initial state and accountID from StateProvider
+	initialState, accountId, err := p.stateProvider.Provide(ctx)
 	if err != nil {
 		p.logger.Error("Failed to fetch initial state", "error", err)
 		return fmt.Errorf("failed to fetch initial state: %w", err)
 	}
 
-	// Get accountID from StateProvider (populated during Provide call)
-	accountId := p.stateProvider.GetAccountID()
 	if accountId == "" {
 		p.logger.Warn("AccountID is empty after state fetch")
 		accountId = "unknown"
@@ -463,15 +460,13 @@ func (p *LocalResolverProvider) startScheduledTasks(parentCtx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				// Fetch latest state
-				state, err := p.stateProvider.Provide(ctx)
+				// Fetch latest state and accountID
+				state, accountId, err := p.stateProvider.Provide(ctx)
 				if err != nil {
 					p.logger.Error("State fetch failed", "error", err)
 					continue
 				}
 
-				// Get accountID from StateProvider
-				accountId := p.stateProvider.GetAccountID()
 				if accountId == "" {
 					p.logger.Warn("AccountID is empty, skipping state update")
 					continue

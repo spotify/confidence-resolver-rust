@@ -263,13 +263,16 @@ func TestFlagsAdminStateFetcher_Provide(t *testing.T) {
 	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
-	// Provide should fetch and return state
-	state, err := fetcher.Provide(ctx)
+	// Provide should fetch and return state and accountID
+	state, accountID, err := fetcher.Provide(ctx)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 	if state == nil {
 		t.Error("Expected state to be returned")
+	}
+	if accountID != "test-account" {
+		t.Errorf("Expected accountID 'test-account', got %s", accountID)
 	}
 }
 
@@ -312,16 +315,19 @@ func TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError(t *testing.T) {
 	ctx := context.Background()
 
 	// First call succeeds
-	state1, err := fetcher.Provide(ctx)
+	state1, accountID1, err := fetcher.Provide(ctx)
 	if err != nil {
 		t.Errorf("Expected no error on first call, got %v", err)
+	}
+	if accountID1 != "test-account" {
+		t.Errorf("Expected accountID 'test-account', got %s", accountID1)
 	}
 
 	// Wait for URI to expire
 	time.Sleep(200 * time.Millisecond)
 
 	// Second call will try to refresh and fail
-	state2, err := fetcher.Provide(ctx)
+	state2, accountID2, err := fetcher.Provide(ctx)
 	if err == nil {
 		t.Error("Expected error to be returned when service fails")
 	}
@@ -330,6 +336,9 @@ func TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError(t *testing.T) {
 	}
 	if string(state1) != string(state2) {
 		t.Error("Expected cached state to match previous state")
+	}
+	if accountID1 != accountID2 {
+		t.Error("Expected cached accountID to match previous accountID")
 	}
 }
 

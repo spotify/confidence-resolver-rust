@@ -71,14 +71,14 @@ func (f *FlagsAdminStateFetcher) Reload(ctx context.Context) error {
 }
 
 // Provide implements the StateProvider interface
-// Returns the latest resolver state, fetching it if needed
+// Returns the latest resolver state and account ID, fetching it if needed
 // On error, returns cached state (if available) to maintain availability
-func (f *FlagsAdminStateFetcher) Provide(ctx context.Context) ([]byte, error) {
+func (f *FlagsAdminStateFetcher) Provide(ctx context.Context) ([]byte, string, error) {
 	// Try to fetch the latest state
 	err := f.Reload(ctx)
-	// Always return the current state (cached or fresh)
+	// Always return the current state and accountID (cached or fresh)
 	// This ensures availability even if fetch fails
-	return f.GetRawState(), err
+	return f.GetRawState(), f.GetAccountID(), err
 }
 
 // getResolverFileURI gets the signed URI for downloading the resolver state

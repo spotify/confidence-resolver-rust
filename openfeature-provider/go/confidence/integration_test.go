@@ -21,15 +21,12 @@ type mockStateProvider struct {
 	accountID string
 }
 
-func (m *mockStateProvider) Provide(ctx context.Context) ([]byte, error) {
-	return m.state, nil
-}
-
-func (m *mockStateProvider) GetAccountID() string {
-	if m.accountID == "" {
-		return "test-account"
+func (m *mockStateProvider) Provide(ctx context.Context) ([]byte, string, error) {
+	accountID := m.accountID
+	if accountID == "" {
+		accountID = "test-account"
 	}
-	return m.accountID
+	return m.state, accountID, nil
 }
 
 // trackingFlagLogger wraps a real GrpcWasmFlagLogger with a mocked connection
