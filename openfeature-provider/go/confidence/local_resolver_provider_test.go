@@ -435,9 +435,9 @@ func (m *mockStateProviderForInit) Provide(ctx context.Context) ([]byte, string,
 }
 
 type mockResolverAPIForInit struct {
-	updateStateFunc    func(state []byte, accountID string) error
-	closeFunc          func(ctx context.Context)
-	resolveWithSticky  func(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
+	updateStateFunc   func(state []byte, accountID string) error
+	closeFunc         func(ctx context.Context)
+	resolveWithSticky func(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
 }
 
 func (m *mockResolverAPIForInit) UpdateStateAndFlushLogs(state []byte, accountID string) error {
