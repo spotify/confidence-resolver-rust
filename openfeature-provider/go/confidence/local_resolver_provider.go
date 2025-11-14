@@ -32,6 +32,12 @@ type LocalResolverProvider struct {
 	pollInterval  time.Duration
 }
 
+// Compile-time interface conformance checks
+var (
+	_ openfeature.FeatureProvider = (*LocalResolverProvider)(nil)
+	_ openfeature.StateHandler    = (*LocalResolverProvider)(nil)
+)
+
 // NewLocalResolverProvider creates a new LocalResolverProvider
 func NewLocalResolverProvider(
 	resolverAPI WasmResolverApi,

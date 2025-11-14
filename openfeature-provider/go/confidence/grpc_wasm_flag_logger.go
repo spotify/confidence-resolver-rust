@@ -32,6 +32,9 @@ type GrpcWasmFlagLogger struct {
 	wg     sync.WaitGroup
 }
 
+// Compile-time interface conformance check
+var _ WasmFlagLogger = (*GrpcWasmFlagLogger)(nil)
+
 // NewGrpcWasmFlagLogger creates a new GrpcWasmFlagLogger
 func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, logger *slog.Logger) *GrpcWasmFlagLogger {
 	flagLogger := &GrpcWasmFlagLogger{
@@ -149,6 +152,9 @@ func (g *GrpcWasmFlagLogger) Shutdown() {
 
 // NoOpWasmFlagLogger is a flag logger that drops all requests (for disabled logging)
 type NoOpWasmFlagLogger struct{}
+
+// Compile-time interface conformance check
+var _ WasmFlagLogger = (*NoOpWasmFlagLogger)(nil)
 
 // NewNoOpWasmFlagLogger creates a new NoOpWasmFlagLogger
 func NewNoOpWasmFlagLogger() *NoOpWasmFlagLogger {

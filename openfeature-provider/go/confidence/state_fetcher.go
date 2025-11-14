@@ -25,6 +25,9 @@ type FlagsAdminStateFetcher struct {
 	logger               *slog.Logger
 }
 
+// Compile-time interface conformance check
+var _ StateProvider = (*FlagsAdminStateFetcher)(nil)
+
 // NewFlagsAdminStateFetcher creates a new FlagsAdminStateFetcher
 func NewFlagsAdminStateFetcher(
 	resolverStateService adminv1.ResolverStateServiceClient,

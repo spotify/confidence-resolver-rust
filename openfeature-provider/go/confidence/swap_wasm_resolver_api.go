@@ -40,6 +40,9 @@ type SwapWasmResolverApi struct {
 	logger         *slog.Logger
 }
 
+// Compile-time interface conformance check
+var _ WasmResolverApi = (*SwapWasmResolverApi)(nil)
+
 // NewSwapWasmResolverApi creates a new SwapWasmResolverApi
 // The instance is created without initial state (lazy initialization).
 // Call UpdateStateAndFlushLogs to initialize with state.
