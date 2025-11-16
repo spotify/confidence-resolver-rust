@@ -14,9 +14,11 @@ import { ResolveReason } from './proto/types';
 import { VERSION } from './version';
 import { Fetch, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
-import { logger } from './logger';
 import { LocalResolver } from './LocalResolver';
 import { sha256Hex } from './hash';
+import { getLogger } from './logger';
+
+const logger = getLogger('provider');
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
@@ -149,6 +151,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     const response = this.resolver.resolveWithSticky(request);
 
     if (response.success && response.success.response) {
+      this.flushAssigned();
       const { response: flagsResponse } = response.success;
       return flagsResponse;
     }
@@ -255,21 +258,35 @@ export class ConfidenceServerProviderLocal implements Provider {
   // TODO should this return success/failure, or even throw?
   async flush(signal?: AbortSignal): Promise<void> {
     const writeFlagLogRequest = this.resolver.flushLogs();
-    if (writeFlagLogRequest.length == 0) {
-      // nothing to send
-      return;
+    if (writeFlagLogRequest.length > 0) {
+      await this.sendFlagLogs(writeFlagLogRequest, signal);
     }
-    const response = await this.fetch('https://resolver.confidence.dev/v1/clientFlagLogs:write', {
+  }
+
+  private async flushAssigned(): Promise<void> {
+    const writeFlagLogRequest = this.resolver.flushAssigned();
+    if (writeFlagLogRequest.length > 0) {
+      await this.sendFlagLogs(writeFlagLogRequest);
+    }
+  }
+
+  private async sendFlagLogs(encodedWriteFlagLogRequest: Uint8Array, signal = this.main.signal): Promise<void> {
+    try {
+      const response = await this.fetch('https://resolver.confidence.dev/v1/clientFlagLogs:write', {
       method: 'post',
       signal,
       headers: {
         'Content-Type': 'application/x-protobuf',
         Authorization: `ClientSecret ${this.options.flagClientSecret}`,
       },
-      body: writeFlagLogRequest as Uint8Array<ArrayBuffer>,
-    });
-    if (!response.ok) {
-      logger.error(`Failed to write flag logs: ${response.status} ${response.statusText} - ${await response.text()}`);
+      body: encodedWriteFlagLogRequest as Uint8Array<ArrayBuffer>,
+      });
+      if (!response.ok) {
+        logger.error(`Failed to write flag logs: ${response.status} ${response.statusText} - ${await response.text()}`);
+        throw new Error(`${response.status}: ${response.statusText}`);
+      }
+    } catch (err) {
+      logger.warn('Failed to send flag logs', err);
     }
   }
 
