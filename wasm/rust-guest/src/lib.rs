@@ -52,6 +52,7 @@ impl
     }
 }
 
+const LOG_TARGET_BYTES: usize = 4 * 1024 * 1024; // 4 mb
 const VOID: Void = Void {};
 const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
@@ -198,16 +199,25 @@ wasm_msg_guest! {
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
         resolver.resolve_flags(&request)
     }
+
+    // deprecated
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
-        let resolve = RESOLVE_LOGGER.checkpoint();
-        let assign = ASSIGN_LOGGER.checkpoint();
-        Ok(WriteFlagLogsRequest {
-            flag_assigned: assign.flag_assigned,
-            telemetry_data: None,
-            client_resolve_info: resolve.client_resolve_info,
-            flag_resolve_info: resolve.flag_resolve_info
-        })
+        let mut req = RESOLVE_LOGGER.checkpoint();
+        ASSIGN_LOGGER.checkpoint_fill(&mut req);
+        Ok(req)
     }
+
+    fn bounded_flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
+        let mut req = RESOLVE_LOGGER.checkpoint();
+        ASSIGN_LOGGER.checkpoint_fill_with_limit(&mut req, LOG_TARGET_BYTES, false);
+        Ok(req)
+    }
+
+    fn bounded_flush_assign(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
+        Ok(ASSIGN_LOGGER.checkpoint_with_limit(LOG_TARGET_BYTES, true))
+    }
+
+
 
 }
 
