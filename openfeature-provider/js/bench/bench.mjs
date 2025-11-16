@@ -1,5 +1,5 @@
 import process from 'node:process';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { setTimeout as sleep, setImmediate } from 'node:timers/promises';
 import { OpenFeature } from '@openfeature/server-sdk';
 import { createConfidenceServerProvider } from '../dist/index.node.js';
 
@@ -44,7 +44,6 @@ const provider = createConfidenceServerProvider({
   flagClientSecret: CLIENT_SECRET,
   apiClientId: API_CLIENT_ID,
   apiClientSecret: API_CLIENT_SECRET,
-  flushInterval: 1000,
   fetch: proxyFetch,
 });
 
@@ -53,7 +52,6 @@ const evalContext = { targetingKey: 'tutorial_visitor', visitor_id: 'tutorial_vi
 
 let completed = 0;
 let errors = 0;
-const immediate = () => new Promise(resolve => setImmediate(resolve));
 
 function runLoop(abort, client, flagKey, onErrorAbort) {
   return (async () => {
@@ -72,15 +70,21 @@ function runLoop(abort, client, flagKey, onErrorAbort) {
       }
       // Occasionally yield to the event loop so timers/signals can fire even if resolves are synchronous
       if ((++i & 1023) === 0) {
-        await immediate();
+        await setImmediate();
       }
     }
   })();
 }
 
-function seconds(n) { return n * 1000; }
+function seconds(n) {
+  return n * 1000;
+}
 
 try {
+  // setInterval(() => {
+  //   console.log(process.memoryUsage());
+  // }, 1000).unref();
+
   await OpenFeature.setProviderAndWait(provider);
   const client = OpenFeature.getClient();
 
@@ -96,6 +100,7 @@ try {
       process.exit(1);
     }
   }
+  console.log('starting');
 
   // Measurement with signal handling
   const measureAbort = new AbortController();
@@ -105,18 +110,22 @@ try {
 
   const start = Date.now();
   const run = runLoop(measureAbort.signal, client, FLAG_KEY, true);
-  await sleep(seconds(DURATION));
+  await sleep(seconds(DURATION), undefined, { signal: measureAbort.signal });
   measureAbort.abort();
   await run;
 
   const elapsedMs = Date.now() - start;
   const qps = completed / (elapsedMs / 1000);
-  console.log(`flag=${FLAG_KEY} duration=${Math.round(elapsedMs)}ms ops=${completed} errors=${errors} throughput=${Math.round(qps)} ops/s`);
+  console.log(
+    `flag=${FLAG_KEY} duration=${Math.round(elapsedMs)}ms ops=${completed} errors=${errors} throughput=${Math.round(
+      qps,
+    )} ops/s`,
+  );
 } catch (err) {
   console.error(err);
   process.exit(1);
 } finally {
-  try { await provider.onClose(); } catch {}
+  try {
+    await provider.onClose();
+  } catch {}
 }
-
-
