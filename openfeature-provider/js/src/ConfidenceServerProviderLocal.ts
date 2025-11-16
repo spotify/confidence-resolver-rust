@@ -23,6 +23,9 @@ import {
 } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
 import { AccessToken, LocalResolver, ResolveStateUri } from './LocalResolver';
+import { getLogger } from './logger';
+
+const logger = getLogger('provider');
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
@@ -94,6 +97,7 @@ export class ConfidenceServerProviderLocal implements Provider {
                 }),
                 withTimeout(3 * TimeUnit.SECOND), // TODO make configurable
               ],
+              // TODO we should limit the number of concurrent requests here as each request holds is quite big (4mb)
               '*/v1/flagLogs:write': [
                 withRetry({
                   maxAttempts: 3,
@@ -173,6 +177,7 @@ export class ConfidenceServerProviderLocal implements Provider {
     const response = this.resolver.resolveWithSticky(request);
 
     if (response.success && response.success.response) {
+      this.flushAssigned();
       const { response: flagsResponse } = response.success;
       return flagsResponse;
     }
@@ -275,18 +280,34 @@ export class ConfidenceServerProviderLocal implements Provider {
   // TODO should this return success/failure, or even throw?
   async flush(signal?: AbortSignal): Promise<void> {
     const writeFlagLogRequest = this.resolver.flushLogs();
-    if (writeFlagLogRequest.length == 0) {
-      // nothing to send
-      return;
+    if (writeFlagLogRequest.length > 0) {
+      await this.sendFlagLogs(writeFlagLogRequest, signal);
     }
-    await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
-      method: 'post',
-      signal,
-      headers: {
-        'Content-Type': 'application/x-protobuf',
-      },
-      body: writeFlagLogRequest as Uint8Array<ArrayBuffer>,
-    });
+  }
+
+  private async flushAssigned(): Promise<void> {
+    const writeFlagLogRequest = this.resolver.flushAssigned();
+    if (writeFlagLogRequest.length > 0) {
+      await this.sendFlagLogs(writeFlagLogRequest);
+    }
+  }
+
+  private async sendFlagLogs(encodedWriteFlagLogRequest: Uint8Array, signal = this.main.signal): Promise<void> {
+    try {
+      const res = await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
+        method: 'post',
+        signal,
+        headers: {
+          'Content-Type': 'application/x-protobuf',
+        },
+        body: encodedWriteFlagLogRequest as Uint8Array<ArrayBuffer>,
+      });
+      if (!res.ok) {
+        throw new Error(`${res.status}: ${res.statusText}`);
+      }
+    } catch (err) {
+      logger.warn('Failed to send flag logs', err);
+    }
   }
 
   private async fetchResolveStateUri(signal?: AbortSignal): Promise<ResolveStateUri> {
