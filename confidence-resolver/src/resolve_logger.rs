@@ -76,6 +76,9 @@ impl ResolveLogger {
         values: &[crate::ResolvedValue<'_>],
     ) {
         self.with_state(|state: &ResolveInfoState| {
+            // Increment the resolve counter
+            state.resolve_count.fetch_add(1, Ordering::Relaxed);
+
             state
                 .client_resolve_info
                 .with_default(client_credential, |client_resolve_info| {
@@ -207,11 +210,13 @@ impl ResolveLogger {
             .map(|state| {
                 let client_resolve_info = build_client_resolve_info(&state);
                 let flag_resolve_info = build_flag_resolve_info(&state);
+                let resolve_count = state.resolve_count.load(Ordering::Relaxed) as i64;
                 pb::WriteFlagLogsRequest {
                     flag_resolve_info,
                     client_resolve_info,
                     flag_assigned: state.flag_assigned.into_iter().collect(),
                     telemetry_data: None,
+                    resolve_count,
                 }
             })
             .unwrap_or_default()
@@ -239,6 +244,7 @@ struct ResolveInfoState {
     flag_resolve_info: HashMap<String, FlagResolveInfo>,
     client_resolve_info: HashMap<String, ClientResolveInfo>,
     flag_assigned: crossbeam_queue::SegQueue<pb::FlagAssigned>,
+    resolve_count: AtomicU32,
 }
 
 fn extract_client(credential: &str) -> String {
@@ -658,6 +664,30 @@ mod tests {
                 .count,
             1
         );
+    }
+
+    #[test]
+    fn test_resolve_counter() {
+        let logger = ResolveLogger::new();
+        let cred = "clients/test/clientCredentials/test";
+
+        // Log 5 resolves
+        for _ in 0..5 {
+            logger.log_resolve("id", &Struct::default(), cred, &[]);
+        }
+
+        // Checkpoint and verify the counter
+        let req = logger.checkpoint();
+        assert_eq!(req.resolve_count, 5);
+
+        // Log 3 more resolves
+        for _ in 0..3 {
+            logger.log_resolve("id", &Struct::default(), cred, &[]);
+        }
+
+        // Checkpoint again and verify the counter was reset and is now 3
+        let req2 = logger.checkpoint();
+        assert_eq!(req2.resolve_count, 3);
     }
 
     #[test]

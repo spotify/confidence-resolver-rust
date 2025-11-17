@@ -83,6 +83,12 @@ message WriteFlagLogsRequest {
   repeated confidence.flags.admin.v1.FlagResolveInfo flag_resolve_info = 4 [
     (google.api.field_behavior) = OPTIONAL
   ];
+
+  // Number of resolve operations since the last flush/checkpoint.
+  // This counter is reset when logs are retrieved by the application.
+  int64 resolve_count = 5 [
+    (google.api.field_behavior) = OPTIONAL
+  ];
 }
 
 message WriteFlagLogsResponse {}

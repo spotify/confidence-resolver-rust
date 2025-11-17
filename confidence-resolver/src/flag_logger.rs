@@ -13,8 +13,10 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
     // map of flag to flag resolve info
     let mut flag_resolve_map: HashMap<String, VariantRuleResolveInfo> = HashMap::new();
     let mut flag_assigned: Vec<FlagAssigned> = vec![];
+    let mut total_resolve_count: i64 = 0;
 
     for flag_logs_message in message_batch {
+        total_resolve_count = total_resolve_count.saturating_add(flag_logs_message.resolve_count);
         for c in &flag_logs_message.client_resolve_info {
             if let Some(set) = schema_map.get_mut(&c.client_credential) {
                 for schema in &c.schema {
@@ -96,6 +98,7 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
         flag_assigned,
         flag_resolve_info,
         client_resolve_info,
+        resolve_count: total_resolve_count,
     }
 }
 
