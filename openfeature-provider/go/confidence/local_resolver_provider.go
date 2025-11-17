@@ -4,7 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
 	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
@@ -12,20 +16,50 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+const defaultPollIntervalSeconds = 10
+
 // LocalResolverProvider implements the OpenFeature FeatureProvider interface
 // for local flag resolution using the Confidence WASM resolver
 type LocalResolverProvider struct {
-	factory      *LocalResolverFactory
-	clientSecret string
-	logger       *slog.Logger
+	resolverAPI   WasmResolverApi
+	stateProvider StateProvider
+	flagLogger    FlagLogger
+	clientSecret  string
+	logger        *slog.Logger
+	cancelFunc    context.CancelFunc
+	wg            sync.WaitGroup
+	mu            sync.Mutex
+	pollInterval  time.Duration
 }
 
+// Compile-time interface conformance checks
+var (
+	_ openfeature.FeatureProvider = (*LocalResolverProvider)(nil)
+	_ openfeature.StateHandler    = (*LocalResolverProvider)(nil)
+)
+
 // NewLocalResolverProvider creates a new LocalResolverProvider
-func NewLocalResolverProvider(factory *LocalResolverFactory, clientSecret string, logger *slog.Logger) *LocalResolverProvider {
+func NewLocalResolverProvider(
+	resolverAPI WasmResolverApi,
+	stateProvider StateProvider,
+	flagLogger FlagLogger,
+	clientSecret string,
+	logger *slog.Logger,
+) *LocalResolverProvider {
+	// Create a default logger if none provided
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
+	}
+
 	return &LocalResolverProvider{
-		factory:      factory,
-		clientSecret: clientSecret,
-		logger:       logger,
+		resolverAPI:   resolverAPI,
+		stateProvider: stateProvider,
+		flagLogger:    flagLogger,
+		clientSecret:  clientSecret,
+		logger:        logger,
+		pollInterval:  getPollIntervalSeconds(),
 	}
 }
 
@@ -221,9 +255,6 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 		EvaluationContext: protoCtx,
 	}
 
-	// Get resolver API from factory
-	resolverAPI := p.factory.GetSwapResolverAPI()
-
 	// Create ResolveWithSticky request
 	stickyRequest := &resolver.ResolveWithStickyRequest{
 		ResolveRequest:          request,
@@ -233,7 +264,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	}
 
 	// Resolve flags with sticky support
-	stickyResponse, err := resolverAPI.ResolveWithSticky(stickyRequest)
+	stickyResponse, err := p.resolverAPI.ResolveWithSticky(stickyRequest)
 	if err != nil {
 		p.logger.Error("Failed to resolve flag", "flag", flagPath, "error", err)
 		return openfeature.InterfaceResolutionDetail{
@@ -336,17 +367,138 @@ func (p *LocalResolverProvider) Hooks() []openfeature.Hook {
 }
 
 // Init initializes the provider (part of StateHandler interface)
+// Fetches initial state and starts background tasks for state updates and log flushing
 func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationContext) error {
-	// Provider is already initialized in NewProvider, nothing to do here
-	// TODO move the bulk of the initialization to this place.
+	ctx := context.Background()
+
+	// Check if required components are present
+	if p.stateProvider == nil {
+		return fmt.Errorf("state provider is nil, cannot initialize")
+	}
+
+	if p.resolverAPI == nil {
+		return fmt.Errorf("resolver API is nil, cannot initialize")
+	}
+
+	// Fetch initial state and accountID from StateProvider
+	initialState, accountId, err := p.stateProvider.Provide(ctx)
+	if err != nil {
+		p.logger.Error("Failed to fetch initial state", "error", err)
+		return fmt.Errorf("failed to fetch initial state: %w", err)
+	}
+
+	if accountId == "" {
+		p.logger.Warn("AccountID is empty after state fetch")
+		accountId = "unknown"
+	}
+
+	// Update resolver with initial state (triggers WASM compilation and initialization)
+	if err := p.resolverAPI.UpdateStateAndFlushLogs(initialState, accountId); err != nil {
+		p.logger.Error("Failed to initialize resolver with initial state", "error", err)
+		return fmt.Errorf("failed to initialize resolver: %w", err)
+	}
+
+	// Start background tasks for state updates and log flushing
+	p.startScheduledTasks(ctx)
+
+	p.logger.Info("Provider initialized successfully")
 	return nil
 }
 
 // Shutdown closes the provider and cleans up resources (part of StateHandler interface)
 func (p *LocalResolverProvider) Shutdown() {
-	if p.factory != nil {
-		p.factory.Shutdown(context.Background())
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.logger != nil {
+		p.logger.Info("Shutting down provider")
 	}
+
+	// Cancel background tasks
+	if p.cancelFunc != nil {
+		p.cancelFunc()
+		p.cancelFunc = nil
+		if p.logger != nil {
+			p.logger.Info("Cancelled scheduled tasks")
+		}
+	}
+
+	// Wait for background goroutines to exit
+	p.wg.Wait()
+
+	ctx := context.Background()
+
+	// Close resolver API (which flushes final logs)
+	if p.resolverAPI != nil {
+		p.resolverAPI.Close(ctx)
+		if p.logger != nil {
+			p.logger.Info("Closed resolver API")
+		}
+	}
+
+	// Shutdown flag logger (which waits for log sends to complete)
+	if p.flagLogger != nil {
+		p.flagLogger.Shutdown()
+		if p.logger != nil {
+			p.logger.Info("Shut down flag logger")
+		}
+	}
+
+	if p.logger != nil {
+		p.logger.Info("Provider shut down")
+	}
+}
+
+// startScheduledTasks starts the background tasks for state fetching and log polling
+func (p *LocalResolverProvider) startScheduledTasks(parentCtx context.Context) {
+	ctx, cancel := context.WithCancel(parentCtx)
+	p.mu.Lock()
+	p.cancelFunc = cancel
+	p.mu.Unlock()
+
+	// Ticker for state fetching and log flushing
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		ticker := time.NewTicker(p.pollInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// Fetch latest state and accountID
+				state, accountId, err := p.stateProvider.Provide(ctx)
+				if err != nil {
+					p.logger.Error("State fetch failed", "error", err)
+					continue
+				}
+
+				if accountId == "" {
+					p.logger.Warn("AccountID is empty, skipping state update")
+					continue
+				}
+
+				// Update state and flush logs
+				if err := p.resolverAPI.UpdateStateAndFlushLogs(state, accountId); err != nil {
+					p.logger.Error("Failed to update state and flush logs", "error", err)
+				} else {
+					p.logger.Info("Updated resolver state and flushed logs", "account", accountId)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+// getPollIntervalSeconds gets the poll interval from environment or returns default
+func getPollIntervalSeconds() time.Duration {
+	if envVal := os.Getenv("CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS"); envVal != "" {
+		if seconds, err := strconv.ParseInt(envVal, 10, 64); err == nil {
+			return time.Duration(seconds) * time.Second
+		}
+	}
+	return time.Duration(defaultPollIntervalSeconds) * time.Second
 }
 
 // parseFlagPath splits a flag key into flag name and path

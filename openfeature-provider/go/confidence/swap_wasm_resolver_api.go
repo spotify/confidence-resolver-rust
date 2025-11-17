@@ -11,6 +11,18 @@ import (
 	"github.com/tetratelabs/wazero"
 )
 
+var ErrNotInitialized = errors.New("resolver not initialized: call UpdateStateAndFlushLogs first")
+
+// WasmResolverApi is an interface for resolver API operations
+type WasmResolverApi interface {
+	// UpdateStateAndFlushLogs updates the resolver with new state and flushes any pending logs
+	UpdateStateAndFlushLogs(state []byte, accountId string) error
+	// ResolveWithSticky resolves flags with sticky assignment support
+	ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
+	// Close closes the resolver and flushes any pending logs
+	Close(ctx context.Context)
+}
+
 // SwapWasmResolverApi wraps ResolverApi and allows atomic swapping of instances
 // Similar to Java's SwapWasmResolverApi, it creates a new instance on each state update,
 // swaps it atomically, and closes the old one (which flushes logs)
@@ -24,18 +36,21 @@ type SwapWasmResolverApi struct {
 	// Dependencies needed to create new instances
 	runtime        wazero.Runtime
 	compiledModule wazero.CompiledModule
-	flagLogger     WasmFlagLogger
+	flagLogger     FlagLogger
 	logger         *slog.Logger
 }
 
-// NewSwapWasmResolverApi creates a new SwapWasmResolverApi with an initial state
+// Compile-time interface conformance check
+var _ WasmResolverApi = (*SwapWasmResolverApi)(nil)
+
+// NewSwapWasmResolverApi creates a new SwapWasmResolverApi
+// The instance is created without initial state (lazy initialization).
+// Call UpdateStateAndFlushLogs to initialize with state.
 func NewSwapWasmResolverApi(
 	ctx context.Context,
 	runtime wazero.Runtime,
 	wasmBytes []byte,
-	flagLogger WasmFlagLogger,
-	initialState []byte,
-	accountId string,
+	flagLogger FlagLogger,
 	logger *slog.Logger,
 ) (*SwapWasmResolverApi, error) {
 	// Initialize host functions and compile module once
@@ -51,13 +66,8 @@ func NewSwapWasmResolverApi(
 		logger:         logger,
 	}
 
-	// Create initial instance
-	initialInstance := NewResolverApiFromCompiled(ctx, runtime, compiledModule, flagLogger, logger)
-	if err := initialInstance.SetResolverState(initialState, accountId); err != nil {
-		return nil, err
-	}
-
-	swap.currentInstance.Store(initialInstance)
+	// Store nil to indicate lazy initialization
+	swap.currentInstance.Store((*ResolverApi)(nil))
 
 	return swap, nil
 }
@@ -78,18 +88,32 @@ func (s *SwapWasmResolverApi) UpdateStateAndFlushLogs(state []byte, accountId st
 	// Atomically swap to the new instance
 	oldInstance := s.currentInstance.Swap(newInstance).(*ResolverApi)
 
-	// Close the old instance (which flushes logs)
-	oldInstance.Close(ctx)
+	// Close the old instance (which flushes logs), but only if it's not nil
+	// (nil indicates this was the first initialization)
+	if oldInstance != nil {
+		oldInstance.Close(ctx)
+	}
 	return nil
 }
+
 func (s *SwapWasmResolverApi) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
-	// Lock to ensure resolve doesn't happen during swap
+	// Load the current instance
 	instance := s.currentInstance.Load().(*ResolverApi)
+
+	// Check if instance is nil (not yet initialized)
+	if instance == nil {
+		return nil, ErrNotInitialized
+	}
+
 	response, err := instance.ResolveWithSticky(request)
 
 	// If instance is closed, retry with the current instance (which may have been swapped)
 	if err != nil && errors.Is(err, ErrInstanceClosed) {
 		instance = s.currentInstance.Load().(*ResolverApi)
+		// Check again for nil after reload
+		if instance == nil {
+			return nil, ErrNotInitialized
+		}
 		return instance.ResolveWithSticky(request)
 	}
 

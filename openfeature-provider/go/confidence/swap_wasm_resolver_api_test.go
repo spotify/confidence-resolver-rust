@@ -17,6 +17,10 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, nil))
+}
+
 func loadTestResolverState(t *testing.T) []byte {
 	dataPath := filepath.Join("..", "..", "..", "data", "resolver_state_current.pb")
 	data, err := os.ReadFile(dataPath)
@@ -200,11 +204,16 @@ func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 	initialState := createMinimalResolverState()
 	accountId := "test-account"
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, initialState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
 	defer swap.Close(ctx)
+
+	// Initialize with test state
+	if err := swap.UpdateStateAndFlushLogs(initialState, accountId); err != nil {
+		t.Fatalf("Failed to initialize swap with state: %v", err)
+	}
 
 	if swap == nil {
 		t.Fatal("Expected non-nil SwapWasmResolverApi")
@@ -229,13 +238,11 @@ func TestSwapWasmResolverApi_NewSwapWasmResolverApi_InvalidWasm(t *testing.T) {
 	defer runtime.Close(ctx)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	initialState := createMinimalResolverState()
-	accountId := "test-account"
 
 	// Use invalid WASM bytes
 	invalidWasmBytes := []byte("not valid wasm")
 
-	_, err := NewSwapWasmResolverApi(ctx, runtime, invalidWasmBytes, flagLogger, initialState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	_, err := NewSwapWasmResolverApi(ctx, runtime, invalidWasmBytes, flagLogger, testLogger())
 	if err == nil {
 		t.Fatal("Expected error when creating SwapWasmResolverApi with invalid WASM")
 	}
@@ -252,11 +259,16 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	testState := loadTestResolverState(t)
 	testAcctID := loadTestAccountID(t)
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi with real state: %v", err)
 	}
 	defer swap.Close(ctx)
+
+	// Initialize with test state
+	if err := swap.UpdateStateAndFlushLogs(testState, testAcctID); err != nil {
+		t.Fatalf("Failed to initialize swap with state: %v", err)
+	}
 
 	request := createResolveWithStickyRequest(
 		createTutorialFeatureRequest(),
@@ -344,11 +356,16 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	initialState := loadTestResolverState(t)
 	accountId := loadTestAccountID(t)
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, initialState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
 	defer swap.Close(ctx)
+
+	// Initialize with test state
+	if err := swap.UpdateStateAndFlushLogs(initialState, accountId); err != nil {
+		t.Fatalf("Failed to initialize swap with state: %v", err)
+	}
 
 	// Update with new state - the key test is that UpdateStateAndFlushLogs succeeds
 	newState := loadTestResolverState(t)
@@ -398,11 +415,16 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 	initialState := loadTestResolverState(t)
 	accountId := loadTestAccountID(t)
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, initialState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
 	defer swap.Close(ctx)
+
+	// Initialize with test state
+	if err := swap.UpdateStateAndFlushLogs(initialState, accountId); err != nil {
+		t.Fatalf("Failed to initialize swap with state: %v", err)
+	}
 
 	// Perform multiple state updates to verify the swap mechanism works correctly
 	for i := 0; i < 3; i++ {
@@ -450,9 +472,14 @@ func TestSwapWasmResolverApi_Close(t *testing.T) {
 	initialState := createMinimalResolverState()
 	accountId := "test-account"
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, initialState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+	}
+
+	// Initialize with test state
+	if err := swap.UpdateStateAndFlushLogs(initialState, accountId); err != nil {
+		t.Fatalf("Failed to initialize swap with state: %v", err)
 	}
 
 	// Close should not panic
@@ -484,11 +511,16 @@ func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 	testState := loadTestResolverState(t)
 	testAcctID := loadTestAccountID(t)
 
-	wasmResolver, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testState, testAcctID, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	wasmResolver, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi with sample state: %v", err)
 	}
 	defer wasmResolver.Close(ctx)
+
+	// Initialize with test state
+	if err := wasmResolver.UpdateStateAndFlushLogs(testState, testAcctID); err != nil {
+		t.Fatalf("Failed to initialize swap with state: %v", err)
+	}
 
 	stickyRequest := createResolveWithStickyRequest(
 		createTutorialFeatureRequest(),
@@ -566,11 +598,16 @@ func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(
 	stickyState := createStateWithStickyFlag()
 	accountId := "test-account"
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, stickyState, accountId, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
 	defer swap.Close(ctx)
+
+	// Initialize with test state
+	if err := swap.UpdateStateAndFlushLogs(stickyState, accountId); err != nil {
+		t.Fatalf("Failed to initialize swap with state: %v", err)
+	}
 
 	stickyRequest := createResolveWithStickyRequest(
 		&resolver.ResolveFlagsRequest{

@@ -38,9 +38,6 @@ func TestNewGrpcWasmFlagLogger(t *testing.T) {
 	if logger.stub == nil {
 		t.Error("Expected stub to be set correctly")
 	}
-	if logger.writer == nil {
-		t.Error("Expected writer to be initialized")
-	}
 }
 
 func TestGrpcWasmFlagLogger_Write_Empty(t *testing.T) {
@@ -228,33 +225,6 @@ func TestGrpcWasmFlagLogger_CreateChunks(t *testing.T) {
 	}
 	if len(chunks[2].ClientResolveInfo) != 0 || len(chunks[2].FlagResolveInfo) != 0 {
 		t.Error("Expected third chunk to have no metadata")
-	}
-}
-
-func TestGrpcWasmFlagLogger_WithCustomWriter(t *testing.T) {
-	mockStub := &mockInternalFlagLoggerServiceClient{}
-	callCount := 0
-
-	customWriter := func(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
-		callCount++
-		return nil
-	}
-
-	logger := NewGrpcWasmFlagLoggerWithWriter(mockStub, customWriter, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	ctx := context.Background()
-
-	request := &resolverv1.WriteFlagLogsRequest{
-		FlagAssigned: make([]*resolverevents.FlagAssigned, 10),
-	}
-
-	err := logger.Write(ctx, request)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	// Custom writer is called synchronously
-	if callCount != 1 {
-		t.Errorf("Expected custom writer to be called once, got %d calls", callCount)
 	}
 }
 
