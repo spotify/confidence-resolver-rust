@@ -14,6 +14,7 @@ import io.grpc.Channel;
 import io.grpc.ClientInterceptors;
 import io.grpc.protobuf.services.HealthStatusManager;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -38,7 +39,14 @@ class LocalResolverServiceFactory implements ResolverServiceFactory {
 
   static FlagResolverService from(
       ApiSecret apiSecret, StickyResolveStrategy stickyResolveStrategy) {
-    return createFlagResolverService(apiSecret, stickyResolveStrategy);
+    return createFlagResolverService(apiSecret, stickyResolveStrategy, new DefaultChannelFactory());
+  }
+
+  static FlagResolverService from(
+      ApiSecret apiSecret,
+      StickyResolveStrategy stickyResolveStrategy,
+      ChannelFactory channelFactory) {
+    return createFlagResolverService(apiSecret, stickyResolveStrategy, channelFactory);
   }
 
   static FlagResolverService from(
@@ -49,14 +57,24 @@ class LocalResolverServiceFactory implements ResolverServiceFactory {
   }
 
   private static FlagResolverService createFlagResolverService(
-      ApiSecret apiSecret, StickyResolveStrategy stickyResolveStrategy) {
-    final var channel = createConfidenceChannel();
+      ApiSecret apiSecret,
+      StickyResolveStrategy stickyResolveStrategy,
+      ChannelFactory channelFactory) {
+    final String confidenceDomain =
+        Optional.ofNullable(System.getenv("CONFIDENCE_DOMAIN"))
+            .orElse("edge-grpc.spotify.com");
+
+    // Create base channel for auth service (no JWT auth interceptor)
+    final var channel = channelFactory.create(confidenceDomain, Collections.emptyList());
     final AuthServiceBlockingStub authService = AuthServiceGrpc.newBlockingStub(channel);
     final TokenHolder tokenHolder =
         new TokenHolder(apiSecret.clientId(), apiSecret.clientSecret(), authService);
     final Token token = tokenHolder.getToken();
-    final Channel authenticatedChannel =
-        ClientInterceptors.intercept(channel, new JwtAuthClientInterceptor(tokenHolder));
+
+    // Create authenticated channel with JWT interceptor
+    final var jwtInterceptor = new JwtAuthClientInterceptor(tokenHolder);
+    final var authenticatedChannel =
+        channelFactory.create(confidenceDomain, Collections.singletonList(jwtInterceptor));
     final ResolverStateServiceBlockingStub resolverStateService =
         ResolverStateServiceGrpc.newBlockingStub(authenticatedChannel);
     final HealthStatusManager healthStatusManager = new HealthStatusManager();
