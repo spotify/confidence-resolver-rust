@@ -26,6 +26,7 @@ const MAX_NO_OF_FLAGS_TO_BATCH_RESOLVE: usize = 200;
 
 use err::Fallible;
 
+pub mod assign_logger;
 mod err;
 pub mod flag_logger;
 mod gzip;

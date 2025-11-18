@@ -4,6 +4,7 @@ use std::sync::LazyLock;
 
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
+use confidence_resolver::assign_logger::AssignLogger;
 use prost::Message;
 
 use confidence_resolver::proto::confidence::flags::resolver::v1::{
@@ -51,12 +52,14 @@ impl
     }
 }
 
+const LOG_TARGET_BYTES: usize = 4 * 1024 * 1024; // 4 mb
 const VOID: Void = Void {};
 const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
 // TODO simplify by assuming single threaded?
 static RESOLVER_STATE: ArcSwapOption<ResolverState> = ArcSwapOption::const_empty();
-static LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
+static RESOLVE_LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
+static ASSIGN_LOGGER: LazyLock<AssignLogger> = LazyLock::new(AssignLogger::new);
 
 thread_local! {
     static RNG: RefCell<SmallRng> = RefCell::new({
@@ -135,7 +138,7 @@ impl Host for WasmHost {
         client: &Client,
         _sdk: &Option<Sdk>,
     ) {
-        LOGGER.log_resolve(
+        RESOLVE_LOGGER.log_resolve(
             resolve_id,
             evaluation_context,
             &client.client_credential_name,
@@ -150,7 +153,7 @@ impl Host for WasmHost {
         client: &Client,
         sdk: &Option<Sdk>,
     ) {
-        LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
+        ASSIGN_LOGGER.log_assigns(resolve_id, evaluation_context, assigned_flags, client, sdk);
     }
 
     fn encrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
@@ -196,10 +199,25 @@ wasm_msg_guest! {
         let resolver = resolver_state.get_resolver::<WasmHost>(&request.client_secret, evaluation_context, &ENCRYPTION_KEY)?;
         resolver.resolve_flags(&request)
     }
+
+    // deprecated
     fn flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
-        let response = LOGGER.checkpoint();
-        Ok(response)
+        let mut req = RESOLVE_LOGGER.checkpoint();
+        ASSIGN_LOGGER.checkpoint_fill(&mut req);
+        Ok(req)
     }
+
+    fn bounded_flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
+        let mut req = RESOLVE_LOGGER.checkpoint();
+        ASSIGN_LOGGER.checkpoint_fill_with_limit(&mut req, LOG_TARGET_BYTES, false);
+        Ok(req)
+    }
+
+    fn bounded_flush_assign(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
+        Ok(ASSIGN_LOGGER.checkpoint_with_limit(LOG_TARGET_BYTES, true))
+    }
+
+
 
 }
 
