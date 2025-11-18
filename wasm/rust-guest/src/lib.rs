@@ -143,6 +143,8 @@ impl Host for WasmHost {
             evaluation_context,
             &client.client_credential_name,
             values,
+            client,
+            _sdk,
         );
     }
 
