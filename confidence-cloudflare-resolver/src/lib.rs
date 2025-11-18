@@ -49,13 +49,15 @@ impl Host for H {
         evaluation_context: &Struct,
         values: &[ResolvedValue<'_>],
         client: &Client,
-        _sdk: &Option<Sdk>,
+        sdk: &Option<Sdk>,
     ) {
         RESOLVE_LOGGER.log_resolve(
             resolve_id,
             evaluation_context,
             client.client_credential_name.as_str(),
             values,
+            client,
+            sdk,
         );
     }
 
