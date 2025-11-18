@@ -18,6 +18,10 @@ import (
 
 const defaultPollIntervalSeconds = 10
 
+// Version is set via ldflags during build/release process
+// Example: go build -ldflags "-X github.com/spotify/confidence-resolver/openfeature-provider/go/confidence.Version=v1.0.0"
+var Version = "dev"
+
 // LocalResolverProvider implements the OpenFeature FeatureProvider interface
 // for local flag resolution using the Confidence WASM resolver
 type LocalResolverProvider struct {
@@ -246,13 +250,19 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 		}
 	}
 
-	// Build resolve request
+	// Build resolve request with SDK information
 	requestFlagName := "flags/" + flagPath
 	request := &resolver.ResolveFlagsRequest{
 		Flags:             []string{requestFlagName},
 		Apply:             true,
 		ClientSecret:      p.clientSecret,
 		EvaluationContext: protoCtx,
+		Sdk: &resolvertypes.Sdk{
+			Sdk: &resolvertypes.Sdk_Id{
+				Id: resolvertypes.SdkId_SDK_ID_GO_PROVIDER,
+			},
+			Version: Version,
+		},
 	}
 
 	// Create ResolveWithSticky request
