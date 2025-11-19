@@ -19,6 +19,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class Main {
+    static {
+        System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "info");
+        System.setProperty("org.slf4j.simpleLogger.log.com.spotify.confidence", "debug");
+    }
+
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
     public static void main(String[] args) throws InterruptedException {
@@ -47,8 +52,9 @@ public class Main {
 
             // Demo: Evaluate flags with multiple concurrent threads
             log.info("=== Flag Evaluation Demo with 10 Concurrent Threads ===");
+            log.info("Available processors: {}", Runtime.getRuntime().availableProcessors());
             int threads = 10;
-            long durationSeconds = 10;
+            long durationSeconds = 30;
             ExecutorService executor = Executors.newFixedThreadPool(threads);
             AtomicLong totalResolves = new AtomicLong(0);
             AtomicLong errorCount = new AtomicLong(0);
@@ -79,8 +85,7 @@ public class Main {
                                 errorCount.incrementAndGet();
                             }
                             
-                            // Sleep briefly to not hammer it too hard in this loop
-                            Thread.sleep(10);
+                            // No sleep to test throughput
                         } catch (Exception e) {
                             errorCount.incrementAndGet();
                             log.error("Evaluation error", e);
