@@ -16,7 +16,7 @@ Demo application showing how to use the Confidence OpenFeature Local Provider in
 
    ```bash
    # From openfeature-provider/java directory
-   mvn clean install
+   mvn -DskipTests clean install
    ```
 
 2. **Set Environment Variables**
@@ -48,5 +48,6 @@ mvn exec:java -Dexec.mainClass="com.spotify.confidence.demo.Main"
 ```
 
 The demo runs concurrent flag evaluations to test performance and state synchronization.
+
 
 
