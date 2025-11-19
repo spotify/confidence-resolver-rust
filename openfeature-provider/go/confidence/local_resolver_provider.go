@@ -255,7 +255,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 		EvaluationContext: protoCtx,
 		Sdk: &resolvertypes.Sdk{
 			Sdk: &resolvertypes.Sdk_Id{
-				Id: resolvertypes.SdkId_SDK_ID_GO_PROVIDER,
+				Id: resolvertypes.SdkId_SDK_ID_GO_LOCAL_PROVIDER,
 			},
 			Version: Version,
 		},

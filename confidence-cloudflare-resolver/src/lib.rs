@@ -1,5 +1,8 @@
 use confidence_resolver::{
-    FlagToApply, Host, ResolvedValue, ResolverState, assign_logger::AssignLogger, flag_logger, proto::{confidence, google::Struct}
+    assign_logger::AssignLogger,
+    flag_logger,
+    proto::{confidence, google::Struct},
+    FlagToApply, Host, ResolvedValue, ResolverState,
 };
 use worker::*;
 
