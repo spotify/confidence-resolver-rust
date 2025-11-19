@@ -189,3 +189,26 @@ enum SdkId {
   SDK_ID_JAVA_LOCAL_PROVIDER = 21;
   SDK_ID_JS_LOCAL_PROVIDER = 22;
 }
+
+message WriteFlagLogsRequest {
+  repeated bytes flag_assigned = 1;
+
+  TelemetryData telemetry_data = 2;
+
+  repeated bytes client_resolve_info = 3;
+  repeated bytes flag_resolve_info = 4;
+}
+
+// Collection of telemetry metrics, usually included in request messages to
+// monitor sender-side issues or performance
+message TelemetryData {
+  // "events" dropped from the sender due to issues or inefficiencies.
+  // This is implemented as a delta counter between TelemetryData messages
+  int64 dropped_events = 1;
+
+  // Requests per second for resolve calls (from WASM resolver)
+  double resolve_rps = 2;
+
+  // Information about the SDK/provider
+  Sdk sdk = 3;
+}

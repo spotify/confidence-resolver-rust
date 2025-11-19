@@ -8,7 +8,7 @@ import type {
   ResolutionDetails,
   ResolutionReason,
 } from '@openfeature/server-sdk';
-import { ResolveReason, SdkId } from './proto/api';
+import { ResolveReason, SdkId, WriteFlagLogsRequest } from './proto/api';
 import { ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyRequest } from './proto/api';
 import {
   Fetch,
@@ -283,6 +283,19 @@ export class ConfidenceServerProviderLocal implements Provider {
       // nothing to send
       return;
     }
+
+    try {
+      const decoded = WriteFlagLogsRequest.decode(writeFlagLogRequest);
+      // Log telemetry data if running in debug mode
+      if (decoded.telemetryData && typeof process !== 'undefined' && process.env?.DEBUG_CONFIDENCE) {
+        console.log(
+          `Telemetry Data: dropped_events=${decoded.telemetryData.droppedEvents}, resolve_rps=${decoded.telemetryData.resolveRps?.toFixed(2)}, sdk_id=${decoded.telemetryData.sdk?.id}, sdk_version=${decoded.telemetryData.sdk?.version}`,
+        );
+      }
+    } catch (e) {
+      console.error('Failed to decode log request for telemetry', e);
+    }
+
     await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
       method: 'post',
       signal,
