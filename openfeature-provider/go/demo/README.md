@@ -1,4 +1,4 @@
-# Confidence OpenFeature Provider Demo
+# Confidence OpenFeature Provider Demo (Go)
 
 Demo application showing how to use the Confidence OpenFeature Local Provider in Go.
 
@@ -9,19 +9,26 @@ Demo application showing how to use the Confidence OpenFeature Local Provider in
 
 ## Setup
 
-Set the required environment variables:
+The demo is configured to use the local provider code (via `replace` directive in `go.mod`).
 
-```bash
-export CONFIDENCE_API_CLIENT_ID="your-api-client-id"
-export CONFIDENCE_API_CLIENT_SECRET="your-api-client-secret"
-export CONFIDENCE_CLIENT_SECRET="your-client-secret"
-```
+1. **Set Environment Variables**
 
-Get your credentials from the [Confidence dashboard](https://confidence.spotify.com/).
+   Set the required environment variables:
+
+   ```bash
+   export CONFIDENCE_API_CLIENT_ID="your-api-client-id"
+   export CONFIDENCE_API_CLIENT_SECRET="your-api-client-secret"
+   export CONFIDENCE_CLIENT_SECRET="your-client-secret"
+   ```
+
+   Get your credentials from the [Confidence dashboard](https://confidence.spotify.com/).
 
 ## Run
 
+Navigate to the demo directory and run the application:
+
 ```bash
+cd demo
 go run main.go
 ```
 
