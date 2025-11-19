@@ -9,22 +9,22 @@
     "CHANGELOG.md",
     "LICENSE"
   ],
-  "main": "./dist/index.node.js",
+  "main": "./dist/index.node.mjs",
   "module": "./dist/index.browser.js",
-  "types": "./dist/index.node.d.ts",
+  "types": "./dist/index.node.d.mts",
   "exports": {
     ".": {
       "node": {
-        "types": "./dist/index.node.d.ts",
-        "default": "./dist/index.node.js"
+        "types": "./dist/index.node.d.mts",
+        "default": "./dist/index.node.mjs"
       },
       "browser": {
         "types": "./dist/index.browser.d.ts",
         "default": "./dist/index.browser.js"
       },
       "default": {
-        "types": "./dist/index.node.d.ts",
-        "default": "./dist/index.node.js"
+        "types": "./dist/index.node.d.mts",
+        "default": "./dist/index.node.mjs"
       }
     },
     "./package.json": "./package.json"
