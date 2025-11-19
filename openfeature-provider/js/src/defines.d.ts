@@ -10,4 +10,9 @@ declare global {
    * True when running tests, false otherwise.
    */
   const __TEST__: boolean;
+
+  /**
+   * The version of the SDK.
+   */
+  const SDK_VERSION: string;
 }

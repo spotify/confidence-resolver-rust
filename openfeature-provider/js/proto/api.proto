@@ -24,7 +24,7 @@ message ResolveFlagsRequest {
   bool apply = 4;
 
   // Information about the SDK used to initiate the request.
-  // Sdk sdk = 5;
+  Sdk sdk = 5;
 }
 
 message ResolveFlagsResponse {
@@ -154,4 +154,38 @@ message ResolveWithStickyResponse {
     string rule = 3;
     string variant = 4;
   }
+}
+
+message Sdk {
+  oneof sdk {
+    SdkId id = 1;
+    string custom_id = 2;
+  }
+  string version = 3;
+}
+
+enum SdkId {
+  SDK_ID_UNSPECIFIED = 0;
+  SDK_ID_JAVA_PROVIDER = 1;
+  SDK_ID_KOTLIN_PROVIDER = 2;
+  SDK_ID_SWIFT_PROVIDER = 3;
+  SDK_ID_JS_WEB_PROVIDER = 4;
+  SDK_ID_JS_SERVER_PROVIDER = 5;
+  SDK_ID_PYTHON_PROVIDER = 6;
+  SDK_ID_GO_PROVIDER = 7;
+  SDK_ID_RUBY_PROVIDER = 8;
+  SDK_ID_RUST_PROVIDER = 9;
+  SDK_ID_JAVA_CONFIDENCE = 10;
+  SDK_ID_KOTLIN_CONFIDENCE = 11;
+  SDK_ID_SWIFT_CONFIDENCE = 12;
+  SDK_ID_JS_CONFIDENCE = 13;
+  SDK_ID_PYTHON_CONFIDENCE = 14;
+  SDK_ID_GO_CONFIDENCE = 15;
+  SDK_ID_RUST_CONFIDENCE = 16;
+  SDK_ID_FLUTTER_IOS_CONFIDENCE = 17;
+  SDK_ID_FLUTTER_ANDROID_CONFIDENCE = 18;
+  SDK_ID_DOTNET_CONFIDENCE = 19;
+  SDK_ID_GO_LOCAL_PROVIDER = 20;
+  SDK_ID_JAVA_LOCAL_PROVIDER = 21;
+  SDK_ID_JS_LOCAL_PROVIDER = 22;
 }

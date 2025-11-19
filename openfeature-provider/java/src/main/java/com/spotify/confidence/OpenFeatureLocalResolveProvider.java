@@ -5,6 +5,8 @@ import com.google.protobuf.Struct;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolvedFlag;
+import com.spotify.confidence.flags.resolver.v1.Sdk;
+import com.spotify.confidence.flags.resolver.v1.SdkId;
 import dev.openfeature.sdk.EvaluationContext;
 import dev.openfeature.sdk.FeatureProvider;
 import dev.openfeature.sdk.Metadata;
@@ -15,6 +17,9 @@ import dev.openfeature.sdk.exceptions.GeneralError;
 import dev.openfeature.sdk.exceptions.TypeMismatchError;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.slf4j.Logger;
@@ -54,6 +59,22 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
       org.slf4j.LoggerFactory.getLogger(OpenFeatureLocalResolveProvider.class);
   private final FlagResolverService flagResolverService;
   private final StickyResolveStrategy stickyResolveStrategy;
+  private static final String SDK_VERSION;
+
+  static {
+    String version = "unknown";
+    try (InputStream input =
+        OpenFeatureLocalResolveProvider.class.getResourceAsStream("/version.properties")) {
+      Properties prop = new Properties();
+      if (input != null) {
+        prop.load(input);
+        version = prop.getProperty("version", "unknown");
+      }
+    } catch (IOException ex) {
+      log.warn("Failed to load version.properties", ex);
+    }
+    SDK_VERSION = version;
+  }
 
   /**
    * Creates a new OpenFeature provider for local flag resolution with sticky default fallback
@@ -209,6 +230,11 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
               .setClientSecret(clientSecret)
               .setEvaluationContext(
                   Struct.newBuilder().putAllFields(evaluationContext.getFieldsMap()).build())
+              .setSdk(
+                  Sdk.newBuilder()
+                      .setId(SdkId.SDK_ID_JAVA_LOCAL_PROVIDER)
+                      .setVersion(SDK_VERSION)
+                      .build())
               .build();
 
       resolveFlagResponse = flagResolverService.resolveFlags(req).get();

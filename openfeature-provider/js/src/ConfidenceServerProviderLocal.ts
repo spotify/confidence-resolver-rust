@@ -8,7 +8,7 @@ import type {
   ResolutionDetails,
   ResolutionReason,
 } from '@openfeature/server-sdk';
-import { ResolveReason } from './proto/api';
+import { ResolveReason, SdkId } from './proto/api';
 import { ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyRequest } from './proto/api';
 import {
   Fetch,
@@ -155,6 +155,10 @@ export class ConfidenceServerProviderLocal implements Provider {
         evaluationContext: ConfidenceServerProviderLocal.convertEvaluationContext(context),
         apply: true,
         clientSecret: this.options.flagClientSecret,
+        sdk: {
+          id: SdkId.SDK_ID_JS_LOCAL_PROVIDER,
+          version: SDK_VERSION,
+        },
       },
       materializationsPerUnit: {},
       failFastOnSticky: true, // Always fail fast - use remote resolver for sticky assignments

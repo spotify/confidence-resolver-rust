@@ -1,4 +1,7 @@
 import { defineConfig } from 'tsdown';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url).pathname, 'utf-8'));
 
 const base = defineConfig({
   minify: 'dce-only',
@@ -8,6 +11,7 @@ const base = defineConfig({
   define: {
     __ASSERT__: 'false',
     __TEST__: 'false',
+    SDK_VERSION: JSON.stringify(pkg.version),
   },
   external: ['@bufbuild/protobuf/wire'],
   // inputOptions: {
