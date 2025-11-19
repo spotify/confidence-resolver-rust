@@ -23,8 +23,8 @@ public class ConfidenceGrpcFlagResolver {
 
   private final FlagResolverServiceGrpc.FlagResolverServiceFutureStub stub;
 
-  public ConfidenceGrpcFlagResolver() {
-    this.channel = GrpcUtil.createConfidenceChannel();
+  public ConfidenceGrpcFlagResolver(ChannelFactory channelFactory) {
+    this.channel = GrpcUtil.createConfidenceChannel(channelFactory);
     this.stub = FlagResolverServiceGrpc.newFutureStub(channel);
   }
 

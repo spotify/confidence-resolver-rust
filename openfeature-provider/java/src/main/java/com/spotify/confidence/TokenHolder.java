@@ -19,7 +19,7 @@ class TokenHolder {
   private final String apiClientId;
   private final String apiClientSecret;
 
-  private final LoadingCache<CacheKey, Token> tokenCache;
+  private LoadingCache<CacheKey, Token> tokenCache;
   private final AuthServiceGrpc.AuthServiceBlockingStub stub;
 
   public TokenHolder(
@@ -27,40 +27,41 @@ class TokenHolder {
     this.apiClientId = apiClientId;
     this.apiClientSecret = apiClientSecret;
     this.stub = stub;
-
-    this.tokenCache =
-        Caffeine.newBuilder()
-            .expireAfter(
-                new Expiry<CacheKey, Token>() {
-                  @Override
-                  public long expireAfterCreate(
-                      CacheKey cacheKey, Token authToken, long currentTime) {
-                    return getExpiryDuration(authToken);
-                  }
-
-                  @Override
-                  public long expireAfterUpdate(
-                      CacheKey cacheKey, Token authToken, long currentTime, long currentDuration) {
-                    return getExpiryDuration(authToken);
-                  }
-
-                  @Override
-                  public long expireAfterRead(
-                      CacheKey cacheKey, Token authToken, long currentTime, long currentDuration) {
-                    return currentDuration;
-                  }
-
-                  private long getExpiryDuration(Token authToken) {
-                    return Duration.between(now(), authToken.expiration())
-                        .minusHours(1L) // Subtract an hour to have some margin
-                        .toNanos();
-                  }
-                })
-            .build(this::requestAccessToken);
   }
 
   public Token getToken() {
-    return tokenCache.get(new CacheKey());
+      if (tokenCache == null) {
+          this.tokenCache =
+                  Caffeine.newBuilder()
+                          .expireAfter(
+                                  new Expiry<CacheKey, Token>() {
+                                      @Override
+                                      public long expireAfterCreate(
+                                              CacheKey cacheKey, Token authToken, long currentTime) {
+                                          return getExpiryDuration(authToken);
+                                      }
+
+                                      @Override
+                                      public long expireAfterUpdate(
+                                              CacheKey cacheKey, Token authToken, long currentTime, long currentDuration) {
+                                          return getExpiryDuration(authToken);
+                                      }
+
+                                      @Override
+                                      public long expireAfterRead(
+                                              CacheKey cacheKey, Token authToken, long currentTime, long currentDuration) {
+                                          return currentDuration;
+                                      }
+
+                                      private long getExpiryDuration(Token authToken) {
+                                          return Duration.between(now(), authToken.expiration())
+                                                  .minusHours(1L) // Subtract an hour to have some margin
+                                                  .toNanos();
+                                      }
+                                  })
+                          .build(this::requestAccessToken);
+      }
+      return tokenCache.get(new CacheKey());
   }
 
   private Token requestAccessToken(CacheKey cacheKey) {

@@ -20,7 +20,6 @@ public class TestBase {
   protected static final ClientCredential.ClientSecret secret =
       ClientCredential.ClientSecret.newBuilder().setSecret("very-secret").build();
   protected final byte[] desiredStateBytes;
-  protected static LocalResolverServiceFactory resolverServiceFactory;
   static final String account = "accounts/foo";
   static final String clientName = "clients/client";
   static final String credentialName = clientName + "/credentials/creddy";
@@ -34,6 +33,7 @@ public class TestBase {
                   .setName(credentialName)
                   .setClientSecret(secret)
                   .build()));
+  private final ResolverApi resolverApi;
 
   protected TestBase(byte[] stateBytes) {
     this.desiredStateBytes = stateBytes;
@@ -49,7 +49,7 @@ public class TestBase {
             desiredStateBytes,
             "",
             mockFallback);
-    resolverServiceFactory = new LocalResolverServiceFactory(wasmResolverApi, mockFallback);
+    this.resolverApi = wasmResolverApi;
   }
 
   protected static void setup() {}
@@ -59,26 +59,19 @@ public class TestBase {
 
   protected ResolveFlagsResponse resolveWithContext(
       List<String> flags, String username, Struct struct, boolean apply, String secret) {
-    try {
-      return resolverServiceFactory
-          .create(secret)
-          .resolveFlags(
+      return resolverApi.resolve(
               ResolveFlagsRequest.newBuilder()
                   .addAllFlags(flags)
                   .setClientSecret(secret)
                   .setEvaluationContext(
                       Structs.of("targeting_key", Values.of(username), "bar", Values.of(struct)))
                   .setApply(apply)
-                  .build())
-          .get();
-    } catch (InterruptedException | ExecutionException e) {
-      throw new RuntimeException(e);
-    }
+                  .build());
   }
 
   protected ResolveFlagsResponse resolveWithNumericTargetingKey(
       List<String> flags, Number targetingKey, Struct struct) {
-    try {
+
       final var builder =
           ResolveFlagsRequest.newBuilder()
               .addAllFlags(flags)
@@ -95,10 +88,7 @@ public class TestBase {
                 "targeting_key", Values.of(targetingKey.longValue()), "bar", Values.of(struct)));
       }
 
-      return resolverServiceFactory.create(secret.getSecret()).resolveFlags(builder.build()).get();
-    } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
-      throw new RuntimeException(e);
-    }
+      return resolverApi.resolve(builder.build());
   }
 
   protected ResolveFlagsResponse resolveWithContext(

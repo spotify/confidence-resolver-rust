@@ -24,6 +24,8 @@ interface ResolverApi {
    */
   ResolveFlagsResponse resolve(ResolveFlagsRequest request);
 
+  void init(byte[] state, String accountId);
+
   /**
    * Updates the resolver state and flushes any pending logs.
    *

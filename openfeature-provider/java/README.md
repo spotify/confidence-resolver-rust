@@ -40,7 +40,7 @@ String clientSecret = "your-application-client-secret";
 // Create and register the provider
 OpenFeatureLocalResolveProvider provider = 
     new OpenFeatureLocalResolveProvider(apiSecret, clientSecret);
-OpenFeatureAPI.getInstance().setProvider(provider);
+OpenFeatureAPI.getInstance().setProviderAndWait(provider); // important to use setProviderAndWait()
 
 // Use OpenFeature client
 Client client = OpenFeatureAPI.getInstance().getClient();
@@ -49,18 +49,42 @@ String value = client.getStringValue("my-flag", "default-value");
 
 ## Configuration
 
+### Environment Variables
 
-### Exposure Logging
+Configure the provider behavior using environment variables:
 
-Enable or disable exposure logging:
+- `CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS`: How often to poll for flag configuration updates (default: `300` seconds)
+
+// Deprecated in favour of a custom ChannelFactory:
+- `CONFIDENCE_DOMAIN`: Override the default Confidence service endpoint (default: `edge-grpc.spotify.com`)
+- `CONFIDENCE_GRPC_PLAINTEXT`: Use plaintext gRPC connections instead of TLS (default: `false`)
+
+### Custom Channel Factory (Advanced)
+
+For testing or advanced production scenarios, you can provide a custom `ChannelFactory` to control how gRPC channels are created:
 
 ```java
-// Enable exposure logging (default)
-new OpenFeatureLocalResolveProvider(apiSecret, clientSecret, true);
+import com.spotify.confidence.LocalProviderConfig;
+import com.spotify.confidence.ChannelFactory;
 
-// Disable exposure logging
-new OpenFeatureLocalResolveProvider(apiSecret, clientSecret, false);
+// Example: Custom channel factory for testing with in-process server
+ChannelFactory mockFactory = (target, interceptors) ->
+    InProcessChannelBuilder.forName("test-server")
+        .usePlaintext()
+        .intercept(interceptors.toArray(new ClientInterceptor[0]))
+        .build();
+
+ApiSecret apiSecret = new ApiSecret("client-id", "client-secret");
+LocalProviderConfig config = new LocalProviderConfig(apiSecret, mockFactory);
+OpenFeatureLocalResolveProvider provider =
+    new OpenFeatureLocalResolveProvider(config, "client-secret");
 ```
+
+This is particularly useful for:
+- **Unit testing**: Inject in-process channels with mock gRPC servers
+- **Integration testing**: Point to local test servers
+- **Production customization**: Custom TLS settings, proxies, or connection pooling
+- **Debugging**: Add custom logging or tracing interceptors
 
 ## Credentials
 

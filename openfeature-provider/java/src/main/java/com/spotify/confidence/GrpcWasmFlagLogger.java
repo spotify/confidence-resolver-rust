@@ -30,13 +30,13 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
 
   @VisibleForTesting
   public GrpcWasmFlagLogger(ApiSecret apiSecret, FlagLogWriter writer) {
-    this.stub = createAuthenticatedStub(apiSecret);
+    this.stub = createAuthenticatedStub(apiSecret, new DefaultChannelFactory());
     this.executorService = Executors.newCachedThreadPool();
     this.writer = writer;
   }
 
-  public GrpcWasmFlagLogger(ApiSecret apiSecret) {
-    this.stub = createAuthenticatedStub(apiSecret);
+  public GrpcWasmFlagLogger(ApiSecret apiSecret, ChannelFactory channelFactory) {
+    this.stub = createAuthenticatedStub(apiSecret, channelFactory);
     this.executorService = Executors.newCachedThreadPool();
     this.writer =
         request ->
@@ -54,8 +54,8 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
   }
 
   private static InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub
-      createAuthenticatedStub(ApiSecret apiSecret) {
-    final var channel = createConfidenceChannel();
+      createAuthenticatedStub(ApiSecret apiSecret, ChannelFactory channelFactory) {
+    final var channel = createConfidenceChannel(channelFactory);
     final AuthServiceGrpc.AuthServiceBlockingStub authService =
         AuthServiceGrpc.newBlockingStub(channel);
     final TokenHolder tokenHolder =

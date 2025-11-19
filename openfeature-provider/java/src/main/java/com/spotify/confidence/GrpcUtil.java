@@ -7,6 +7,8 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -46,17 +48,9 @@ final class GrpcUtil {
     return completableFuture;
   }
 
-  static ManagedChannel createConfidenceChannel() {
+  static ManagedChannel createConfidenceChannel(ChannelFactory channelFactory) {
     final String confidenceDomain =
         Optional.ofNullable(System.getenv("CONFIDENCE_DOMAIN")).orElse(CONFIDENCE_DOMAIN);
-    final boolean useGrpcPlaintext =
-        Optional.ofNullable(System.getenv("CONFIDENCE_GRPC_PLAINTEXT"))
-            .map(Boolean::parseBoolean)
-            .orElse(false);
-    ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget(confidenceDomain);
-    if (useGrpcPlaintext) {
-      builder = builder.usePlaintext();
-    }
-    return builder.intercept(new DefaultDeadlineClientInterceptor(Duration.ofMinutes(1))).build();
+    return channelFactory.create(confidenceDomain, List.of(new DefaultDeadlineClientInterceptor(Duration.ofMinutes(1))));
   }
 }
