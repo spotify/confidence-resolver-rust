@@ -100,15 +100,14 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
         })
     }
 
-    let telemetry_data =
-        if total_resolve_rps > 0.0 || first_sdk.is_some() {
-            Some(TelemetryData {
-                resolve_rps: total_resolve_rps,
-                sdk: first_sdk,
-            })
-        } else {
-            None
-        };
+    let telemetry_data = if total_resolve_rps > 0.0 || first_sdk.is_some() {
+        Some(TelemetryData {
+            resolve_rps: total_resolve_rps,
+            sdk: first_sdk,
+        })
+    } else {
+        None
+    };
 
     WriteFlagLogsRequest {
         telemetry_data,
