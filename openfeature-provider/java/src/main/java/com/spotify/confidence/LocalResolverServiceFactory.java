@@ -80,10 +80,16 @@ class LocalResolverServiceFactory implements ResolverServiceFactory {
         TimeUnit.SECONDS);
 
     logPollExecutor.scheduleAtFixedRate(
-        () ->
+        () -> {
+          try {
             wasmResolverApi.updateStateAndFlushLogs(
                 sidecarFlagsAdminFetcher.rawStateHolder().get(),
-                sidecarFlagsAdminFetcher.accountId),
+                sidecarFlagsAdminFetcher.accountId);
+          } catch (Exception e) {
+            System.err.println("Error in log poll executor: " + e.getMessage());
+            e.printStackTrace();
+          }
+        },
         POLL_LOG_INTERVAL.getSeconds(),
         POLL_LOG_INTERVAL.getSeconds(),
         TimeUnit.SECONDS);

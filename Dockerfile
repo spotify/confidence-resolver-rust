@@ -614,7 +614,7 @@ COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/l
 
 # Force build stages to run
 COPY --from=confidence-cloudflare-resolver.build /workspace/Cargo.toml /markers/build-cloudflare
-COPY --from=openfeature-provider-js.build /app/dist/index.node.js /artifacts/openfeature-js/
+COPY --from=openfeature-provider-js.build /app/dist/index.node.mjs /artifacts/openfeature-js/
 COPY --from=openfeature-provider-java.build /app/target/*.jar /artifacts/openfeature-java/
 COPY --from=openfeature-provider-go.build /app/.build.stamp /artifacts/openfeature-go/
 COPY --from=openfeature-provider-ruby.build /app/.build.stamp /artifacts/openfeature-ruby/

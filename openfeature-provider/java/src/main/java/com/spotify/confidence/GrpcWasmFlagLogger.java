@@ -74,6 +74,22 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
       return;
     }
 
+    if (request.hasTelemetryData()) {
+      String sdkId = "nil";
+      String sdkVersion = "nil";
+      if (request.getTelemetryData().hasSdk()) {
+        sdkId = request.getTelemetryData().getSdk().getId().toString();
+        sdkVersion = request.getTelemetryData().getSdk().getVersion();
+      }
+      String logMsg = String.format(
+          "Telemetry Data: dropped_events=%d, resolve_rps=%.2f, sdk_id=%s, sdk_version=%s",
+          request.getTelemetryData().getDroppedEvents(),
+          request.getTelemetryData().getResolveRps(),
+          sdkId,
+          sdkVersion);
+      logger.debug(logMsg);
+    }
+
     final int flagAssignedCount = request.getFlagAssignedCount();
 
     // If flag_assigned list is small enough, send everything as-is
