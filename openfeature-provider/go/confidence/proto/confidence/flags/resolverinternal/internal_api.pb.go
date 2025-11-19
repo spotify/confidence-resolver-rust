@@ -242,9 +242,13 @@ func (x *WriteFlagAssignedResponse) GetAssignedFlags() int64 {
 // monitor sender-side issues or performance
 type TelemetryData struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// "events" dropped from the sender to due to issues or inefficiencies.
+	// "events" dropped from the sender due to issues or inefficiencies.
 	// This is implemented as a delta counter between TelemetryData messages
 	DroppedEvents int64 `protobuf:"varint,1,opt,name=dropped_events,json=droppedEvents,proto3" json:"dropped_events,omitempty"`
+	// Requests per second for resolve calls (from WASM resolver)
+	ResolveRps float64 `protobuf:"fixed64,2,opt,name=resolve_rps,json=resolveRps,proto3" json:"resolve_rps,omitempty"`
+	// Information about the SDK/provider
+	Sdk           *resolvertypes.Sdk `protobuf:"bytes,3,opt,name=sdk,proto3" json:"sdk,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -284,6 +288,20 @@ func (x *TelemetryData) GetDroppedEvents() int64 {
 		return x.DroppedEvents
 	}
 	return 0
+}
+
+func (x *TelemetryData) GetResolveRps() float64 {
+	if x != nil {
+		return x.ResolveRps
+	}
+	return 0
+}
+
+func (x *TelemetryData) GetSdk() *resolvertypes.Sdk {
+	if x != nil {
+		return x.Sdk
+	}
+	return nil
 }
 
 type ResolveToken struct {
@@ -544,9 +562,12 @@ const file_confidence_flags_resolver_v1_internal_api_proto_rawDesc = "" +
 	"\rflag_assigned\x18\x01 \x03(\v21.confidence.flags.resolver.v1.events.FlagAssignedB\x04\xe2A\x01\x02R\fflagAssigned\x12X\n" +
 	"\x0etelemetry_data\x18\x02 \x01(\v2+.confidence.flags.resolver.v1.TelemetryDataB\x04\xe2A\x01\x01R\rtelemetryData\"B\n" +
 	"\x19WriteFlagAssignedResponse\x12%\n" +
-	"\x0eassigned_flags\x18\x01 \x01(\x03R\rassignedFlags\"<\n" +
+	"\x0eassigned_flags\x18\x01 \x01(\x03R\rassignedFlags\"\x98\x01\n" +
 	"\rTelemetryData\x12+\n" +
-	"\x0edropped_events\x18\x01 \x01(\x03B\x04\xe2A\x01\x02R\rdroppedEvents\"j\n" +
+	"\x0edropped_events\x18\x01 \x01(\x03B\x04\xe2A\x01\x02R\rdroppedEvents\x12\x1f\n" +
+	"\vresolve_rps\x18\x02 \x01(\x01R\n" +
+	"resolveRps\x129\n" +
+	"\x03sdk\x18\x03 \x01(\v2!.confidence.flags.resolver.v1.SdkB\x04\xe2A\x01\x01R\x03sdk\"j\n" +
 	"\fResolveToken\x12I\n" +
 	"\btoken_v1\x18\x01 \x01(\v2,.confidence.flags.resolver.v1.ResolveTokenV1H\x00R\atokenV1B\x0f\n" +
 	"\rresolve_token\"\x9a\a\n" +
@@ -608,9 +629,10 @@ var file_confidence_flags_resolver_v1_internal_api_proto_goTypes = []any{
 	(*resolverevents.FlagAssigned)(nil),          // 9: confidence.flags.resolver.v1.events.FlagAssigned
 	(*v1.ClientResolveInfo)(nil),                 // 10: confidence.flags.admin.v1.ClientResolveInfo
 	(*v1.FlagResolveInfo)(nil),                   // 11: confidence.flags.admin.v1.FlagResolveInfo
-	(*structpb.Struct)(nil),                      // 12: google.protobuf.Struct
-	(resolvertypes.ResolveReason)(0),             // 13: confidence.flags.resolver.v1.ResolveReason
-	(*resolverevents.FallthroughAssignment)(nil), // 14: confidence.flags.resolver.v1.events.FallthroughAssignment
+	(*resolvertypes.Sdk)(nil),                    // 12: confidence.flags.resolver.v1.Sdk
+	(*structpb.Struct)(nil),                      // 13: google.protobuf.Struct
+	(resolvertypes.ResolveReason)(0),             // 14: confidence.flags.resolver.v1.ResolveReason
+	(*resolverevents.FallthroughAssignment)(nil), // 15: confidence.flags.resolver.v1.events.FallthroughAssignment
 }
 var file_confidence_flags_resolver_v1_internal_api_proto_depIdxs = []int32{
 	9,  // 0: confidence.flags.resolver.v1.WriteFlagLogsRequest.flag_assigned:type_name -> confidence.flags.resolver.v1.events.FlagAssigned
@@ -619,21 +641,22 @@ var file_confidence_flags_resolver_v1_internal_api_proto_depIdxs = []int32{
 	11, // 3: confidence.flags.resolver.v1.WriteFlagLogsRequest.flag_resolve_info:type_name -> confidence.flags.admin.v1.FlagResolveInfo
 	9,  // 4: confidence.flags.resolver.v1.WriteFlagAssignedRequest.flag_assigned:type_name -> confidence.flags.resolver.v1.events.FlagAssigned
 	4,  // 5: confidence.flags.resolver.v1.WriteFlagAssignedRequest.telemetry_data:type_name -> confidence.flags.resolver.v1.TelemetryData
-	6,  // 6: confidence.flags.resolver.v1.ResolveToken.token_v1:type_name -> confidence.flags.resolver.v1.ResolveTokenV1
-	12, // 7: confidence.flags.resolver.v1.ResolveTokenV1.evaluation_context:type_name -> google.protobuf.Struct
-	7,  // 8: confidence.flags.resolver.v1.ResolveTokenV1.assignments:type_name -> confidence.flags.resolver.v1.ResolveTokenV1.AssignmentsEntry
-	8,  // 9: confidence.flags.resolver.v1.ResolveTokenV1.AssignmentsEntry.value:type_name -> confidence.flags.resolver.v1.ResolveTokenV1.AssignedFlag
-	13, // 10: confidence.flags.resolver.v1.ResolveTokenV1.AssignedFlag.reason:type_name -> confidence.flags.resolver.v1.ResolveReason
-	14, // 11: confidence.flags.resolver.v1.ResolveTokenV1.AssignedFlag.fallthrough_assignments:type_name -> confidence.flags.resolver.v1.events.FallthroughAssignment
-	2,  // 12: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagAssigned:input_type -> confidence.flags.resolver.v1.WriteFlagAssignedRequest
-	0,  // 13: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:input_type -> confidence.flags.resolver.v1.WriteFlagLogsRequest
-	3,  // 14: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagAssigned:output_type -> confidence.flags.resolver.v1.WriteFlagAssignedResponse
-	1,  // 15: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:output_type -> confidence.flags.resolver.v1.WriteFlagLogsResponse
-	14, // [14:16] is the sub-list for method output_type
-	12, // [12:14] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	12, // 6: confidence.flags.resolver.v1.TelemetryData.sdk:type_name -> confidence.flags.resolver.v1.Sdk
+	6,  // 7: confidence.flags.resolver.v1.ResolveToken.token_v1:type_name -> confidence.flags.resolver.v1.ResolveTokenV1
+	13, // 8: confidence.flags.resolver.v1.ResolveTokenV1.evaluation_context:type_name -> google.protobuf.Struct
+	7,  // 9: confidence.flags.resolver.v1.ResolveTokenV1.assignments:type_name -> confidence.flags.resolver.v1.ResolveTokenV1.AssignmentsEntry
+	8,  // 10: confidence.flags.resolver.v1.ResolveTokenV1.AssignmentsEntry.value:type_name -> confidence.flags.resolver.v1.ResolveTokenV1.AssignedFlag
+	14, // 11: confidence.flags.resolver.v1.ResolveTokenV1.AssignedFlag.reason:type_name -> confidence.flags.resolver.v1.ResolveReason
+	15, // 12: confidence.flags.resolver.v1.ResolveTokenV1.AssignedFlag.fallthrough_assignments:type_name -> confidence.flags.resolver.v1.events.FallthroughAssignment
+	2,  // 13: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagAssigned:input_type -> confidence.flags.resolver.v1.WriteFlagAssignedRequest
+	0,  // 14: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:input_type -> confidence.flags.resolver.v1.WriteFlagLogsRequest
+	3,  // 15: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagAssigned:output_type -> confidence.flags.resolver.v1.WriteFlagAssignedResponse
+	1,  // 16: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:output_type -> confidence.flags.resolver.v1.WriteFlagLogsResponse
+	15, // [15:17] is the sub-list for method output_type
+	13, // [13:15] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_confidence_flags_resolver_v1_internal_api_proto_init() }

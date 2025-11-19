@@ -2,11 +2,14 @@ use std::sync::{
     atomic::{AtomicU32, AtomicU64, Ordering},
     Arc, RwLock,
 };
-use std::time::Instant;
 
-use crate::schema_util::{DerivedClientSchema, SchemaFromEvaluationContext};
+use crate::{
+    schema_util::{DerivedClientSchema, SchemaFromEvaluationContext},
+    Host,
+};
 use arc_swap::ArcSwap;
 use papaya::{HashMap, HashSet};
+use std::marker::PhantomData;
 
 mod pb {
     pub use crate::proto::confidence::flags::admin::v1::{
@@ -17,20 +20,22 @@ mod pb {
 }
 
 #[derive(Debug)]
-pub struct ResolveLogger {
+pub struct ResolveLogger<H> {
     state: ArcSwap<RwLock<Option<ResolveInfoState>>>,
+    _phantom: PhantomData<H>,
 }
 
-impl Default for ResolveLogger {
+impl<H: Host> Default for ResolveLogger<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ResolveLogger {
-    pub fn new() -> ResolveLogger {
+impl<H: Host> ResolveLogger<H> {
+    pub fn new() -> ResolveLogger<H> {
         ResolveLogger {
-            state: ArcSwap::new(Arc::new(RwLock::new(Some(ResolveInfoState::default())))),
+            state: ArcSwap::new(Arc::new(RwLock::new(Some(ResolveInfoState::new::<H>())))),
+            _phantom: PhantomData,
         }
     }
 
@@ -128,7 +133,7 @@ impl ResolveLogger {
     pub fn checkpoint(&self) -> pb::WriteFlagLogsRequest {
         let lock = self
             .state
-            .swap(Arc::new(RwLock::new(Some(ResolveInfoState::default()))));
+            .swap(Arc::new(RwLock::new(Some(ResolveInfoState::new::<H>()))));
         // the only operation we do under write-lock is take the option, and that can't panic, so lock shouldn't be poisoned,
         // even so, if it some how was it's safe to still use the value.
         let mut wg = lock
@@ -143,13 +148,12 @@ impl ResolveLogger {
 
                 // Calculate RPS
                 let resolve_count = state.resolve_count.load(Ordering::Relaxed);
-                let resolve_rps = if let Some(start) = state.start_time {
-                    let elapsed = start.elapsed().as_secs_f64();
-                    if elapsed > 0.0 {
-                        resolve_count as f64 / elapsed
-                    } else {
-                        0.0
-                    }
+                let current_time_seconds = H::current_time().seconds as f64
+                    + (H::current_time().nanos as f64 / 1_000_000_000.0);
+                let elapsed = current_time_seconds - state.start_time_seconds;
+
+                let resolve_rps = if elapsed > 0.0 {
+                    resolve_count as f64 / elapsed
                 } else {
                     0.0
                 };
@@ -200,8 +204,22 @@ struct ResolveInfoState {
     flag_resolve_info: HashMap<String, FlagResolveInfo>,
     client_resolve_info: HashMap<String, ClientResolveInfo>,
     resolve_count: AtomicU64,
-    start_time: Option<Instant>,
+    start_time_seconds: f64,
     sdk: RwLock<Option<crate::flags_resolver::Sdk>>,
+}
+
+impl ResolveInfoState {
+    fn new<H: Host>() -> Self {
+        let t = H::current_time();
+        let start_time_seconds = t.seconds as f64 + (t.nanos as f64 / 1_000_000_000.0);
+        ResolveInfoState {
+            flag_resolve_info: HashMap::default(),
+            client_resolve_info: HashMap::default(),
+            resolve_count: AtomicU64::new(0),
+            start_time_seconds,
+            sdk: RwLock::new(None),
+        }
+    }
 }
 
 impl Default for ResolveInfoState {
@@ -210,7 +228,7 @@ impl Default for ResolveInfoState {
             flag_resolve_info: HashMap::default(),
             client_resolve_info: HashMap::default(),
             resolve_count: AtomicU64::new(0),
-            start_time: Some(Instant::now()),
+            start_time_seconds: 0.0,
             sdk: RwLock::new(None),
         }
     }
@@ -342,13 +360,64 @@ impl PapayaCounterMapExt for HashMap<String, AtomicU32> {
 #[cfg(test)]
 mod tests {
     use crate::{
-      proto::{confidence::flags::admin::v1::{
-        context_field_semantic_type::{CountrySemanticType, DateSemanticType, TimestampSemanticType, VersionSemanticType}, evaluation_context_schema_field, ContextFieldSemanticType
-      }, google::Struct}, resolve_logger::{pb::WriteFlagLogsRequest, ResolveLogger}, Client, Account
+        proto::{
+            confidence::flags::admin::v1::{
+                context_field_semantic_type::{
+                    CountrySemanticType, DateSemanticType, TimestampSemanticType, VersionSemanticType,
+                },
+                evaluation_context_schema_field, ContextFieldSemanticType,
+            },
+            google::Struct,
+        },
+        resolve_logger::{pb::WriteFlagLogsRequest, ResolveLogger},
+        Account, Client, Host,
     };
     use crate::proto::confidence::flags::admin::v1::context_field_semantic_type::country_semantic_type::CountryFormat;
-    use std::{collections::BTreeMap};
+    use crate::proto::google::Timestamp;
     use serde_json::json;
+    use std::collections::BTreeMap;
+
+    struct TestHost;
+    impl Host for TestHost {
+        #[cfg(not(feature = "std"))]
+        fn random_alphanumeric(_len: usize) -> String {
+            "random".to_string()
+        }
+
+        #[cfg(not(feature = "std"))]
+        fn current_time() -> Timestamp {
+            Timestamp {
+                seconds: 1680352496,
+                nanos: 0,
+            }
+        }
+
+        fn log_resolve(
+            _resolve_id: &str,
+            _evaluation_context: &Struct,
+            _values: &[crate::ResolvedValue<'_>],
+            _client: &Client,
+            _sdk: &Option<crate::flags_resolver::Sdk>,
+        ) {
+        }
+
+        fn log_assign(
+            _resolve_id: &str,
+            _evaluation_context: &Struct,
+            _assigned_flags: &[crate::FlagToApply],
+            _client: &Client,
+            _sdk: &Option<crate::flags_resolver::Sdk>,
+        ) {
+        }
+
+        fn encrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
+            Ok(token_data.to_vec())
+        }
+
+        fn decrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
+            Ok(token_data.to_vec())
+        }
+    }
 
     fn test_client() -> Client {
         Client {
@@ -362,7 +431,7 @@ mod tests {
 
     #[test]
     fn decorates_with_context_schema() {
-        let logger = ResolveLogger::new();
+        let logger = ResolveLogger::<TestHost>::new();
         let ctx: Struct = serde_json::from_value(json!({
           "country": "SE",
           "not_a_country": "abc",
@@ -457,7 +526,7 @@ mod tests {
 
     #[test]
     fn decorates_with_list_schema() {
-        let logger = ResolveLogger::new();
+        let logger = ResolveLogger::<TestHost>::new();
         let ctx: Struct = serde_json::from_value(json!({
           "country": ["SE","DK","NO"],
           "random_stuff": ["SE","abc",3]
@@ -502,7 +571,7 @@ mod tests {
             Flag, Segment,
         };
 
-        let logger = ResolveLogger::new();
+        let logger = ResolveLogger::<TestHost>::new();
 
         let flag = Flag {
             name: "flags/test".into(),
@@ -569,7 +638,7 @@ mod tests {
             Flag, Segment,
         };
 
-        let logger = ResolveLogger::new();
+        let logger = ResolveLogger::<TestHost>::new();
 
         let flag = Flag {
             name: "flags/test-fallthrough".into(),
@@ -662,7 +731,7 @@ mod tests {
         use std::thread;
         use std::time::Duration;
 
-        let logger = Arc::new(ResolveLogger::new());
+        let logger = Arc::new(ResolveLogger::<TestHost>::new());
         let flag = Flag {
             name: "flags/concurrent".into(),
             ..Default::default()

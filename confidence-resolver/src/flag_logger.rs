@@ -4,7 +4,7 @@ use crate::proto::confidence::flags::admin::v1::flag_resolve_info::{
 };
 use crate::proto::confidence::flags::admin::v1::{ClientResolveInfo, FlagResolveInfo};
 use crate::proto::confidence::flags::resolver::v1::events::FlagAssigned;
-use crate::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest;
+use crate::proto::confidence::flags::resolver::v1::{TelemetryData, WriteFlagLogsRequest};
 use std::collections::{HashMap, HashSet};
 
 pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLogsRequest {
@@ -13,8 +13,19 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
     // map of flag to flag resolve info
     let mut flag_resolve_map: HashMap<String, VariantRuleResolveInfo> = HashMap::new();
     let mut flag_assigned: Vec<FlagAssigned> = vec![];
+    let mut total_dropped_events: i64 = 0;
+    let mut total_resolve_rps: f64 = 0.0;
+    let mut first_sdk: Option<crate::proto::confidence::flags::resolver::v1::Sdk> = None;
 
     for flag_logs_message in message_batch {
+        if let Some(td) = &flag_logs_message.telemetry_data {
+            total_dropped_events += td.dropped_events;
+            total_resolve_rps += td.resolve_rps;
+            if first_sdk.is_none() && td.sdk.is_some() {
+                first_sdk = td.sdk.clone();
+            }
+        }
+
         for c in &flag_logs_message.client_resolve_info {
             if let Some(set) = schema_map.get_mut(&c.client_credential) {
                 for schema in &c.schema {
@@ -91,8 +102,18 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
         })
     }
 
+    let telemetry_data = if total_dropped_events > 0 || total_resolve_rps > 0.0 || first_sdk.is_some() {
+        Some(TelemetryData {
+            dropped_events: total_dropped_events,
+            resolve_rps: total_resolve_rps,
+            sdk: first_sdk,
+        })
+    } else {
+        None
+    };
+
     WriteFlagLogsRequest {
-        telemetry_data: None,
+        telemetry_data,
         flag_assigned,
         flag_resolve_info,
         client_resolve_info,
