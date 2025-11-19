@@ -121,7 +121,6 @@ public class AssignLoggerTest {
     when(stub.writeFlagAssigned(any())).thenReturn(WriteFlagAssignedResponse.getDefaultInstance());
     final long capacityBefore = logger.remainingCapacity();
     addManyAssigns();
-    assertThat(logger.dropCount()).isZero();
     assertThat(logger.remainingCapacity()).isLessThan(capacityBefore);
     logger.checkpoint();
     assertThat(logger.remainingCapacity()).isEqualTo(capacityBefore);
@@ -135,66 +134,6 @@ public class AssignLoggerTest {
 
     assertThatExceptionOfType(RuntimeException.class).isThrownBy(logger::checkpoint);
     assertThat(logger.remainingCapacity()).isEqualTo(capacityAfter);
-  }
-
-  @Test
-  void eventuallyDropsAssigns() {
-    assertThat(logger.dropCount()).isZero();
-    addManyAssigns();
-    addManyAssigns();
-    assertThat(logger.dropCount()).isZero();
-    addManyAssigns();
-    assertThat(logger.dropCount()).isGreaterThan(0);
-  }
-
-  @Test
-  void sendsAndResetsDropCount() {
-    when(stub.writeFlagAssigned(any())).thenReturn(WriteFlagAssignedResponse.getDefaultInstance());
-    addManyAssigns();
-    addManyAssigns();
-    addManyAssigns();
-
-    final long dropped = logger.dropCount();
-    assertThat(dropped).isPositive();
-
-    logger.checkpoint();
-
-    assertThat(logger.dropCount()).isZero();
-
-    final InOrder inOrder = Mockito.inOrder(stub);
-    inOrder.verify(stub).writeFlagAssigned(matchDropCount(dropped));
-    inOrder.verify(stub, atLeastOnce()).writeFlagAssigned(matchDropCount(0));
-    inOrder.verifyNoMoreInteractions();
-  }
-
-  @Test
-  void resendsDropCountOnFailure() {
-    when(stub.writeFlagAssigned(any()))
-        .thenThrow(RuntimeException.class)
-        .thenReturn(WriteFlagAssignedResponse.getDefaultInstance());
-
-    addManyAssigns();
-    addManyAssigns();
-    addManyAssigns();
-
-    final long dropped = logger.dropCount();
-    assertThat(dropped).isPositive();
-
-    assertThatExceptionOfType(RuntimeException.class).isThrownBy(logger::checkpoint);
-
-    assertThat(logger.dropCount()).isEqualTo(dropped);
-    verify(stub).writeFlagAssigned(matchDropCount(dropped));
-
-    logger.checkpoint();
-
-    final InOrder inOrder = Mockito.inOrder(stub);
-    inOrder.verify(stub, times(2)).writeFlagAssigned(matchDropCount(dropped));
-    inOrder.verify(stub, atLeastOnce()).writeFlagAssigned(matchDropCount(0));
-    inOrder.verifyNoMoreInteractions();
-  }
-
-  private static WriteFlagAssignedRequest matchDropCount(long value) {
-    return argThat(request -> request.getTelemetryData().getDroppedEvents() == value);
   }
 
   private void addManyAssigns() {

@@ -51,7 +51,6 @@ class GrpcWasmFlagLoggerTest {
     final var request =
         WriteFlagLogsRequest.newBuilder()
             .addAllFlagAssigned(createFlagAssignedList(100))
-            .setTelemetryData(TelemetryData.newBuilder().setDroppedEvents(5).build())
             .addClientResolveInfo(
                 ClientResolveInfo.newBuilder().setClient("clients/test-client").build())
             .addFlagResolveInfo(FlagResolveInfo.newBuilder().setFlag("flags/test-flag").build())
@@ -68,7 +67,6 @@ class GrpcWasmFlagLoggerTest {
 
     final WriteFlagLogsRequest sentRequest = captor.getValue();
     assertEquals(100, sentRequest.getFlagAssignedCount());
-    assertEquals(5, sentRequest.getTelemetryData().getDroppedEvents());
     assertEquals(1, sentRequest.getClientResolveInfoCount());
     assertEquals(1, sentRequest.getFlagResolveInfoCount());
 
@@ -87,7 +85,7 @@ class GrpcWasmFlagLoggerTest {
     final var request =
         WriteFlagLogsRequest.newBuilder()
             .addAllFlagAssigned(createFlagAssignedList(totalFlags))
-            .setTelemetryData(TelemetryData.newBuilder().setDroppedEvents(10).build())
+            .setTelemetryData(TelemetryData.newBuilder().build())
             .addClientResolveInfo(
                 ClientResolveInfo.newBuilder().setClient("clients/test-client").build())
             .addFlagResolveInfo(FlagResolveInfo.newBuilder().setFlag("flags/test-flag").build())
@@ -109,7 +107,6 @@ class GrpcWasmFlagLoggerTest {
     final WriteFlagLogsRequest firstChunk = sentRequests.get(0);
     assertEquals(1000, firstChunk.getFlagAssignedCount());
     assertTrue(firstChunk.hasTelemetryData());
-    assertEquals(10, firstChunk.getTelemetryData().getDroppedEvents());
     assertEquals(1, firstChunk.getClientResolveInfoCount());
     assertEquals("clients/test-client", firstChunk.getClientResolveInfo(0).getClient());
     assertEquals(1, firstChunk.getFlagResolveInfoCount());
@@ -144,7 +141,7 @@ class GrpcWasmFlagLoggerTest {
     final var request =
         WriteFlagLogsRequest.newBuilder()
             .addAllFlagAssigned(createFlagAssignedList(totalFlags))
-            .setTelemetryData(TelemetryData.newBuilder().setDroppedEvents(7).build())
+            .setTelemetryData(TelemetryData.newBuilder().build())
             .build();
 
     final ArgumentCaptor<WriteFlagLogsRequest> captor =
@@ -180,7 +177,7 @@ class GrpcWasmFlagLoggerTest {
 
     final var request =
         WriteFlagLogsRequest.newBuilder()
-            .setTelemetryData(TelemetryData.newBuilder().setDroppedEvents(3).build())
+            .setTelemetryData(TelemetryData.newBuilder().build())
             .addClientResolveInfo(
                 ClientResolveInfo.newBuilder().setClient("clients/test-client").build())
             .build();

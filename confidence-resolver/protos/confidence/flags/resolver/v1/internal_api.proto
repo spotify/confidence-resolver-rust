@@ -109,12 +109,6 @@ message WriteFlagAssignedResponse {
 // Collection of telemetry metrics, usually included in request messages to
 // monitor sender-side issues or performance
 message TelemetryData {
-  // "events" dropped from the sender due to issues or inefficiencies.
-  // This is implemented as a delta counter between TelemetryData messages
-  int64 dropped_events = 1 [
-    (google.api.field_behavior) = REQUIRED
-  ];
-
   // Requests per second for resolve calls (from WASM resolver)
   double resolve_rps = 2;
 

@@ -161,7 +161,6 @@ impl<H: Host> ResolveLogger<H> {
                 let telemetry_data = if resolve_count > 0 {
                     let sdk = state.sdk.read().ok().and_then(|s| s.clone());
                     Some(pb::TelemetryData {
-                        dropped_events: 0,
                         resolve_rps,
                         sdk,
                     })
