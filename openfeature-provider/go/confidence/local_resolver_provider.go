@@ -253,6 +253,12 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 		Apply:             true,
 		ClientSecret:      p.clientSecret,
 		EvaluationContext: protoCtx,
+		Sdk: &resolvertypes.Sdk{
+			Sdk: &resolvertypes.Sdk_Id{
+				Id: resolvertypes.SdkId_SDK_ID_GO_PROVIDER,
+			},
+			Version: Version,
+		},
 	}
 
 	// Create ResolveWithSticky request

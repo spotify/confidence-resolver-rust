@@ -19,7 +19,7 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
 
     for flag_logs_message in message_batch {
         if let Some(td) = &flag_logs_message.telemetry_data {
-            total_dropped_events += td.dropped_events;
+            total_dropped_events = total_dropped_events.saturating_add(td.dropped_events);
             total_resolve_rps += td.resolve_rps;
             if first_sdk.is_none() && td.sdk.is_some() {
                 first_sdk = td.sdk.clone();
@@ -102,15 +102,16 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
         })
     }
 
-    let telemetry_data = if total_dropped_events > 0 || total_resolve_rps > 0.0 || first_sdk.is_some() {
-        Some(TelemetryData {
-            dropped_events: total_dropped_events,
-            resolve_rps: total_resolve_rps,
-            sdk: first_sdk,
-        })
-    } else {
-        None
-    };
+    let telemetry_data =
+        if total_dropped_events > 0 || total_resolve_rps > 0.0 || first_sdk.is_some() {
+            Some(TelemetryData {
+                dropped_events: total_dropped_events,
+                resolve_rps: total_resolve_rps,
+                sdk: first_sdk,
+            })
+        } else {
+            None
+        };
 
     WriteFlagLogsRequest {
         telemetry_data,

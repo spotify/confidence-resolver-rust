@@ -410,11 +410,17 @@ mod tests {
         ) {
         }
 
-        fn encrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
+        fn encrypt_resolve_token(
+            token_data: &[u8],
+            _encryption_key: &[u8],
+        ) -> Result<Vec<u8>, String> {
             Ok(token_data.to_vec())
         }
 
-        fn decrypt_resolve_token(token_data: &[u8], _encryption_key: &[u8]) -> Result<Vec<u8>, String> {
+        fn decrypt_resolve_token(
+            token_data: &[u8],
+            _encryption_key: &[u8],
+        ) -> Result<Vec<u8>, String> {
             Ok(token_data.to_vec())
         }
     }
