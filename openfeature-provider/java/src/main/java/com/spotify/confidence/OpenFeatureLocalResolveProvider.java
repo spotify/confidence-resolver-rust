@@ -76,6 +76,53 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   }
 
   /**
+   * Creates a new OpenFeature provider for local flag resolution with custom channel factory.
+   *
+   * <p>This constructor accepts a {@link LocalProviderConfig} which allows you to customize
+   * how gRPC channels are created, particularly useful for testing with mock servers or
+   * advanced production scenarios requiring custom connection logic.
+   *
+   * <p><strong>Example with custom channel factory for testing:</strong>
+   * <pre>{@code
+   * ChannelFactory mockFactory = (target, interceptors) ->
+   *     InProcessChannelBuilder.forName("test-server")
+   *         .usePlaintext()
+   *         .intercept(interceptors.toArray(new ClientInterceptor[0]))
+   *         .build();
+   *
+   * ApiSecret apiSecret = new ApiSecret("client-id", "client-secret");
+   * LocalProviderConfig config = new LocalProviderConfig(apiSecret, mockFactory);
+   * OpenFeatureLocalResolveProvider provider =
+   *     new OpenFeatureLocalResolveProvider(config, "client-secret");
+   * }</pre>
+   *
+   * @param config the provider configuration including API credentials and optional channel factory
+   * @param clientSecret the client secret for your application, used for flag resolution
+   *     authentication
+   */
+  public OpenFeatureLocalResolveProvider(LocalProviderConfig config, String clientSecret) {
+    this(config, clientSecret, new RemoteResolverFallback());
+  }
+
+  /**
+   * Creates a new OpenFeature provider for local flag resolution with custom channel factory
+   * and sticky resolve strategy.
+   *
+   * @param config the provider configuration including API credentials and optional channel factory
+   * @param clientSecret the client secret for your application, used for flag resolution
+   *     authentication
+   * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
+   */
+  public OpenFeatureLocalResolveProvider(
+      LocalProviderConfig config, String clientSecret, StickyResolveStrategy stickyResolveStrategy) {
+    this.flagResolverService =
+        LocalResolverServiceFactory.from(
+            config.getApiSecret(), stickyResolveStrategy, config.getChannelFactory());
+    this.clientSecret = clientSecret;
+    this.stickyResolveStrategy = stickyResolveStrategy;
+  }
+
+  /**
    * Creates a new OpenFeature provider for local flag resolution with full configuration control.
    *
    * <p>This is the primary constructor that allows full control over the provider configuration,
@@ -88,7 +135,6 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
    *     authentication. This is different from the API secret and is specific to your application
    *     configuration
    * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
-   * @since 0.2.4
    */
   public OpenFeatureLocalResolveProvider(
       ApiSecret apiSecret, String clientSecret, StickyResolveStrategy stickyResolveStrategy) {
