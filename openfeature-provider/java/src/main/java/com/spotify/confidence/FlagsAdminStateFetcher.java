@@ -48,10 +48,6 @@ class FlagsAdminStateFetcher implements AccountStateProvider {
         this.resolverStateService = resolverStateService;
     }
 
-    public AtomicReference<byte[]> rawStateHolder() {
-        return rawResolverStateHolder;
-    }
-
     @Override
     public byte[] provide() {
         return rawResolverStateHolder.get();

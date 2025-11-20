@@ -306,6 +306,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     public void shutdown() {
         this.stickyResolveStrategy.close();
         this.wasmResolveApi.close();
+        // shutdown grpc classes... work with a closer?
         FeatureProvider.super.shutdown();
     }
 
