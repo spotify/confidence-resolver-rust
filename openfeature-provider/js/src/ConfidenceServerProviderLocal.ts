@@ -286,7 +286,9 @@ export class ConfidenceServerProviderLocal implements Provider {
         throw new Error(`${response.status}: ${response.statusText}`);
       }
     } catch (err) {
+      // Network error (DNS/connect/TLS) - already retried by middleware, log and rethrow
       logger.warn('Failed to send flag logs', err);
+      throw err;
     }
   }
 
