@@ -1,5 +1,8 @@
 use confidence_resolver::{
-    FlagToApply, Host, ResolvedValue, ResolverState, assign_logger::AssignLogger, flag_logger, proto::{confidence, google::Struct}
+    assign_logger::AssignLogger,
+    flag_logger,
+    proto::{confidence, google::Struct},
+    FlagToApply, Host, ResolvedValue, ResolverState,
 };
 use worker::*;
 
@@ -11,7 +14,7 @@ use serde_json::json;
 
 use confidence::flags::resolver::v1::{ApplyFlagsRequest, ApplyFlagsResponse, ResolveFlagsRequest};
 
-static RESOLVE_LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
+static RESOLVE_LOGGER: LazyLock<ResolveLogger<H>> = LazyLock::new(ResolveLogger::new);
 static ASSIGN_LOGGER: LazyLock<AssignLogger> = LazyLock::new(AssignLogger::new);
 
 use confidence_resolver::Client;
@@ -49,13 +52,15 @@ impl Host for H {
         evaluation_context: &Struct,
         values: &[ResolvedValue<'_>],
         client: &Client,
-        _sdk: &Option<Sdk>,
+        sdk: &Option<Sdk>,
     ) {
         RESOLVE_LOGGER.log_resolve(
             resolve_id,
             evaluation_context,
             client.client_credential_name.as_str(),
             values,
+            client,
+            sdk,
         );
     }
 
@@ -238,7 +243,7 @@ pub async fn consume_flag_logs_queue(
             .map(|m| m.body().clone())
             .map(|s| serde_json::from_str::<confidence_resolver::proto::confidence::flags::resolver::v1::WriteFlagLogsRequest>(s.as_str()).unwrap())
             .map(|v| WriteFlagLogsRequest {
-                telemetry_data: None,
+                telemetry_data: v.telemetry_data,
                 flag_resolve_info: v.flag_resolve_info,
                 flag_assigned: v.flag_assigned,
                 client_resolve_info: v.client_resolve_info,

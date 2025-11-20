@@ -1,35 +1,41 @@
 use std::sync::{
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicU32, AtomicU64, Ordering},
     Arc, RwLock,
 };
 
-use crate::schema_util::{DerivedClientSchema, SchemaFromEvaluationContext};
+use crate::{
+    schema_util::{DerivedClientSchema, SchemaFromEvaluationContext},
+    Host,
+};
 use arc_swap::ArcSwap;
 use papaya::{HashMap, HashSet};
+use std::marker::PhantomData;
 
 mod pb {
     pub use crate::proto::confidence::flags::admin::v1::{
         client_resolve_info, flag_resolve_info, ClientResolveInfo, FlagResolveInfo,
     };
-
+    pub use crate::proto::confidence::flags::resolver::v1::TelemetryData;
     pub use crate::proto::{confidence::flags::resolver::v1::WriteFlagLogsRequest, google::Struct};
 }
 
 #[derive(Debug)]
-pub struct ResolveLogger {
+pub struct ResolveLogger<H> {
     state: ArcSwap<RwLock<Option<ResolveInfoState>>>,
+    _phantom: PhantomData<H>,
 }
 
-impl Default for ResolveLogger {
+impl<H: Host> Default for ResolveLogger<H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ResolveLogger {
-    pub fn new() -> ResolveLogger {
+impl<H: Host> ResolveLogger<H> {
+    pub fn new() -> ResolveLogger<H> {
         ResolveLogger {
-            state: ArcSwap::new(Arc::new(RwLock::new(Some(ResolveInfoState::default())))),
+            state: ArcSwap::new(Arc::new(RwLock::new(Some(ResolveInfoState::new::<H>())))),
+            _phantom: PhantomData,
         }
     }
 
@@ -59,6 +65,8 @@ impl ResolveLogger {
         resolve_context: &pb::Struct,
         client_credential: &str,
         values: &[crate::ResolvedValue<'_>],
+        _client: &crate::Client,
+        sdk: &Option<crate::flags_resolver::Sdk>,
     ) {
         self.with_state(|state: &ResolveInfoState| {
             state
@@ -67,6 +75,18 @@ impl ResolveLogger {
                     let schema = SchemaFromEvaluationContext::get_schema(resolve_context);
                     client_resolve_info.schemas.pin().insert(schema);
                 });
+
+            // Track resolve request count for RPS calculation
+            state.resolve_count.fetch_add(1, Ordering::Relaxed);
+
+            // Store SDK info if not already set
+            if let Some(sdk_value) = sdk {
+                if let Ok(mut sdk_lock) = state.sdk.write() {
+                    if sdk_lock.is_none() {
+                        *sdk_lock = Some(sdk_value.clone());
+                    }
+                }
+            }
 
             for value in values {
                 state
@@ -113,7 +133,7 @@ impl ResolveLogger {
     pub fn checkpoint(&self) -> pb::WriteFlagLogsRequest {
         let lock = self
             .state
-            .swap(Arc::new(RwLock::new(Some(ResolveInfoState::default()))));
+            .swap(Arc::new(RwLock::new(Some(ResolveInfoState::new::<H>()))));
         // the only operation we do under write-lock is take the option, and that can't panic, so lock shouldn't be poisoned,
         // even so, if it some how was it's safe to still use the value.
         let mut wg = lock
@@ -125,13 +145,33 @@ impl ResolveLogger {
             .map(|state| {
                 let client_resolve_info = build_client_resolve_info(&state);
                 let flag_resolve_info = build_flag_resolve_info(&state);
+
+                // Calculate RPS
+                let resolve_count = state.resolve_count.load(Ordering::Relaxed);
+                let current_time_seconds = H::current_time().seconds as f64
+                    + (H::current_time().nanos as f64 / 1_000_000_000.0);
+                let elapsed = current_time_seconds - state.start_time_seconds;
+
+                let resolve_rps = if elapsed > 0.0 {
+                    resolve_count as f64 / elapsed
+                } else {
+                    0.0
+                };
+
+                let telemetry_data = if resolve_count > 0 {
+                    let sdk = state.sdk.read().ok().and_then(|s| s.clone());
+                    Some(pb::TelemetryData { resolve_rps, sdk })
+                } else {
+                    None
+                };
+
                 pb::WriteFlagLogsRequest {
                     flag_resolve_info,
                     client_resolve_info,
                     // Assignment events are handled by `AssignLogger`, so this logger
                     // only returns schema/counter data here.
                     flag_assigned: Vec::new(),
-                    telemetry_data: None,
+                    telemetry_data,
                 }
             })
             .unwrap_or_default()
@@ -154,10 +194,40 @@ struct FlagResolveInfo {
 struct ClientResolveInfo {
     schemas: HashSet<DerivedClientSchema>,
 }
-#[derive(Debug, Default)]
+
+#[derive(Debug)]
 struct ResolveInfoState {
     flag_resolve_info: HashMap<String, FlagResolveInfo>,
     client_resolve_info: HashMap<String, ClientResolveInfo>,
+    resolve_count: AtomicU64,
+    start_time_seconds: f64,
+    sdk: RwLock<Option<crate::flags_resolver::Sdk>>,
+}
+
+impl ResolveInfoState {
+    fn new<H: Host>() -> Self {
+        let t = H::current_time();
+        let start_time_seconds = t.seconds as f64 + (t.nanos as f64 / 1_000_000_000.0);
+        ResolveInfoState {
+            flag_resolve_info: HashMap::default(),
+            client_resolve_info: HashMap::default(),
+            resolve_count: AtomicU64::new(0),
+            start_time_seconds,
+            sdk: RwLock::new(None),
+        }
+    }
+}
+
+impl Default for ResolveInfoState {
+    fn default() -> Self {
+        ResolveInfoState {
+            flag_resolve_info: HashMap::default(),
+            client_resolve_info: HashMap::default(),
+            resolve_count: AtomicU64::new(0),
+            start_time_seconds: 0.0,
+            sdk: RwLock::new(None),
+        }
+    }
 }
 
 fn extract_client(credential: &str) -> String {
@@ -286,17 +356,84 @@ impl PapayaCounterMapExt for HashMap<String, AtomicU32> {
 #[cfg(test)]
 mod tests {
     use crate::{
-      proto::{confidence::flags::admin::v1::{
-        context_field_semantic_type::{CountrySemanticType, DateSemanticType, TimestampSemanticType, VersionSemanticType}, evaluation_context_schema_field, ContextFieldSemanticType
-      }, google::Struct}, resolve_logger::{pb::WriteFlagLogsRequest, ResolveLogger}
+        proto::{
+            confidence::flags::admin::v1::{
+                context_field_semantic_type::{
+                    CountrySemanticType, DateSemanticType, TimestampSemanticType, VersionSemanticType,
+                },
+                evaluation_context_schema_field, ContextFieldSemanticType,
+            },
+            google::Struct,
+        },
+        resolve_logger::{pb::WriteFlagLogsRequest, ResolveLogger},
+        Account, Client, Host,
     };
     use crate::proto::confidence::flags::admin::v1::context_field_semantic_type::country_semantic_type::CountryFormat;
-    use std::{collections::BTreeMap};
+    use crate::proto::google::Timestamp;
     use serde_json::json;
+    use std::collections::BTreeMap;
+
+    struct TestHost;
+    impl Host for TestHost {
+        #[cfg(not(feature = "std"))]
+        fn random_alphanumeric(_len: usize) -> String {
+            "random".to_string()
+        }
+
+        #[cfg(not(feature = "std"))]
+        fn current_time() -> Timestamp {
+            Timestamp {
+                seconds: 1680352496,
+                nanos: 0,
+            }
+        }
+
+        fn log_resolve(
+            _resolve_id: &str,
+            _evaluation_context: &Struct,
+            _values: &[crate::ResolvedValue<'_>],
+            _client: &Client,
+            _sdk: &Option<crate::flags_resolver::Sdk>,
+        ) {
+        }
+
+        fn log_assign(
+            _resolve_id: &str,
+            _evaluation_context: &Struct,
+            _assigned_flags: &[crate::FlagToApply],
+            _client: &Client,
+            _sdk: &Option<crate::flags_resolver::Sdk>,
+        ) {
+        }
+
+        fn encrypt_resolve_token(
+            token_data: &[u8],
+            _encryption_key: &[u8],
+        ) -> Result<Vec<u8>, String> {
+            Ok(token_data.to_vec())
+        }
+
+        fn decrypt_resolve_token(
+            token_data: &[u8],
+            _encryption_key: &[u8],
+        ) -> Result<Vec<u8>, String> {
+            Ok(token_data.to_vec())
+        }
+    }
+
+    fn test_client() -> Client {
+        Client {
+            account: Account {
+                name: "accounts/test".to_string(),
+            },
+            client_name: "test-client".to_string(),
+            client_credential_name: "clients/test/clientCredentials/test".to_string(),
+        }
+    }
 
     #[test]
     fn decorates_with_context_schema() {
-        let logger = ResolveLogger::new();
+        let logger = ResolveLogger::<TestHost>::new();
         let ctx: Struct = serde_json::from_value(json!({
           "country": "SE",
           "not_a_country": "abc",
@@ -307,9 +444,10 @@ mod tests {
         }))
         .unwrap();
 
+        let client = test_client();
         let cred = "clients/test/clientCredentials/test";
         let rv = [];
-        logger.log_resolve("id", &ctx, cred, &rv);
+        logger.log_resolve("id", &ctx, cred, &rv, &client, &None);
         let req = logger.checkpoint();
         // find the client entry in the built request
         let crec = req
@@ -390,16 +528,17 @@ mod tests {
 
     #[test]
     fn decorates_with_list_schema() {
-        let logger = ResolveLogger::new();
+        let logger = ResolveLogger::<TestHost>::new();
         let ctx: Struct = serde_json::from_value(json!({
           "country": ["SE","DK","NO"],
           "random_stuff": ["SE","abc",3]
         }))
         .unwrap();
 
+        let client = test_client();
         let cred = "clients/test/clientCredentials/test";
         let rv = [];
-        logger.log_resolve("id", &ctx, cred, &rv);
+        logger.log_resolve("id", &ctx, cred, &rv, &client, &None);
         let req = logger.checkpoint();
         let crec = req
             .client_resolve_info
@@ -434,7 +573,7 @@ mod tests {
             Flag, Segment,
         };
 
-        let logger = ResolveLogger::new();
+        let logger = ResolveLogger::<TestHost>::new();
 
         let flag = Flag {
             name: "flags/test".into(),
@@ -457,8 +596,9 @@ mod tests {
         let rv = [crate::ResolvedValue::new(&flag)
             .with_variant_match(&rule, &segment, &variant, "control", "user123")];
 
+        let client = test_client();
         let cred = "clients/test/clientCredentials/test";
-        logger.log_resolve("id", &Struct::default(), cred, &rv);
+        logger.log_resolve("id", &Struct::default(), cred, &rv, &client, &None);
         let req = logger.checkpoint();
 
         let flag_info = req
@@ -500,7 +640,7 @@ mod tests {
             Flag, Segment,
         };
 
-        let logger = ResolveLogger::new();
+        let logger = ResolveLogger::<TestHost>::new();
 
         let flag = Flag {
             name: "flags/test-fallthrough".into(),
@@ -528,8 +668,9 @@ mod tests {
         rv.attribute_fallthrough_rule(&fallthrough_rule, "control", "user123");
         let rv = [rv.with_variant_match(&match_rule, &segment, &match_variant, "final", "user123")];
 
+        let client = test_client();
         let cred = "clients/test/clientCredentials/test";
-        logger.log_resolve("id", &Struct::default(), cred, &rv);
+        logger.log_resolve("id", &Struct::default(), cred, &rv, &client, &None);
         let req = logger.checkpoint();
 
         let flag_info = req
@@ -592,7 +733,7 @@ mod tests {
         use std::thread;
         use std::time::Duration;
 
-        let logger = Arc::new(ResolveLogger::new());
+        let logger = Arc::new(ResolveLogger::<TestHost>::new());
         let flag = Flag {
             name: "flags/concurrent".into(),
             ..Default::default()
@@ -626,11 +767,12 @@ mod tests {
             let cred_s = cred.to_string();
             let done_cl = done.clone();
             handles.push(thread::spawn(move || {
+                let client = test_client();
                 let mut count = 0i64;
                 while !done_cl.load(Ordering::Relaxed) {
                     let rv = [crate::ResolvedValue::new(&f)
                         .with_variant_match(&r, &s, &v, "assign", "user")];
-                    lg.log_resolve("id", &Struct::default(), &cred_s, &rv);
+                    lg.log_resolve("id", &Struct::default(), &cred_s, &rv, &client, &None);
                     count += 1;
                 }
                 count

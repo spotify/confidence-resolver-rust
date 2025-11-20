@@ -51,7 +51,8 @@
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": true,
       "component": "openfeature-provider/go",
-      "tag-separator": "/"
+      "tag-separator": "/",
+      "extra-files": ["confidence/version.go"]
     },
     "openfeature-provider/ruby": {
       "release-type": "ruby",

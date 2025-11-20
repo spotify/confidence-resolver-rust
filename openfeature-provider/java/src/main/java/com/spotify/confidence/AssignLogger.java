@@ -32,7 +32,6 @@ class AssignLogger implements Closeable {
   private static final int GRPC_MESSAGE_MAX_SIZE = 4194304 - 1048576;
 
   private final ConcurrentLinkedQueue<FlagAssigned> queue = new ConcurrentLinkedQueue<>();
-  private final LongAdder dropCount = new LongAdder();
   private final AtomicLong capacity;
   private Instant lastFlagAssigned = Instant.now();
   private final Timer timer;
@@ -89,9 +88,7 @@ class AssignLogger implements Closeable {
   }
 
   private WriteFlagAssignedRequest.Builder prepareNewBatch() {
-    return WriteFlagAssignedRequest.newBuilder()
-        .setTelemetryData(
-            TelemetryData.newBuilder().setDroppedEvents(dropCount.sumThenReset()).build());
+    return WriteFlagAssignedRequest.newBuilder();
   }
 
   private void sendBatch(WriteFlagAssignedRequest batch) {
@@ -109,7 +106,6 @@ class AssignLogger implements Closeable {
           ex);
       // we still own the capacity so can add back directly to queue
       queue.addAll(batch.getFlagAssignedList());
-      dropCount.add(batch.getTelemetryData().getDroppedEvents());
       throw ex;
     }
   }
@@ -117,11 +113,6 @@ class AssignLogger implements Closeable {
   @VisibleForTesting
   long remainingCapacity() {
     return capacity.get();
-  }
-
-  @VisibleForTesting
-  long dropCount() {
-    return dropCount.sum();
   }
 
   void logAssigns(
@@ -137,7 +128,6 @@ class AssignLogger implements Closeable {
         return;
       }
     }
-    dropCount.increment();
   }
 
   @Override

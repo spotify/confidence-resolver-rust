@@ -47,6 +47,19 @@ func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFla
 		return nil
 	}
 
+	if request.TelemetryData != nil {
+		sdkID := "nil"
+		sdkVersion := "nil"
+		if request.TelemetryData.Sdk != nil {
+			sdkID = request.TelemetryData.Sdk.GetId().String()
+			sdkVersion = request.TelemetryData.Sdk.Version
+		}
+		g.logger.Info("Telemetry Data",
+			"resolve_rps", request.TelemetryData.ResolveRps,
+			"sdk_id", sdkID,
+			"sdk_version", sdkVersion)
+	}
+
 	g.logger.Debug("Writing flag logs",
 		"flag_assigned", flagAssignedCount,
 		"client_resolve_info", clientResolveCount,
