@@ -109,11 +109,17 @@ message WriteFlagAssignedResponse {
 // Collection of telemetry metrics, usually included in request messages to
 // monitor sender-side issues or performance
 message TelemetryData {
-  // Requests per second for resolve calls (from WASM resolver)
-  double resolve_rps = 2;
+  // Cumulative count of resolve calls (monotonic counter)
+  uint64 resolve_count = 4;
 
   // Information about the SDK/provider
   Sdk sdk = 3 [
+    (google.api.field_behavior) = OPTIONAL
+  ];
+
+  // Unique identifier for this client instance (UUID or hostname)
+  // Used to deduplicate metrics when the same client hits different backend pods
+  string client_instance_id = 5 [
     (google.api.field_behavior) = OPTIONAL
   ];
 }

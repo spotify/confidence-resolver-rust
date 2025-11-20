@@ -7,6 +7,7 @@ require github.com/open-feature/go-sdk v1.16.0
 require github.com/tetratelabs/wazero v1.9.0
 
 require (
+	github.com/google/uuid v1.6.0
 	google.golang.org/genproto v0.0.0-20251029180050-ab9386a59fda
 	google.golang.org/genproto/googleapis/api v0.0.0-20251029180050-ab9386a59fda
 	google.golang.org/grpc v1.75.1

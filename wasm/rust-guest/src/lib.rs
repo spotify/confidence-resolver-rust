@@ -58,7 +58,7 @@ const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
 // TODO simplify by assuming single threaded?
 static RESOLVER_STATE: ArcSwapOption<ResolverState> = ArcSwapOption::const_empty();
-static RESOLVE_LOGGER: LazyLock<ResolveLogger<WasmHost>> = LazyLock::new(ResolveLogger::new);
+static RESOLVE_LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
 static ASSIGN_LOGGER: LazyLock<AssignLogger> = LazyLock::new(AssignLogger::new);
 
 thread_local! {
@@ -184,6 +184,12 @@ wasm_msg_guest! {
             .map_err(|e| format!("Failed to decode resolver state: {}", e))?;
         let new_state = ResolverState::from_proto(state_pb, request.account_id.as_str())?;
         RESOLVER_STATE.store(Some(Arc::new(new_state)));
+
+        // Set client instance ID on the resolve logger
+        if !request.client_instance_id.is_empty() {
+            RESOLVE_LOGGER.set_client_instance_id(request.client_instance_id);
+        }
+
         Ok(VOID)
     }
 

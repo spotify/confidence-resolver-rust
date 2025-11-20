@@ -13,14 +13,18 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
     // map of flag to flag resolve info
     let mut flag_resolve_map: HashMap<String, VariantRuleResolveInfo> = HashMap::new();
     let mut flag_assigned: Vec<FlagAssigned> = vec![];
-    let mut total_resolve_rps: f64 = 0.0;
+    let mut total_resolve_count: u64 = 0;
     let mut first_sdk: Option<crate::proto::confidence::flags::resolver::v1::Sdk> = None;
+    let mut client_instance_id: String = String::new();
 
     for flag_logs_message in message_batch {
         if let Some(td) = &flag_logs_message.telemetry_data {
-            total_resolve_rps += td.resolve_rps;
+            total_resolve_count = total_resolve_count.saturating_add(td.resolve_count);
             if first_sdk.is_none() && td.sdk.is_some() {
                 first_sdk = td.sdk.clone();
+            }
+            if client_instance_id.is_empty() && !td.client_instance_id.is_empty() {
+                client_instance_id = td.client_instance_id.clone();
             }
         }
 
@@ -100,10 +104,11 @@ pub fn aggregate_batch(message_batch: Vec<WriteFlagLogsRequest>) -> WriteFlagLog
         })
     }
 
-    let telemetry_data = if total_resolve_rps > 0.0 || first_sdk.is_some() {
+    let telemetry_data = if total_resolve_count > 0 || first_sdk.is_some() {
         Some(TelemetryData {
-            resolve_rps: total_resolve_rps,
+            resolve_count: total_resolve_count,
             sdk: first_sdk,
+            client_instance_id,
         })
     } else {
         None

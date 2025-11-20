@@ -204,18 +204,19 @@ func (r *ResolverApi) Close(ctx context.Context) {
 }
 
 // SetResolverState sets the resolver state in the WASM module
-func (r *ResolverApi) SetResolverState(state []byte, accountId string) error {
+func (r *ResolverApi) SetResolverState(state []byte, accountId string, clientInstanceID string) error {
 	// Use write lock for SetResolverState - blocks all other access
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	ctx := context.Background()
-	r.logger.Debug("Setting resolver state", "account", accountId)
+	r.logger.Debug("Setting resolver state", "account", accountId, "client_instance_id", clientInstanceID)
 
 	// Create SetResolverStateRequest
 	setStateRequest := &messages.SetResolverStateRequest{
-		State:     state,
-		AccountId: accountId,
+		State:            state,
+		AccountId:        accountId,
+		ClientInstanceId: clientInstanceID,
 	}
 
 	// Wrap in Request

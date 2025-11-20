@@ -59,11 +59,12 @@ func (*Void) Descriptor() ([]byte, []int) {
 }
 
 type SetResolverStateRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	State         []byte                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
-	AccountId     string                 `protobuf:"bytes,2,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	State            []byte                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	AccountId        string                 `protobuf:"bytes,2,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	ClientInstanceId string                 `protobuf:"bytes,3,opt,name=client_instance_id,json=clientInstanceId,proto3" json:"client_instance_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SetResolverStateRequest) Reset() {
@@ -106,6 +107,13 @@ func (x *SetResolverStateRequest) GetState() []byte {
 func (x *SetResolverStateRequest) GetAccountId() string {
 	if x != nil {
 		return x.AccountId
+	}
+	return ""
+}
+
+func (x *SetResolverStateRequest) GetClientInstanceId() string {
+	if x != nil {
+		return x.ClientInstanceId
 	}
 	return ""
 }
@@ -302,11 +310,12 @@ const file_messages_proto_rawDesc = "" +
 	"\n" +
 	"\x0emessages.proto\x12\n" +
 	"rust_guest\x1a\x1cgoogle/protobuf/struct.proto\"\x06\n" +
-	"\x04Void\"N\n" +
+	"\x04Void\"|\n" +
 	"\x17SetResolverStateRequest\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\fR\x05state\x12\x1d\n" +
 	"\n" +
-	"account_id\x18\x02 \x01(\tR\taccountId\"\x97\x01\n" +
+	"account_id\x18\x02 \x01(\tR\taccountId\x12,\n" +
+	"\x12client_instance_id\x18\x03 \x01(\tR\x10clientInstanceId\"\x97\x01\n" +
 	"\x14ResolveSimpleRequest\x12#\n" +
 	"\rclient_secret\x18\x01 \x01(\tR\fclientSecret\x12F\n" +
 	"\x12evaluation_context\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x11evaluationContext\x12\x12\n" +

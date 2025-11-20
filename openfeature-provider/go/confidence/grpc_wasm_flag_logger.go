@@ -55,7 +55,8 @@ func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFla
 			sdkVersion = request.TelemetryData.Sdk.Version
 		}
 		g.logger.Info("Telemetry Data",
-			"resolve_rps", request.TelemetryData.ResolveRps,
+			"resolve_count", request.TelemetryData.ResolveCount,
+			"client_instance_id", request.TelemetryData.ClientInstanceId,
 			"sdk_id", sdkID,
 			"sdk_version", sdkVersion)
 	}

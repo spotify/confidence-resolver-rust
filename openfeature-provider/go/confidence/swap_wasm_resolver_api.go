@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/google/uuid"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"github.com/tetratelabs/wazero"
 )
@@ -38,6 +39,10 @@ type SwapWasmResolverApi struct {
 	compiledModule wazero.CompiledModule
 	flagLogger     FlagLogger
 	logger         *slog.Logger
+
+	// Unique client instance ID for metric deduplication
+	// Generated once at creation and passed to all WASM instances
+	clientInstanceID string
 }
 
 // Compile-time interface conformance check
@@ -59,11 +64,15 @@ func NewSwapWasmResolverApi(
 		return nil, err
 	}
 
+	// Generate unique client instance ID (stable across WASM recreations)
+	clientInstanceID := uuid.New().String()
+
 	swap := &SwapWasmResolverApi{
-		runtime:        runtime,
-		compiledModule: compiledModule,
-		flagLogger:     flagLogger,
-		logger:         logger,
+		runtime:          runtime,
+		compiledModule:   compiledModule,
+		flagLogger:       flagLogger,
+		logger:           logger,
+		clientInstanceID: clientInstanceID,
 	}
 
 	// Store nil to indicate lazy initialization
@@ -81,7 +90,7 @@ func (s *SwapWasmResolverApi) UpdateStateAndFlushLogs(state []byte, accountId st
 
 	// Create new instance with updated state
 	newInstance := NewResolverApiFromCompiled(ctx, s.runtime, s.compiledModule, s.flagLogger, s.logger)
-	if err := newInstance.SetResolverState(state, accountId); err != nil {
+	if err := newInstance.SetResolverState(state, accountId, s.clientInstanceID); err != nil {
 		return err
 	}
 

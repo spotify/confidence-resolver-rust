@@ -13,6 +13,7 @@ message Void {}
 message SetResolverStateRequest {
     bytes state = 1;
     string account_id = 2;
+    string client_instance_id = 3;
 }
 
 message ResolveSimpleRequest {

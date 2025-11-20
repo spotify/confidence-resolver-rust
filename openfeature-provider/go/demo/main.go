@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -60,8 +59,8 @@ func main() {
 	// Create OpenFeature client
 	client := openfeature.NewClient("demo-app")
 
-	// Demo: Evaluate flags with multiple concurrent threads
-	log.Println("=== Flag Evaluation Demo with 10 Concurrent Threads ===")
+	// Demo: Evaluate flags continuously at 5 resolves per second
+	log.Println("=== Flag Evaluation Demo - 5 Resolves/Second (Continuous) ===")
 	log.Println("")
 
 	// Create evaluation context
@@ -73,75 +72,53 @@ func main() {
 		},
 	)
 
-	// Run 5 concurrent threads continuously for 5 second
-	var wg sync.WaitGroup
-	numThreads := 5
-	runDuration := 5 * time.Second
-
-	log.Printf("Starting %d threads to run for %v to test reload and flush...", numThreads, runDuration)
+	log.Println("Starting continuous evaluation at 5 resolves/second...")
+	log.Println("Press Ctrl+C to stop")
 	log.Println("")
 
 	startTime := time.Now()
-	stopTime := startTime.Add(runDuration)
 
 	// Shared counters for throughput calculation
 	var totalSuccess, totalErrors int64
 
-	for i := 0; i < numThreads; i++ {
-		wg.Add(1)
-		threadID := i
-		go func() {
-			defer wg.Done()
+	// Create ticker for 5 resolves per second (200ms interval)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
 
-			var successCount, errorCount int64
-			iteration := 0
+	// Stats reporting ticker (every 10 seconds)
+	statsTicker := time.NewTicker(10 * time.Second)
+	defer statsTicker.Stop()
 
-			for time.Now().Before(stopTime) {
-				// Use ObjectValueDetails to get the full flag object
-				result, err := client.ObjectValueDetails(ctx, "mattias-boolean-flag", map[string]interface{}{}, evalCtx)
-				if err != nil {
-					errorCount++
-					if iteration == 0 { // Only log first error per thread
-						log.Printf("Thread %d: Error: %v", threadID, err)
-					}
-				} else {
-					successCount++
-					if iteration == 0 { // Only log first success per thread
-						log.Printf("Thread %d: First result - Value: %+v, Variant: %s, Reason: %s",
-							threadID, result.Value, result.Variant, result.Reason)
-					}
+	iteration := 0
+	for {
+		select {
+		case <-ticker.C:
+			// Use ObjectValueDetails to get the full flag object
+			result, err := client.ObjectValueDetails(ctx, "mattias-boolean-flag", map[string]interface{}{}, evalCtx)
+			if err != nil {
+				atomic.AddInt64(&totalErrors, 1)
+				if iteration == 0 { // Only log first error
+					log.Printf("Error: %v", err)
 				}
-				iteration++
-
-				// Small sleep to avoid tight loop
-				time.Sleep(1 * time.Millisecond)
+			} else {
+				atomic.AddInt64(&totalSuccess, 1)
+				if iteration == 0 { // Only log first success
+					log.Printf("First result - Value: %+v, Variant: %s, Reason: %s",
+						result.Value, result.Variant, result.Reason)
+				}
 			}
+			iteration++
 
-			// Update shared counters atomically
-			atomic.AddInt64(&totalSuccess, successCount)
-			atomic.AddInt64(&totalErrors, errorCount)
+		case <-statsTicker.C:
+			duration := time.Since(startTime)
+			totalRequests := atomic.LoadInt64(&totalSuccess) + atomic.LoadInt64(&totalErrors)
+			throughputPerSecond := float64(totalRequests) / duration.Seconds()
 
-			log.Printf("Thread %d complete after %v: %d successes, %d errors (%d total iterations)",
-				threadID, time.Since(startTime), successCount, errorCount, iteration)
-		}()
+			log.Printf("Stats: %d total requests, %.2f req/s, %d successes, %d errors",
+				totalRequests, throughputPerSecond,
+				atomic.LoadInt64(&totalSuccess), atomic.LoadInt64(&totalErrors))
+		}
 	}
-
-	// Wait for all threads to complete
-	wg.Wait()
-
-	duration := time.Since(startTime)
-	totalRequests := totalSuccess + totalErrors
-	throughputPerSecond := float64(totalRequests) / duration.Seconds()
-
-	log.Println("")
-	log.Println("=== Demo Complete ===")
-	log.Printf("Total time: %v", duration)
-	log.Printf("Throughput: %.2f requests/second", throughputPerSecond)
-	log.Printf("Average latency: %.2f ms/request", duration.Seconds()*1000/float64(totalRequests))
-	log.Println("Check logs above for per-thread statistics and state reload/flush messages")
-	log.Println("")
-
-	log.Println("At the end of main... shutting down...")
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

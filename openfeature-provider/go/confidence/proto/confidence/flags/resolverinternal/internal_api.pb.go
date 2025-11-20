@@ -242,15 +242,15 @@ func (x *WriteFlagAssignedResponse) GetAssignedFlags() int64 {
 // monitor sender-side issues or performance
 type TelemetryData struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// "events" dropped from the sender due to issues or inefficiencies.
-	// This is implemented as a delta counter between TelemetryData messages
-	DroppedEvents int64 `protobuf:"varint,1,opt,name=dropped_events,json=droppedEvents,proto3" json:"dropped_events,omitempty"`
-	// Requests per second for resolve calls (from WASM resolver)
-	ResolveRps float64 `protobuf:"fixed64,2,opt,name=resolve_rps,json=resolveRps,proto3" json:"resolve_rps,omitempty"`
+	// Cumulative count of resolve calls (monotonic counter)
+	ResolveCount uint64 `protobuf:"varint,4,opt,name=resolve_count,json=resolveCount,proto3" json:"resolve_count,omitempty"`
 	// Information about the SDK/provider
-	Sdk           *resolvertypes.Sdk `protobuf:"bytes,3,opt,name=sdk,proto3" json:"sdk,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Sdk *resolvertypes.Sdk `protobuf:"bytes,3,opt,name=sdk,proto3" json:"sdk,omitempty"`
+	// Unique identifier for this client instance (UUID or hostname)
+	// Used to deduplicate metrics when the same client hits different backend pods
+	ClientInstanceId string `protobuf:"bytes,5,opt,name=client_instance_id,json=clientInstanceId,proto3" json:"client_instance_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *TelemetryData) Reset() {
@@ -283,16 +283,9 @@ func (*TelemetryData) Descriptor() ([]byte, []int) {
 	return file_confidence_flags_resolver_v1_internal_api_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *TelemetryData) GetDroppedEvents() int64 {
+func (x *TelemetryData) GetResolveCount() uint64 {
 	if x != nil {
-		return x.DroppedEvents
-	}
-	return 0
-}
-
-func (x *TelemetryData) GetResolveRps() float64 {
-	if x != nil {
-		return x.ResolveRps
+		return x.ResolveCount
 	}
 	return 0
 }
@@ -302,6 +295,13 @@ func (x *TelemetryData) GetSdk() *resolvertypes.Sdk {
 		return x.Sdk
 	}
 	return nil
+}
+
+func (x *TelemetryData) GetClientInstanceId() string {
+	if x != nil {
+		return x.ClientInstanceId
+	}
+	return ""
 }
 
 type ResolveToken struct {
@@ -562,12 +562,11 @@ const file_confidence_flags_resolver_v1_internal_api_proto_rawDesc = "" +
 	"\rflag_assigned\x18\x01 \x03(\v21.confidence.flags.resolver.v1.events.FlagAssignedB\x04\xe2A\x01\x02R\fflagAssigned\x12X\n" +
 	"\x0etelemetry_data\x18\x02 \x01(\v2+.confidence.flags.resolver.v1.TelemetryDataB\x04\xe2A\x01\x01R\rtelemetryData\"B\n" +
 	"\x19WriteFlagAssignedResponse\x12%\n" +
-	"\x0eassigned_flags\x18\x01 \x01(\x03R\rassignedFlags\"\x98\x01\n" +
-	"\rTelemetryData\x12+\n" +
-	"\x0edropped_events\x18\x01 \x01(\x03B\x04\xe2A\x01\x02R\rdroppedEvents\x12\x1f\n" +
-	"\vresolve_rps\x18\x02 \x01(\x01R\n" +
-	"resolveRps\x129\n" +
-	"\x03sdk\x18\x03 \x01(\v2!.confidence.flags.resolver.v1.SdkB\x04\xe2A\x01\x01R\x03sdk\"j\n" +
+	"\x0eassigned_flags\x18\x01 \x01(\x03R\rassignedFlags\"\xa3\x01\n" +
+	"\rTelemetryData\x12#\n" +
+	"\rresolve_count\x18\x04 \x01(\x04R\fresolveCount\x129\n" +
+	"\x03sdk\x18\x03 \x01(\v2!.confidence.flags.resolver.v1.SdkB\x04\xe2A\x01\x01R\x03sdk\x122\n" +
+	"\x12client_instance_id\x18\x05 \x01(\tB\x04\xe2A\x01\x01R\x10clientInstanceId\"j\n" +
 	"\fResolveToken\x12I\n" +
 	"\btoken_v1\x18\x01 \x01(\v2,.confidence.flags.resolver.v1.ResolveTokenV1H\x00R\atokenV1B\x0f\n" +
 	"\rresolve_token\"\x9a\a\n" +
