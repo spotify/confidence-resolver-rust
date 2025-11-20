@@ -53,11 +53,6 @@ class FlagsAdminStateFetcher implements AccountStateProvider {
     }
 
     @Override
-    public void init() {
-        reload();
-    }
-
-    @Override
     public byte[] provide() {
         return rawResolverStateHolder.get();
     }

@@ -221,7 +221,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
 
     @Override
     public void initialize(EvaluationContext evaluationContext) {
-        stateProvider.init();
+        stateProvider.reload();
         final byte[] state = stateProvider.provide();
         final String accountId = stateProvider.accountId();
         wasmResolveApi.init(state, accountId);

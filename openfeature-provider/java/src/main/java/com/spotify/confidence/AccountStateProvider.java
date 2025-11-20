@@ -27,7 +27,5 @@ public interface AccountStateProvider {
    */
   String accountId();
 
-  void init();
-
   void reload();
 }

@@ -53,7 +53,7 @@ String value = client.getStringValue("my-flag", "default-value");
 
 Configure the provider behavior using environment variables:
 
-- `CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS`: How often to poll for flag configuration updates (default: `300` seconds)
+- `CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS`: How often to poll Confidence to get updates (default: `300` seconds)
 
 // Deprecated in favour of a custom ChannelFactory:
 - `CONFIDENCE_DOMAIN`: Override the default Confidence service endpoint (default: `edge-grpc.spotify.com`)

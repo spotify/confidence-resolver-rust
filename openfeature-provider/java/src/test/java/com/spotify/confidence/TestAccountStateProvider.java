@@ -12,15 +12,10 @@ public class TestAccountStateProvider implements AccountStateProvider {
     }
 
     @Override
-    public void init() {
-        stateBytes = new byte[initialStateBytes.length];
-        System.arraycopy(initialStateBytes, 0, stateBytes, 0, initialStateBytes.length);
-        account = initialAccount;
-    }
-
-    @Override
     public void reload() {
-        // no-op
+        this.stateBytes = new byte[initialStateBytes.length];
+        System.arraycopy(initialStateBytes, 0, stateBytes, 0, initialStateBytes.length);
+        this.account = initialAccount;
     }
 
     @Override
