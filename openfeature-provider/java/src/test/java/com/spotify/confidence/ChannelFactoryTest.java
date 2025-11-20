@@ -36,7 +36,7 @@ public class ChannelFactoryTest {
     };
 
     @Test
-    public void verifyCustomChannelFactoryIsCalledByFactory() {
+    public void verifyCustomChannelFactoryIsCalledByProvider() {
         final AtomicInteger factoryCallCount = new AtomicInteger(0);
         final List<String> targetsReceived = new ArrayList<>();
         final List<Integer> interceptorCounts = new ArrayList<>();
@@ -46,7 +46,7 @@ public class ChannelFactoryTest {
                     factoryCallCount.incrementAndGet();
                     targetsReceived.add(target);
                     interceptorCounts.add(interceptors.size());
-                    ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget(target)
+                    ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget("localhost")
                             .usePlaintext();
 
                     if (!interceptors.isEmpty()) {
@@ -57,17 +57,11 @@ public class ChannelFactoryTest {
                 };
 
 
-        // Call the factory method that uses ChannelFactory
-        try {
-            LocalResolverServiceFactory.from(apiSecret, noOpResolverFallback, customFactory);
-        } catch (Exception e) {
-            // LocalResolverServiceFactory incorrectly does things in it's constructor which means
-            // we expect this to fail since we're not connecting to a real server but here we are only testing
-            // that the factory being called first
-            assertNotNull(e);
-        }
+        // Call the constructor that uses ChannelFactory
+        new OpenFeatureLocalResolveProvider(new LocalProviderConfig(apiSecret, customFactory), "clientsecret", noOpResolverFallback);
 
-        assertEquals(1, factoryCallCount.get(), "ChannelFactory should have been called at least once, but was called "
+        // called by tokenservice, state service and flag logger
+        assertEquals(3, factoryCallCount.get(), "ChannelFactory should have been called twice, but was called "
                 + factoryCallCount.get()
                 + " times");
 
@@ -77,7 +71,7 @@ public class ChannelFactoryTest {
         assertTrue(
                 targetsReceived.get(0).contains("grpc") || targetsReceived.get(0).contains("edge"),
                 "Target should be a gRPC endpoint, got: " + targetsReceived.get(0));
-        assertEquals(1, interceptorCounts.size(), "Interceptors should have been called");
+        assertEquals(3, interceptorCounts.size(), "Interceptors should have been called");
     }
 
     @Test

@@ -12,8 +12,8 @@ import java.util.concurrent.CompletableFuture;
 final class RemoteResolverFallback implements ResolverFallback, StickyResolveStrategy {
   private final ConfidenceGrpcFlagResolver grpcFlagResolver;
 
-  RemoteResolverFallback() {
-    this.grpcFlagResolver = new ConfidenceGrpcFlagResolver();
+  RemoteResolverFallback(ChannelFactory channelFactory) {
+    this.grpcFlagResolver = new ConfidenceGrpcFlagResolver(channelFactory);
   }
 
   @Override

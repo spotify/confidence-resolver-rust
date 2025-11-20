@@ -32,6 +32,11 @@ class SwapWasmResolverApi implements ResolverApi {
     this.wasmResolverApiRef.set(initialInstance);
   }
 
+    @Override
+    public void init(byte[] state, String accountId) {
+        updateStateAndFlushLogs(state, accountId);
+    }
+
   @Override
   public void updateStateAndFlushLogs(byte[] state, String accountId) {
     // Create new instance with updated state

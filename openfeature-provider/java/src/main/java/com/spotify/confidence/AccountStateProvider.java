@@ -1,7 +1,7 @@
 package com.spotify.confidence;
 
 /**
- * Functional interface for providing AccountState instances.
+ * Interface for providing AccountState instances.
  *
  * <p>The untyped nature of this interface allows high flexibility for testing, but it's not advised
  * to be used in production.
@@ -9,7 +9,6 @@ package com.spotify.confidence;
  * <p>This can be useful if the provider implementer defines the AccountState proto schema in a
  * different Java package.
  */
-@FunctionalInterface
 public interface AccountStateProvider {
 
   /**
@@ -20,4 +19,13 @@ public interface AccountStateProvider {
    * @throws RuntimeException if the AccountState cannot be provided
    */
   byte[] provide();
+
+  /**
+   * Provides the account identifier associated with the account state.
+   *
+   * @return the account ID string
+   */
+  String accountId();
+
+  void reload();
 }

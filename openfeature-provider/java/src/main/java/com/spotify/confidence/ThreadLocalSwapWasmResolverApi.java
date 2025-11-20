@@ -23,7 +23,6 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
   private final WasmFlagLogger flagLogger;
   private final StickyResolveStrategy stickyResolveStrategy;
   private volatile byte[] currentState;
-  private volatile String currentAccountId;
 
   // Pre-initialized resolver instances mapped by core index
   private final Map<Integer, SwapWasmResolverApi> resolverInstances = new ConcurrentHashMap<>();
@@ -37,36 +36,35 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
         }
       };
 
-  public ThreadLocalSwapWasmResolverApi(
-      WasmFlagLogger flagLogger,
-      byte[] initialState,
-      String accountId,
-      StickyResolveStrategy stickyResolveStrategy) {
+  public ThreadLocalSwapWasmResolverApi(WasmFlagLogger flagLogger, StickyResolveStrategy stickyResolveStrategy) {
     this.flagLogger = flagLogger;
     this.stickyResolveStrategy = stickyResolveStrategy;
-    this.currentState = initialState;
-    this.currentAccountId = accountId;
 
     // Pre-create instances based on CPU core count for optimal performance
     this.numInstances = Runtime.getRuntime().availableProcessors();
+  }
+
+  @Override
+  public void init(byte[] state, String accountId) {
     logger.info(
-        "Initialized ThreadLocalSwapWasmResolverApi with {} available processors", numInstances);
+            "Initialized ThreadLocalSwapWasmResolverApi with {} available processors", numInstances);
     final var futures = new ArrayList<CompletableFuture<Void>>(numInstances);
 
     IntStream.range(0, numInstances)
-        .forEach(
-            i ->
-                futures.add(
-                    CompletableFuture.runAsync(
-                        () -> {
-                          final var instance =
-                              new SwapWasmResolverApi(
-                                  this.flagLogger,
-                                  this.currentState,
-                                  this.currentAccountId,
-                                  this.stickyResolveStrategy);
-                          resolverInstances.put(i, instance);
-                        })));
+            .forEach(
+                    i ->
+                            futures.add(
+                                    CompletableFuture.runAsync(
+                                            () -> {
+                                              final var instance =
+                                                      new SwapWasmResolverApi(
+                                                              this.flagLogger,
+                                                              state,
+                                                              accountId,
+                                                              this.stickyResolveStrategy);
+                                              instance.init(state, accountId);
+                                              resolverInstances.put(i, instance);
+                                            })));
     CompletableFutures.allAsList(futures).join();
   }
 
@@ -77,7 +75,6 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
   @Override
   public void updateStateAndFlushLogs(byte[] state, String accountId) {
     this.currentState = state;
-    this.currentAccountId = accountId;
 
     final var futures =
         resolverInstances.values().stream()

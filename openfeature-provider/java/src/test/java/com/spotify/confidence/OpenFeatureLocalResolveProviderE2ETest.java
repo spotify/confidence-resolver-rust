@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
  */
 class OpenFeatureLocalResolveProviderE2ETest {
   private static final String FLAG_CLIENT_SECRET = "RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV";
-  private static OpenFeatureLocalResolveProvider provider;
   private static Client client;
 
   @BeforeAll
@@ -39,24 +38,20 @@ class OpenFeatureLocalResolveProviderE2ETest {
 
     final ApiSecret apiSecret = new ApiSecret(apiClientId, apiClientSecret);
 
-    provider = new OpenFeatureLocalResolveProvider(apiSecret, FLAG_CLIENT_SECRET);
-
-    final OpenFeatureAPI api = OpenFeatureAPI.getInstance();
-    api.setProviderAndWait(provider);
-
+    final var provider = new OpenFeatureLocalResolveProvider(apiSecret, FLAG_CLIENT_SECRET);
+    final var start = System.currentTimeMillis();
+    OpenFeatureAPI.getInstance().setProviderAndWait(provider);
+    System.out.println("OpenFeatureAPI started: " + (System.currentTimeMillis() - start));
     // Set evaluation context with targeting key
     final EvaluationContext context = new MutableContext("test-a")
       .add("sticky", false);
-    api.setEvaluationContext(context);
+    OpenFeatureAPI.getInstance().setEvaluationContext(context);
 
-    client = api.getClient();
+    client = OpenFeatureAPI.getInstance().getClient();
   }
 
   @AfterAll
   static void teardown() {
-    if (provider != null) {
-      provider.shutdown();
-    }
     OpenFeatureAPI.getInstance().shutdown();
   }
 
