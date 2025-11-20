@@ -39,7 +39,7 @@ impl ResolveLogger {
         let persistent_count = Arc::new(AtomicU64::new(0));
         ResolveLogger {
             state: ArcSwap::new(Arc::new(RwLock::new(Some(
-                ResolveInfoState::new_with_counter(persistent_count.clone())
+                ResolveInfoState::new_with_counter(persistent_count.clone()),
             )))),
             persistent_resolve_count: persistent_count,
             client_instance_id: RwLock::new(client_instance_id),
@@ -82,7 +82,8 @@ impl ResolveLogger {
         sdk: &Option<crate::flags_resolver::Sdk>,
     ) {
         // Increment persistent counter (monotonic, survives checkpoints)
-        self.persistent_resolve_count.fetch_add(1, Ordering::Relaxed);
+        self.persistent_resolve_count
+            .fetch_add(1, Ordering::Relaxed);
 
         self.with_state(|state: &ResolveInfoState| {
             state
@@ -145,7 +146,7 @@ impl ResolveLogger {
 
     pub fn checkpoint(&self) -> pb::WriteFlagLogsRequest {
         let lock = self.state.swap(Arc::new(RwLock::new(Some(
-            ResolveInfoState::new_with_counter(self.persistent_resolve_count.clone())
+            ResolveInfoState::new_with_counter(self.persistent_resolve_count.clone()),
         ))));
         // the only operation we do under write-lock is take the option, and that can't panic, so lock shouldn't be poisoned,
         // even so, if it some how was it's safe to still use the value.
@@ -164,7 +165,9 @@ impl ResolveLogger {
 
                 let telemetry_data = if resolve_count > 0 {
                     let sdk = state.sdk.read().ok().and_then(|s| s.clone());
-                    let client_instance_id = self.client_instance_id.read()
+                    let client_instance_id = self
+                        .client_instance_id
+                        .read()
                         .ok()
                         .map(|id| id.clone())
                         .unwrap_or_default();
@@ -211,21 +214,14 @@ struct ClientResolveInfo {
 struct ResolveInfoState {
     flag_resolve_info: HashMap<String, FlagResolveInfo>,
     client_resolve_info: HashMap<String, ClientResolveInfo>,
-    // Shared reference to persistent counter (not reset on checkpoint)
-    resolve_count: Arc<AtomicU64>,
     sdk: RwLock<Option<crate::flags_resolver::Sdk>>,
 }
 
 impl ResolveInfoState {
-    fn new() -> Self {
-        Self::new_with_counter(Arc::new(AtomicU64::new(0)))
-    }
-
-    fn new_with_counter(resolve_count: Arc<AtomicU64>) -> Self {
+    fn new_with_counter(_resolve_count: Arc<AtomicU64>) -> Self {
         ResolveInfoState {
             flag_resolve_info: HashMap::default(),
             client_resolve_info: HashMap::default(),
-            resolve_count,
             sdk: RwLock::new(None),
         }
     }
@@ -236,7 +232,6 @@ impl Default for ResolveInfoState {
         ResolveInfoState {
             flag_resolve_info: HashMap::default(),
             client_resolve_info: HashMap::default(),
-            resolve_count: Arc::new(AtomicU64::new(0)),
             sdk: RwLock::new(None),
         }
     }

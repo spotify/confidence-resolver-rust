@@ -14,7 +14,7 @@ use serde_json::json;
 
 use confidence::flags::resolver::v1::{ApplyFlagsRequest, ApplyFlagsResponse, ResolveFlagsRequest};
 
-static RESOLVE_LOGGER: LazyLock<ResolveLogger<H>> = LazyLock::new(ResolveLogger::new);
+static RESOLVE_LOGGER: LazyLock<ResolveLogger> = LazyLock::new(ResolveLogger::new);
 static ASSIGN_LOGGER: LazyLock<AssignLogger> = LazyLock::new(AssignLogger::new);
 
 use confidence_resolver::Client;
