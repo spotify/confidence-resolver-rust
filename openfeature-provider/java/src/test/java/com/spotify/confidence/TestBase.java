@@ -12,7 +12,6 @@ import com.spotify.confidence.iam.v1.Client;
 import com.spotify.confidence.iam.v1.ClientCredential;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 
 public class TestBase {
@@ -59,36 +58,36 @@ public class TestBase {
 
   protected ResolveFlagsResponse resolveWithContext(
       List<String> flags, String username, Struct struct, boolean apply, String secret) {
-      return resolverApi.resolve(
-              ResolveFlagsRequest.newBuilder()
-                  .addAllFlags(flags)
-                  .setClientSecret(secret)
-                  .setEvaluationContext(
-                      Structs.of("targeting_key", Values.of(username), "bar", Values.of(struct)))
-                  .setApply(apply)
-                  .build());
+    return resolverApi.resolve(
+        ResolveFlagsRequest.newBuilder()
+            .addAllFlags(flags)
+            .setClientSecret(secret)
+            .setEvaluationContext(
+                Structs.of("targeting_key", Values.of(username), "bar", Values.of(struct)))
+            .setApply(apply)
+            .build());
   }
 
   protected ResolveFlagsResponse resolveWithNumericTargetingKey(
       List<String> flags, Number targetingKey, Struct struct) {
 
-      final var builder =
-          ResolveFlagsRequest.newBuilder()
-              .addAllFlags(flags)
-              .setClientSecret(secret.getSecret())
-              .setApply(true);
+    final var builder =
+        ResolveFlagsRequest.newBuilder()
+            .addAllFlags(flags)
+            .setClientSecret(secret.getSecret())
+            .setApply(true);
 
-      if (targetingKey instanceof Double || targetingKey instanceof Float) {
-        builder.setEvaluationContext(
-            Structs.of(
-                "targeting_key", Values.of(targetingKey.doubleValue()), "bar", Values.of(struct)));
-      } else {
-        builder.setEvaluationContext(
-            Structs.of(
-                "targeting_key", Values.of(targetingKey.longValue()), "bar", Values.of(struct)));
-      }
+    if (targetingKey instanceof Double || targetingKey instanceof Float) {
+      builder.setEvaluationContext(
+          Structs.of(
+              "targeting_key", Values.of(targetingKey.doubleValue()), "bar", Values.of(struct)));
+    } else {
+      builder.setEvaluationContext(
+          Structs.of(
+              "targeting_key", Values.of(targetingKey.longValue()), "bar", Values.of(struct)));
+    }
 
-      return resolverApi.resolve(builder.build());
+    return resolverApi.resolve(builder.build());
   }
 
   protected ResolveFlagsResponse resolveWithContext(

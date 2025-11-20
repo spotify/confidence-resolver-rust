@@ -9,14 +9,15 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Default implementation of ChannelFactory that creates standard gRPC channels
- * with security settings based on environment variables.
+ * Default implementation of ChannelFactory that creates standard gRPC channels with security
+ * settings based on environment variables.
  *
  * <p>This factory:
+ *
  * <ul>
- *   <li>Uses TLS by default, unless CONFIDENCE_GRPC_PLAINTEXT=true</li>
- *   <li>Adds a default deadline interceptor (1 minute timeout)</li>
- *   <li>Applies any additional interceptors passed via defaultInterceptors</li>
+ *   <li>Uses TLS by default, unless CONFIDENCE_GRPC_PLAINTEXT=true
+ *   <li>Adds a default deadline interceptor (1 minute timeout)
+ *   <li>Applies any additional interceptors passed via defaultInterceptors
  * </ul>
  */
 public class DefaultChannelFactory implements ChannelFactory {

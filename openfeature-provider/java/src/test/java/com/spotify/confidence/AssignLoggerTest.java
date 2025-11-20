@@ -3,8 +3,6 @@ package com.spotify.confidence;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.argThat;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -26,8 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
-import org.mockito.Mockito;
 
 public class AssignLoggerTest {
   private InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub stub;
