@@ -1,8 +1,8 @@
 package com.spotify.confidence;
 
-import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
+import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import com.spotify.futures.CompletableFutures;
 import java.util.ArrayList;
 import java.util.Map;
@@ -36,7 +36,8 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
         }
       };
 
-  public ThreadLocalSwapWasmResolverApi(WasmFlagLogger flagLogger, StickyResolveStrategy stickyResolveStrategy) {
+  public ThreadLocalSwapWasmResolverApi(
+      WasmFlagLogger flagLogger, StickyResolveStrategy stickyResolveStrategy) {
     this.flagLogger = flagLogger;
     this.stickyResolveStrategy = stickyResolveStrategy;
 
@@ -47,24 +48,21 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
   @Override
   public void init(byte[] state, String accountId) {
     logger.info(
-            "Initialized ThreadLocalSwapWasmResolverApi with {} available processors", numInstances);
+        "Initialized ThreadLocalSwapWasmResolverApi with {} available processors", numInstances);
     final var futures = new ArrayList<CompletableFuture<Void>>(numInstances);
 
     IntStream.range(0, numInstances)
-            .forEach(
-                    i ->
-                            futures.add(
-                                    CompletableFuture.runAsync(
-                                            () -> {
-                                              final var instance =
-                                                      new SwapWasmResolverApi(
-                                                              this.flagLogger,
-                                                              state,
-                                                              accountId,
-                                                              this.stickyResolveStrategy);
-                                              instance.init(state, accountId);
-                                              resolverInstances.put(i, instance);
-                                            })));
+        .forEach(
+            i ->
+                futures.add(
+                    CompletableFuture.runAsync(
+                        () -> {
+                          final var instance =
+                              new SwapWasmResolverApi(
+                                  this.flagLogger, state, accountId, this.stickyResolveStrategy);
+                          instance.init(state, accountId);
+                          resolverInstances.put(i, instance);
+                        })));
     CompletableFutures.allAsList(futures).join();
   }
 

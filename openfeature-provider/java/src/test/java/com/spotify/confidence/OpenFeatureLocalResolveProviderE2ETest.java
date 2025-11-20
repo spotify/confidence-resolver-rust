@@ -43,8 +43,7 @@ class OpenFeatureLocalResolveProviderE2ETest {
     OpenFeatureAPI.getInstance().setProviderAndWait(provider);
     System.out.println("OpenFeatureAPI started: " + (System.currentTimeMillis() - start));
     // Set evaluation context with targeting key
-    final EvaluationContext context = new MutableContext("test-a")
-      .add("sticky", false);
+    final EvaluationContext context = new MutableContext("test-a").add("sticky", false);
     OpenFeatureAPI.getInstance().setEvaluationContext(context);
 
     client = OpenFeatureAPI.getInstance().getClient();
@@ -111,9 +110,7 @@ class OpenFeatureLocalResolveProviderE2ETest {
 
   @Test
   void shouldResolveFlagWithStickyResolve() {
-    final EvaluationContext stickyContext =
-        new MutableContext("test-a")
-            .add("sticky", true);
+    final EvaluationContext stickyContext = new MutableContext("test-a").add("sticky", true);
 
     final FlagEvaluationDetails<Double> details =
         client.getDoubleDetails("web-sdk-e2e-flag.double", -1.0, stickyContext);

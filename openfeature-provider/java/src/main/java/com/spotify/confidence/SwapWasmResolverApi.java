@@ -1,10 +1,10 @@
 package com.spotify.confidence;
 
 import com.spotify.confidence.flags.resolver.v1.MaterializationMap;
-import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
-import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
+import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
+import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,10 +32,10 @@ class SwapWasmResolverApi implements ResolverApi {
     this.wasmResolverApiRef.set(initialInstance);
   }
 
-    @Override
-    public void init(byte[] state, String accountId) {
-        updateStateAndFlushLogs(state, accountId);
-    }
+  @Override
+  public void init(byte[] state, String accountId) {
+    updateStateAndFlushLogs(state, accountId);
+  }
 
   @Override
   public void updateStateAndFlushLogs(byte[] state, String accountId) {

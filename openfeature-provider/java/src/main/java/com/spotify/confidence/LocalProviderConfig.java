@@ -3,10 +3,11 @@ package com.spotify.confidence;
 /**
  * Configuration for the local resolve OpenFeature provider.
  *
- * <p>This class combines API credentials with optional advanced configuration like custom
- * channel factories for gRPC connection creation.
+ * <p>This class combines API credentials with optional advanced configuration like custom channel
+ * factories for gRPC connection creation.
  *
  * <p>Example usage with default channel factory:
+ *
  * <pre>{@code
  * ApiSecret apiSecret = new ApiSecret("client-id", "client-secret");
  * LocalProviderConfig config = new LocalProviderConfig(apiSecret);
@@ -14,6 +15,7 @@ package com.spotify.confidence;
  * }</pre>
  *
  * <p>Example usage with custom channel factory for testing:
+ *
  * <pre>{@code
  * ChannelFactory mockFactory = (target, interceptors) ->
  *     InProcessChannelBuilder.forName("test-server")
@@ -43,8 +45,8 @@ public class LocalProviderConfig {
    * Creates a configuration with a custom channel factory.
    *
    * @param apiSecret the API credentials for Confidence service authentication
-   * @param channelFactory optional custom factory for creating gRPC channels; if null, uses
-   *     {@link DefaultChannelFactory}
+   * @param channelFactory optional custom factory for creating gRPC channels; if null, uses {@link
+   *     DefaultChannelFactory}
    */
   public LocalProviderConfig(ApiSecret apiSecret, ChannelFactory channelFactory) {
     this.apiSecret = apiSecret;
