@@ -303,10 +303,13 @@ export class ConfidenceServerProviderLocal implements Provider {
         body: encodedWriteFlagLogRequest as Uint8Array<ArrayBuffer>,
       });
       if (!res.ok) {
-        throw new Error(`${res.status}: ${res.statusText}`);
+        // HTTP error response - already retried by middleware, just log
+        logger.warn(`Failed to send flag logs: ${res.status}: ${res.statusText}`);
       }
     } catch (err) {
+      // Network error (DNS/connect/TLS) - already retried by middleware, log and rethrow
       logger.warn('Failed to send flag logs', err);
+      throw err;
     }
   }
 
