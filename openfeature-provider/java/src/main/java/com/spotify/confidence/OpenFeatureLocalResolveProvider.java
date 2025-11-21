@@ -8,6 +8,8 @@ import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolvedFlag;
+import com.spotify.confidence.flags.resolver.v1.Sdk;
+import com.spotify.confidence.flags.resolver.v1.SdkId;
 import com.spotify.confidence.iam.v1.AuthServiceGrpc;
 import dev.openfeature.sdk.*;
 import dev.openfeature.sdk.exceptions.FlagNotFoundError;
@@ -55,7 +57,6 @@ import org.slf4j.Logger;
  * String flagValue = client.getStringValue("my-flag", "default-value");
  * }</pre>
  *
- * @since 0.2.4
  */
 @Experimental
 public class OpenFeatureLocalResolveProvider implements FeatureProvider {
@@ -112,7 +113,6 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
      * @param clientSecret the client secret for your application, used for flag resolution
      *                     authentication. This is different from the API secret and is specific to your application
      *                     configuration
-     * @since 0.2.4
      */
     public OpenFeatureLocalResolveProvider(ApiSecret apiSecret, String clientSecret) {
         this(apiSecret, clientSecret, new RemoteResolverFallback(new DefaultChannelFactory()));
@@ -180,7 +180,6 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
      * @param accountStateProvider  a functional interface that provides AccountState instances
      * @param clientSecret          the flag client key used to filter the flags
      * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
-     * @since 0.2.4
      */
     @VisibleForTesting
     public OpenFeatureLocalResolveProvider(
@@ -194,7 +193,6 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
                 new NoOpWasmFlagLogger(),
                 stickyResolveStrategy);
     }
-
 
     private AccountStateProvider getStateProvider(TokenHolder tokenHolder, String confidenceDomain, ChannelFactory channelFactory) {
         // Create authenticated channel with JWT interceptor
@@ -334,6 +332,10 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
                             .setClientSecret(clientSecret)
                             .setEvaluationContext(
                                     Struct.newBuilder().putAllFields(evaluationContext.getFieldsMap()).build())
+                            .setSdk(Sdk.newBuilder()
+                                    .setId(SdkId.SDK_ID_JAVA_LOCAL_PROVIDER)
+                                    .setVersion(Version.VERSION)
+                                    .build())
                             .build();
 
             resolveFlagResponse = wasmResolveApi.resolveWithSticky(

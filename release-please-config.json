@@ -36,7 +36,8 @@
           "type": "pom",
           "path": "pom.xml"
         },
-        "README.md"
+        "README.md",
+        "src/main/java/com/spotify/confidence/Version.java"
       ]
     },
     "openfeature-provider/js": {

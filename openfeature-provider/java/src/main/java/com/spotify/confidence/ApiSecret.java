@@ -8,6 +8,5 @@ package com.spotify.confidence;
  *
  * @param clientId the client ID for your Confidence application
  * @param clientSecret the client secret for your Confidence application
- * @since 0.2.4
  */
 public record ApiSecret(String clientId, String clientSecret) {}
