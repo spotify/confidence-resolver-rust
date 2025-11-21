@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicU32, AtomicU64, Ordering},
+    atomic::{AtomicU32, Ordering},
     Arc, RwLock,
 };
 
@@ -34,7 +34,7 @@ impl<H: Host> Default for ResolveLogger<H> {
 impl<H: Host> ResolveLogger<H> {
     pub fn new() -> ResolveLogger<H> {
         ResolveLogger {
-            state: ArcSwap::new(Arc::new(RwLock::new(Some(ResolveInfoState::new::<H>())))),
+            state: ArcSwap::new(Arc::new(RwLock::new(Some(ResolveInfoState::new())))),
             _phantom: PhantomData,
         }
     }
@@ -75,9 +75,6 @@ impl<H: Host> ResolveLogger<H> {
                     let schema = SchemaFromEvaluationContext::get_schema(resolve_context);
                     client_resolve_info.schemas.pin().insert(schema);
                 });
-
-            // Track resolve request count for RPS calculation
-            state.resolve_count.fetch_add(1, Ordering::Relaxed);
 
             // Store SDK info if not already set
             if let Some(sdk_value) = sdk {
@@ -133,7 +130,7 @@ impl<H: Host> ResolveLogger<H> {
     pub fn checkpoint(&self) -> pb::WriteFlagLogsRequest {
         let lock = self
             .state
-            .swap(Arc::new(RwLock::new(Some(ResolveInfoState::new::<H>()))));
+            .swap(Arc::new(RwLock::new(Some(ResolveInfoState::new()))));
         // the only operation we do under write-lock is take the option, and that can't panic, so lock shouldn't be poisoned,
         // even so, if it some how was it's safe to still use the value.
         let mut wg = lock
@@ -146,23 +143,9 @@ impl<H: Host> ResolveLogger<H> {
                 let client_resolve_info = build_client_resolve_info(&state);
                 let flag_resolve_info = build_flag_resolve_info(&state);
 
-                // Calculate RPS
-                let resolve_count = state.resolve_count.load(Ordering::Relaxed);
-                let current_time_seconds = H::current_time().seconds as f64
-                    + (H::current_time().nanos as f64 / 1_000_000_000.0);
-                let elapsed = current_time_seconds - state.start_time_seconds;
-
-                let resolve_rps = if elapsed > 0.0 {
-                    resolve_count as f64 / elapsed
-                } else {
-                    0.0
-                };
-
-                let telemetry_data = if resolve_count > 0 {
+                let telemetry_data = {
                     let sdk = state.sdk.read().ok().and_then(|s| s.clone());
-                    Some(pb::TelemetryData { resolve_rps, sdk })
-                } else {
-                    None
+                    sdk.map(|s| pb::TelemetryData { sdk: Some(s) })
                 };
 
                 pb::WriteFlagLogsRequest {
@@ -199,20 +182,14 @@ struct ClientResolveInfo {
 struct ResolveInfoState {
     flag_resolve_info: HashMap<String, FlagResolveInfo>,
     client_resolve_info: HashMap<String, ClientResolveInfo>,
-    resolve_count: AtomicU64,
-    start_time_seconds: f64,
     sdk: RwLock<Option<crate::flags_resolver::Sdk>>,
 }
 
 impl ResolveInfoState {
-    fn new<H: Host>() -> Self {
-        let t = H::current_time();
-        let start_time_seconds = t.seconds as f64 + (t.nanos as f64 / 1_000_000_000.0);
+    fn new() -> Self {
         ResolveInfoState {
             flag_resolve_info: HashMap::default(),
             client_resolve_info: HashMap::default(),
-            resolve_count: AtomicU64::new(0),
-            start_time_seconds,
             sdk: RwLock::new(None),
         }
     }
@@ -223,8 +200,6 @@ impl Default for ResolveInfoState {
         ResolveInfoState {
             flag_resolve_info: HashMap::default(),
             client_resolve_info: HashMap::default(),
-            resolve_count: AtomicU64::new(0),
-            start_time_seconds: 0.0,
             sdk: RwLock::new(None),
         }
     }

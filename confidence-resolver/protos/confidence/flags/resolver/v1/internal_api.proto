@@ -109,11 +109,8 @@ message WriteFlagAssignedResponse {
 // Collection of telemetry metrics, usually included in request messages to
 // monitor sender-side issues or performance
 message TelemetryData {
-  // Requests per second for resolve calls (from WASM resolver)
-  double resolve_rps = 2;
-
   // Information about the SDK/provider
-  Sdk sdk = 3 [
+  Sdk sdk = 2 [
     (google.api.field_behavior) = OPTIONAL
   ];
 }
