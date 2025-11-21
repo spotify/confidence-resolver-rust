@@ -110,7 +110,7 @@ message WriteFlagAssignedResponse {
 // monitor sender-side issues or performance
 message TelemetryData {
   // Information about the SDK/provider
-  Sdk sdk = 3 [
+  Sdk sdk = 2 [
     (google.api.field_behavior) = OPTIONAL
   ];
 }

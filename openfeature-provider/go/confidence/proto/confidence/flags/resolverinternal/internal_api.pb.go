@@ -243,7 +243,7 @@ func (x *WriteFlagAssignedResponse) GetAssignedFlags() int64 {
 type TelemetryData struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Information about the SDK/provider
-	Sdk           *resolvertypes.Sdk `protobuf:"bytes,3,opt,name=sdk,proto3" json:"sdk,omitempty"`
+	Sdk           *resolvertypes.Sdk `protobuf:"bytes,2,opt,name=sdk,proto3" json:"sdk,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -545,7 +545,7 @@ const file_confidence_flags_resolver_v1_internal_api_proto_rawDesc = "" +
 	"\x19WriteFlagAssignedResponse\x12%\n" +
 	"\x0eassigned_flags\x18\x01 \x01(\x03R\rassignedFlags\"J\n" +
 	"\rTelemetryData\x129\n" +
-	"\x03sdk\x18\x03 \x01(\v2!.confidence.flags.resolver.v1.SdkB\x04\xe2A\x01\x01R\x03sdk\"j\n" +
+	"\x03sdk\x18\x02 \x01(\v2!.confidence.flags.resolver.v1.SdkB\x04\xe2A\x01\x01R\x03sdk\"j\n" +
 	"\fResolveToken\x12I\n" +
 	"\btoken_v1\x18\x01 \x01(\v2,.confidence.flags.resolver.v1.ResolveTokenV1H\x00R\atokenV1B\x0f\n" +
 	"\rresolve_token\"\x9a\a\n" +
