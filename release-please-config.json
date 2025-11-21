@@ -44,7 +44,7 @@
       "path": "openfeature-provider/js",
       "release-type": "rust",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["package.json"]
+      "extra-files": ["package.json", "src/version.ts"]
     },
     "openfeature-provider/go": {
       "path": "openfeature-provider/go",

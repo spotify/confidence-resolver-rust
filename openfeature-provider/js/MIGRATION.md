@@ -21,6 +21,7 @@ The dependencies to Openfeature (`@openfeature/server-sdk` & `@openfeature/core`
 ## Constructing
 
 Where you previously used either type of approaches to construct your Confidence open feature provider:
+
 ```ts
 const provider = createConfidenceServerProvider({
   clientSecret: 'your-client-secret',
@@ -29,7 +30,7 @@ const provider = createConfidenceServerProvider({
 });
 
 // or
-const confidenceInstance: Confidence // created separately
+const confidenceInstance: Confidence; // created separately
 const provider = createConfidenceServerProvider(confidenceInstance);
 ```
 
@@ -51,6 +52,7 @@ const provider = createConfidenceServerProvider({
 ## Breaking Changes
 
 ### Parameter rename: `clientSecret` → `flagClientSecret`
+
 The client id parameter has been renamed from `clientSecret` to `flagClientSecret`. The value can remain the same, just update the parameter name:
 
 ```ts
@@ -66,7 +68,9 @@ const provider = createConfidenceServerProvider({
 ```
 
 ### New required credentials
+
 You must now provide two additional credentials:
+
 - `apiClientId`: Confidence API Client ID
 - `apiClientSecret`: Confidence API Client Secret
 
@@ -75,6 +79,7 @@ You must now provide two additional credentials:
 The old provider used `timeout` to control network request timeouts for each flag evaluation. When exceeded, default values were returned.
 
 The new provider works differently:
+
 - Flag evaluations happen **locally in WebAssembly** (no network calls during evaluation)
 - The optional `initializeTimeout` parameter (default: 30 seconds) controls how long to wait for the initial resolver state fetch
 - You typically don't need to configure timeouts anymore
@@ -82,6 +87,7 @@ The new provider works differently:
 **Migration**: Remove the `timeout` parameter. If you need to control initialization wait time, use `initializeTimeout` instead.
 
 ## Usage
+
 Since this is just another Provider meant to be used with the OpenFeature SDK, the integration when accessing flag values remain the same.
 
 ## Obtaining the new credentials
@@ -110,7 +116,6 @@ The credentials need to be accessible from your application, for example as envi
 
 <img src="../../img/create-policy.png" alt="create policy" width="300" />
 
-
 ## Testing and verifying
 
 As with any good software development practice we suggest you test this locally or in a test environment before launching in production.
@@ -125,13 +130,17 @@ DEBUG=cnfd:* node your-app.js
 This will show detailed logs about resolver state fetches, retries, and flag evaluations.
 
 We suggest that you create a new flag in Confidence and resolve that flag using the new OpenFeature provider. To verify correctness you should:
+
 #### 1 Verify the expected result in the flag evaluation in your application
+
 #### 2 Verify that flag resolves are visible
+
 <img src="../../img/resolve-graph.png" alt="resolve graph" width="300" />
 
 #### 3 Verify applies are registered correctly - "last apply just now"
+
 <img src="../../img/applies-registered.png" alt="applies registered" width="300" />
 
 #### 4 Verify that flag rules are registering "resolved X times" updates
-<img src="../../img/rule-resolved.png" alt="rule resolved" width="300" />
 
+<img src="../../img/rule-resolved.png" alt="rule resolved" width="300" />
