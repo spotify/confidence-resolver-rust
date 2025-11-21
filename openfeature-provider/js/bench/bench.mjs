@@ -78,7 +78,9 @@ function runLoop(abort, client, flagKey, onErrorAbort) {
   })();
 }
 
-function seconds(n) { return n * 1000; }
+function seconds(n) {
+  return n * 1000;
+}
 
 try {
   await OpenFeature.setProviderAndWait(provider);
@@ -111,12 +113,16 @@ try {
 
   const elapsedMs = Date.now() - start;
   const qps = completed / (elapsedMs / 1000);
-  console.log(`flag=${FLAG_KEY} duration=${Math.round(elapsedMs)}ms ops=${completed} errors=${errors} throughput=${Math.round(qps)} ops/s`);
+  console.log(
+    `flag=${FLAG_KEY} duration=${Math.round(elapsedMs)}ms ops=${completed} errors=${errors} throughput=${Math.round(
+      qps,
+    )} ops/s`,
+  );
 } catch (err) {
   console.error(err);
   process.exit(1);
 } finally {
-  try { await provider.onClose(); } catch {}
+  try {
+    await provider.onClose();
+  } catch {}
 }
-
-
