@@ -54,8 +54,9 @@ String value = client.getStringValue("my-flag", "default-value");
 Configure the provider behavior using environment variables:
 
 - `CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS`: How often to poll Confidence to get updates (default: `300` seconds)
+- `CONFIDENCE_NUMBER_OF_WASM_INSTANCES`: How many WASM instances to create (this defaults to `Runtime.getRuntime().availableProcessors()` and will affect the performance of the provider)
 
-// Deprecated in favour of a custom ChannelFactory:
+##### Deprecated in favour of a custom ChannelFactory:
 - `CONFIDENCE_DOMAIN`: Override the default Confidence service endpoint (default: `edge-grpc.spotify.com`)
 - `CONFIDENCE_GRPC_PLAINTEXT`: Use plaintext gRPC connections instead of TLS (default: `false`)
 
