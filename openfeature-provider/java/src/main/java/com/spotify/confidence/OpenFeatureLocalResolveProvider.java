@@ -72,6 +72,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
             Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder().setDaemon(true).build());
     private final AccountStateProvider stateProvider;
     private final AtomicReference<ProviderState> state = new AtomicReference<>(ProviderState.NOT_READY);
+    private final ChannelFactory channelFactory;
     private static long getPollIntervalSeconds() {
         return Optional.ofNullable(System.getenv("CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS"))
                 .map(Long::parseLong)
@@ -160,13 +161,14 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
             LocalProviderConfig config, String clientSecret, StickyResolveStrategy stickyResolveStrategy) {
         this.clientSecret = clientSecret;
         this.stickyResolveStrategy = stickyResolveStrategy;
+        this.channelFactory = config.getChannelFactory();
         final String confidenceDomain =
                 Optional.ofNullable(System.getenv("CONFIDENCE_DOMAIN"))
                         .orElse("edge-grpc.spotify.com");
 
-        var tokenHolder = createTokenHolder(config.getApiSecret(), config.getChannelFactory(), confidenceDomain);
-        this.stateProvider = getStateProvider(tokenHolder, confidenceDomain, config.getChannelFactory());
-        final var wasmFlagLogger = new GrpcWasmFlagLogger(config.getApiSecret(), config.getChannelFactory());
+        var tokenHolder = createTokenHolder(config.getApiSecret(), this.channelFactory, confidenceDomain);
+        this.stateProvider = getStateProvider(tokenHolder, confidenceDomain, this.channelFactory);
+        final var wasmFlagLogger = new GrpcWasmFlagLogger(config.getApiSecret(), this.channelFactory);
         this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(
                 wasmFlagLogger,
                 stickyResolveStrategy);
@@ -189,6 +191,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
             StickyResolveStrategy stickyResolveStrategy) {
         this.stickyResolveStrategy = stickyResolveStrategy;
         this.clientSecret = clientSecret;
+        this.channelFactory = null; // No factory needed for testing constructor
         this.stateProvider = accountStateProvider;
         this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(
                 new NoOpWasmFlagLogger(),
@@ -306,7 +309,9 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     public void shutdown() {
         this.stickyResolveStrategy.close();
         this.wasmResolveApi.close();
-        // shutdown grpc classes... work with a closer?
+        if (this.channelFactory != null) {
+            this.channelFactory.shutdown();
+        }
         FeatureProvider.super.shutdown();
     }
 

@@ -41,20 +41,26 @@ public class ChannelFactoryTest {
         final List<String> targetsReceived = new ArrayList<>();
         final List<Integer> interceptorCounts = new ArrayList<>();
 
-        final ChannelFactory customFactory =
-                (target, interceptors) -> {
-                    factoryCallCount.incrementAndGet();
-                    targetsReceived.add(target);
-                    interceptorCounts.add(interceptors.size());
-                    ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget("localhost")
-                            .usePlaintext();
+        final ChannelFactory customFactory = new ChannelFactory() {
+            @Override
+            public ManagedChannel create(String target, List<ClientInterceptor> interceptors) {
+                factoryCallCount.incrementAndGet();
+                targetsReceived.add(target);
+                interceptorCounts.add(interceptors.size());
+                ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forTarget("localhost")
+                        .usePlaintext();
 
-                    if (!interceptors.isEmpty()) {
-                        builder.intercept(interceptors.toArray(new ClientInterceptor[0]));
-                    }
+                if (!interceptors.isEmpty()) {
+                    builder.intercept(interceptors.toArray(new ClientInterceptor[0]));
+                }
+                return builder.build();
+            }
 
-                    return builder.build();
-                };
+            @Override
+            public void shutdown() {
+                // Test implementation - no-op
+            }
+        };
 
 
         // Call the constructor that uses ChannelFactory

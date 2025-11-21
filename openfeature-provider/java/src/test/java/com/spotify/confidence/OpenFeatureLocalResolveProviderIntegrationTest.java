@@ -19,6 +19,7 @@ import com.spotify.confidence.iam.v1.AuthServiceGrpc;
 import com.spotify.confidence.iam.v1.RequestAccessTokenRequest;
 import com.sun.net.httpserver.HttpServer;
 import dev.openfeature.sdk.*;
+import dev.openfeature.sdk.exceptions.FlagNotFoundError;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -32,7 +33,9 @@ import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
@@ -45,7 +48,7 @@ import org.junit.jupiter.api.Test;
  * <p>This test uses in-process gRPC server to test the provider without requiring external
  * services.
  */
-class OpenFeatureLocalResolveProviderTest {
+class OpenFeatureLocalResolveProviderIntegrationTest {
     private static final String TEST_CLIENT_ID = "test-client-id";
     private static final String TEST_CLIENT_SECRET = "test-client-secret";
     private static final String FLAG_CLIENT_SECRET = "mkjJruAATQWjeY7foFIWfVAcBWnci2YF";
@@ -104,16 +107,24 @@ class OpenFeatureLocalResolveProviderTest {
                         .start());
 
         // Create custom channel factory that connects to in-process server
-        final ChannelFactory testChannelFactory =
-                (target, interceptors) -> {
-                    InProcessChannelBuilder builder = InProcessChannelBuilder.forName(serverName);
-                    if (!interceptors.isEmpty()) {
-                        builder.intercept(interceptors.toArray(new ClientInterceptor[0]));
-                    }
-                    ManagedChannel channel = builder.build();
-                    grpcCleanup.register(channel);
-                    return channel;
-                };
+        final ChannelFactory testChannelFactory = new ChannelFactory() {
+            private final List<ManagedChannel> channels = new ArrayList<>();
+            @Override
+            public ManagedChannel create(String target, List<ClientInterceptor> interceptors) {
+                InProcessChannelBuilder builder = InProcessChannelBuilder.forName(serverName);
+                if (!interceptors.isEmpty()) {
+                    builder.intercept(interceptors.toArray(new ClientInterceptor[0]));
+                }
+                ManagedChannel channel = builder.build();
+                this.channels.add(channel);
+                return channel;
+            }
+
+            @Override
+            public void shutdown() {
+                channels.stream().forEach(ManagedChannel::shutdown);
+            }
+        };
 
         // Create provider with test configuration
         final ApiSecret apiSecret = new ApiSecret(TEST_CLIENT_ID, TEST_CLIENT_SECRET);
@@ -166,7 +177,30 @@ class OpenFeatureLocalResolveProviderTest {
 
         ProviderEvaluation<String> stringEvaluation = provider.getStringEvaluation("tutorial-feature.message", "meh", context);
         assertThat(stringEvaluation.getValue()).isEqualTo("We are very excited to welcome you to Confidence! This is a message from the tutorial flag.");
+    }
 
+    @Test
+    void testResolveTutorialFeatureFlagWithoutContext() throws Exception {
+        provider.initialize(new ImmutableContext());
+
+        final ImmutableContext context =
+                new ImmutableContext();
+        Value defaultValue = new Value(new ImmutableStructure(Map.of("test", new Value("best"))));
+        ProviderEvaluation<Value> aDefault = provider.getObjectEvaluation("tutorial-feature", defaultValue, context);
+        assertThat(aDefault.getValue().asStructure().asMap()).containsExactlyInAnyOrderEntriesOf(defaultValue.asStructure().asMap());
+        assertThat(aDefault.getVariant()).isNull();
+        assertThat(aDefault.getErrorCode()).isNull();
+        assertThat(aDefault.getReason()).isEqualTo("The server returned no assignment for the flag. Typically, this happens if no configured rules matches the given evaluation context.");
+    }
+
+    @Test
+    void testResolveNonExistingFeatureFlag() throws Exception {
+        provider.initialize(new ImmutableContext());
+
+        final ImmutableContext context =
+                new ImmutableContext("tutorial_visitor", Map.of("visitor_id", new Value("tutorial_visitor")));
+
+        assertThrows(FlagNotFoundError.class, () -> provider.getObjectEvaluation("non-existing-feature", new Value("default"), context));
     }
 
     @Test
