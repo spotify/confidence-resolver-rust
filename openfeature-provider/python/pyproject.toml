@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "confidence-openfeature-provider"
+version = "0.1.0"
+description = "Confidence OpenFeature Provider with local resolve capabilities"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Spotify AB"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "openfeature-sdk>=0.7.0",
+    "wasmtime>=25.0.0",
+    "protobuf>=4.25.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.0.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.6.0",
+    "black>=24.0.0",
+    "mypy>=1.8.0",
+]
+
+[project.urls]
+Homepage = "https://confidence.spotify.com"
+Repository = "https://github.com/spotify/confidence-resolver"
+
+[tool.setuptools]
+packages = ["confidence"]
+package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+confidence = ["wasm/*.wasm", "py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "DTZ", "ISC", "ICN", "G", "PIE", "T20", "PYI", "PT", "Q", "RET", "SIM", "TID", "TCH", "ARG", "PLE", "PLR", "PLW", "RUF"]
+ignore = ["PLR0913", "PLR2004"]
+
+[tool.black]
+line-length = 140
+target-version = ["py39"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
