@@ -3,14 +3,14 @@ WORKDIR /src
 
 # Prepare module files in correct relative locations to satisfy the replace directive
 COPY openfeature-provider/go/bench/go.mod openfeature-provider/go/bench/go.sum ./openfeature-provider/go/bench/
-COPY openfeature-provider/go/confidence/go.mod openfeature-provider/go/confidence/go.sum ./openfeature-provider/go/confidence/
+COPY openfeature-provider/go/go.mod openfeature-provider/go/go.sum ./openfeature-provider/go/
 
 # Prime module cache
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download -C ./openfeature-provider/go/bench
 
 # Copy sources (bench + local provider, including embedded wasm)
-COPY openfeature-provider/go/confidence ./openfeature-provider/go/confidence
+COPY openfeature-provider/go ./openfeature-provider/go
 COPY openfeature-provider/go/bench ./openfeature-provider/go/bench
 
 # Build static bench binary
