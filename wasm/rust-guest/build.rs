@@ -25,6 +25,6 @@ fn main() {
     );
 
     config
-        .compile_protos(&["messages.proto", "types.proto"], &["../proto", "proto"])
+        .compile_protos(&["messages.proto", "types.proto"], &["../proto"])
         .unwrap_or_else(|e| panic!("Failed to compile protos {:?}", e));
 }

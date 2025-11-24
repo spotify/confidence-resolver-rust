@@ -37,8 +37,11 @@ message Sdk {
   string version = 3;
 }
 
+// Note: This enum is required for the Sdk message schema to compile correctly,
+// even though the WASM guest never constructs SdkId values. The guest only
+// receives and passes through Sdk messages from the main confidence-resolver.
 enum SdkId {
-  SDK_ID_RUST_PROVIDER = 0;
+  SDK_ID_UNSPECIFIED = 0;
 }
 
 message ResolvedValue {

@@ -22,7 +22,7 @@ endif
 $(BUILD_STAMP): $(REQ) generate_proto.py $(SRC)
 	python3 -m venv .venv
 	.venv/bin/pip install --upgrade pip
-	.venv/bin/pip install --require-virtualenv wasmtime protobuf
+	.venv/bin/pip install --require-virtualenv wasmtime protobuf googleapis-common-protos
 	.venv/bin/python generate_proto.py --out $(PROTO_OUT)
 	touch $@
 
