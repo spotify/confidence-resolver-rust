@@ -13,7 +13,7 @@ import (
 	"time"
 
 	openfeature "github.com/open-feature/go-sdk/openfeature"
-	confidence "github.com/spotify/confidence-resolver-rust/openfeature-provider/go/confidence"
+	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -84,6 +84,7 @@ func main() {
 		ClientSecret:    clientSecret,
 		ConnFactory:     connFactory,
 	})
+	provider.Init(openfeature.NewTargetlessEvaluationContext(map[string]any{}))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create provider: %v\n", err)
 		os.Exit(1)
