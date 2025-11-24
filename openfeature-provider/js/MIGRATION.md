@@ -34,15 +34,13 @@ const confidenceInstance: Confidence; // created separately
 const provider = createConfidenceServerProvider(confidenceInstance);
 ```
 
-### The new constructor has two new required options:
+### The new constructor:
 
 ```ts
 import { createConfidenceServerProvider } from '@spotify-confidence/openfeature-server-provider-local';
 
 const provider = createConfidenceServerProvider({
   flagClientSecret: 'your-client-secret', // this is the same client secret as before
-  apiClientId: process.env.CONFIDENCE_API_CLIENT_ID!, // <----- New and mandatory!
-  apiClientSecret: process.env.CONFIDENCE_API_CLIENT_SECRET!, // <-----  New and mandatory!
   // initializeTimeout?: number
   // flushInterval?: number
   // fetch?: typeof fetch (Node <18 or custom transport)
@@ -67,13 +65,6 @@ const provider = createConfidenceServerProvider({
 });
 ```
 
-### New required credentials
-
-You must now provide two additional credentials:
-
-- `apiClientId`: Confidence API Client ID
-- `apiClientSecret`: Confidence API Client Secret
-
 ### What happened to the `timeout` parameter?
 
 The old provider used `timeout` to control network request timeouts for each flag evaluation. When exceeded, default values were returned.
@@ -89,32 +80,6 @@ The new provider works differently:
 ## Usage
 
 Since this is just another Provider meant to be used with the OpenFeature SDK, the integration when accessing flag values remain the same.
-
-## Obtaining the new credentials
-
-`CONFIDENCE_API_CLIENT_ID` and `CONFIDENCE_API_CLIENT_SECRET` are credentials for a Confidence API Client with some specific security policies applied.
-
-Someone with admin access in your confidence workspace can generate a new API client like this:
-
-**1. Access the API clients in the Confidence Admin Panel.**
-
-<img src="../../img/admin-panel-api-clients.png" alt="admin panel api clients" width="400" />
-
-**2. Create a new API client and name it well:**
-
-<img src="../../img/create-api-client.png" alt="create API client" width="300" />
-
-**3. Store the API client ID and API client secret in a safe place**
-
-The credentials need to be accessible from your application, for example as environment variables.
-
-**4. Navigate to Policies in the Confidence Admin Panel.**
-
-<img src="../../img/admin-panel-policies.png" alt="admin panel policies" width="400" />
-
-**5. Create a new Policy where you assign `Flags Resolver Logger` and `Flags Resolver Sidecar` to your created API client:**
-
-<img src="../../img/create-policy.png" alt="create policy" width="300" />
 
 ## Testing and verifying
 
