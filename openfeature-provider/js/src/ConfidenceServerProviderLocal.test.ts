@@ -6,7 +6,7 @@ import {
   DEFAULT_STATE_INTERVAL,
 } from './ConfidenceServerProviderLocal';
 import { abortableSleep, TimeUnit, timeoutSignal } from './util';
-import { advanceTimersUntil, NetworkMock } from './test-helpers';
+import { advanceTimersUntil, MockHashProvider, NetworkMock } from './test-helpers';
 
 const mockedWasmResolver: MockedObject<LocalResolver> = {
   resolveWithSticky: vi.fn(),
@@ -27,6 +27,7 @@ beforeEach(() => {
   provider = new ConfidenceServerProviderLocal(mockedWasmResolver, {
     flagClientSecret: 'flagClientSecret',
     fetch: net.fetch,
+    hashProvider: new MockHashProvider(),
   });
 });
 
@@ -202,6 +203,7 @@ describe('timeouts and aborts', () => {
       flagClientSecret: 'flagClientSecret',
       initializeTimeout: 1000,
       fetch: net.fetch,
+      hashProvider: new MockHashProvider(),
     });
 
     await advanceTimersUntil(expect(shortTimeoutProvider.initialize()).rejects.toThrow());

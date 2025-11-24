@@ -14,6 +14,7 @@ import { VERSION } from './version';
 import { Fetch, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
 import { AccessToken, LocalResolver } from './LocalResolver';
+import { HashProvider, WebCryptoHashProvider } from './HashProvider';
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
@@ -22,6 +23,14 @@ export interface ProviderOptions {
   initializeTimeout?: number;
   flushInterval?: number;
   fetch?: typeof fetch;
+}
+
+/**
+ * Internal options for testing only. Not part of the public API.
+ * @internal
+ */
+export interface InternalProviderOptions extends ProviderOptions {
+  hashProvider?: HashProvider;
 }
 
 /**
@@ -39,11 +48,14 @@ export class ConfidenceServerProviderLocal implements Provider {
   private readonly main = new AbortController();
   private readonly fetch: Fetch;
   private readonly flushInterval: number;
+  private readonly hashProvider: HashProvider;
   private stateEtag: string | null = null;
 
   // TODO Maybe pass in a resolver factory, so that we can initialize it in initialize and transition to fatal if not.
   constructor(private resolver: LocalResolver, private options: ProviderOptions) {
     this.flushInterval = options.flushInterval ?? DEFAULT_FLUSH_INTERVAL;
+    // Allow hashProvider override for testing, but default to WebCrypto
+    this.hashProvider = (options as InternalProviderOptions).hashProvider ?? new WebCryptoHashProvider();
 
     this.fetch = Fetch.create(
       [
@@ -226,7 +238,7 @@ export class ConfidenceServerProviderLocal implements Provider {
 
   async updateState(signal?: AbortSignal): Promise<void> {
     // Build CDN URL using SHA256 hash of client secret
-    const hashHex = await this.sha256Hex(this.options.flagClientSecret);
+    const hashHex = await this.hashProvider.sha256Hex(this.options.flagClientSecret);
     const cdnUrl = `https://confidence-resolver-state-cdn.spotifycdn.com/${hashHex}`;
 
     const headers = new Headers();
@@ -252,15 +264,6 @@ export class ConfidenceServerProviderLocal implements Provider {
       accountId: stateRequest.accountId,
       state: stateRequest.state,
     });
-  }
-
-  private async sha256Hex(input: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(input);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
   }
 
   // TODO should this return success/failure, or even throw?
