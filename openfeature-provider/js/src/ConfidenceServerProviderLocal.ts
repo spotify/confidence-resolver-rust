@@ -73,7 +73,7 @@ export class ConfidenceServerProviderLocal implements Provider {
                 }),
                 withTimeout(3 * TimeUnit.SECOND),
               ],
-              '*/v1/flagLogs:clientWrite': [
+              '*/v1/clientFlagLogs:write': [
                 withRetry({
                   maxAttempts: 3,
                   baseInterval: 500,
@@ -278,12 +278,11 @@ export class ConfidenceServerProviderLocal implements Provider {
       // nothing to send
       return;
     }
-    await this.fetch('https://resolver.confidence.dev/v1/flagLogs:clientWrite', {
+    await this.fetch('https://resolver.confidence.dev/v1/clientFlagLogs:write', {
       method: 'post',
       signal,
       headers: {
         'Content-Type': 'application/x-protobuf',
-        // Use client secret authentication instead of JWT
         'Authorization': `ClientSecret ${this.options.flagClientSecret}`,
       },
       body: writeFlagLogRequest as Uint8Array<ArrayBuffer>,

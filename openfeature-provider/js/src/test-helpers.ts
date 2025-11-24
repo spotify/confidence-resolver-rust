@@ -139,7 +139,7 @@ class ResolverServerMock extends ServerMock {
       } satisfies ResolveFlagsResponse),
     );
     super({
-      '/v1/flagLogs:write': flagLogs,
+      '/v1/clientFlagLogs:write': flagLogs,
       '/v1/flags:resolve': flagsResolve,
     });
     this.flagLogs = flagLogs;
