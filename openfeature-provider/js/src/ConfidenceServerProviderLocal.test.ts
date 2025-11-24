@@ -505,3 +505,48 @@ describe('remote resolver fallback for sticky assignments', () => {
     expect(net.resolver.flagsResolve.calls).toBeLessThanOrEqual(3);
   });
 });
+
+describe('SDK telemetry', () => {
+  const RESOLVE_REASON_MATCH = 1;
+
+  it('includes SDK id and version in resolve requests', async () => {
+    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
+
+    // WASM resolver succeeds with local data
+    mockedWasmResolver.resolveWithSticky.mockReturnValue({
+      success: {
+        response: {
+          resolvedFlags: [
+            {
+              flag: 'test-flag',
+              variant: 'variant-a',
+              value: { enabled: true },
+              reason: RESOLVE_REASON_MATCH,
+            },
+          ],
+          resolveToken: new Uint8Array(),
+          resolveId: 'resolve-123',
+        },
+        updates: [],
+      },
+    });
+
+    await provider.resolveBooleanEvaluation('test-flag.enabled', false, {
+      targetingKey: 'user-123',
+    });
+
+    // Verify SDK information is included in the resolve request
+    expect(mockedWasmResolver.resolveWithSticky).toHaveBeenCalledWith({
+      resolveRequest: expect.objectContaining({
+        flags: ['flags/test-flag'],
+        clientSecret: 'flagClientSecret',
+        sdk: expect.objectContaining({
+          id: 22, // SDK_ID_JS_LOCAL_SERVER_PROVIDER
+          version: expect.stringMatching(/^\d+\.\d+\.\d+$/), // Semantic version format
+        }),
+      }),
+      materializationsPerUnit: {},
+      failFastOnSticky: true,
+    });
+  });
+});
