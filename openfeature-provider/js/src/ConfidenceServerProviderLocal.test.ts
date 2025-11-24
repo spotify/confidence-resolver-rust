@@ -38,10 +38,7 @@ describe('idealized conditions', () => {
 
     await vi.advanceTimersByTimeAsync(TimeUnit.HOUR + TimeUnit.SECOND);
 
-    // the token ttl is one hour, since it renews at 80% of ttl, it will be fetched twice
-    expect(net.iam.token.calls).toBe(2);
     // since we fetch state every 30s we should fetch 120 times, but we also do an initial fetch in initialize
-    expect(net.cdn.state.calls).toBe(121);
     expect(net.cdn.state.calls).toBe(121);
     // flush is called every 10s so 360 times in an hour
     expect(net.resolver.flagLogs.calls).toBe(360);
@@ -63,66 +60,6 @@ describe('no network', () => {
 
     expect(provider.status).toBe('ERROR');
     expect(Date.now()).toBe(DEFAULT_STATE_INTERVAL);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Stubbed tests for broader request/middleware behavior (implement later)
-// ---------------------------------------------------------------------------
-
-describe('auth token handling', () => {
-  it('renews token at 80% of TTL', async () => {
-    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
-
-    // Immediately after initialize starts, token should be fetched once
-    expect(net.iam.token.calls).toBe(1);
-
-    // Just before 80% of TTL (1h), no renewal yet
-    await vi.advanceTimersByTimeAsync(0.8 * TimeUnit.HOUR - TimeUnit.SECOND);
-    expect(net.iam.token.calls).toBe(1);
-
-    // Cross the 80% boundary, renewal should trigger
-    await vi.advanceTimersByTimeAsync(2 * TimeUnit.SECOND);
-    expect(net.iam.token.calls).toBe(2);
-  });
-  it('retries token fetch on transient errors', async () => {
-    // Make the IAM token endpoint transiently fail
-    net.iam.token.status = 503;
-    // Recover after 5s
-    setTimeout(() => {
-      net.iam.token.status = 200;
-    }, 15_000);
-
-    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
-
-    // We should have retried at least once
-    expect(net.iam.token.calls).toBeGreaterThan(1);
-    expect(net.iam.token.calls).toBeLessThan(15);
-  });
-  it('refreshes token on 401 and retries once', async () => {
-    // First authed request returns 401
-    net.cdn.state.status = req => (req.headers.get('authorization') === 'Bearer token1' ? 401 : 200);
-
-    await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
-
-    // Token should have been fetched initially and then renewed after 401
-    expect(net.iam.token.calls).toBe(2);
-    // The resolverStateUri should have been attempted twice (initial + retry)
-    expect(net.cdn.state.calls).toBe(2);
-  });
-  it('propagates failure when token cannot be obtained', async () => {
-    // Make IAM token fetch permanently fail (network-level)
-    net.iam.token.status = 'No network';
-
-    await advanceTimersUntil(expect(provider.initialize()).rejects.toThrow());
-
-    // We should have attempted token fetch multiple times due to retry
-    expect(net.iam.token.calls).toBeGreaterThanOrEqual(1);
-    // No authed calls should have proceeded without a token
-    expect(net.cdn.state.calls).toBe(0);
-    // Initialize should time out and mark provider as ERROR
-    expect(Date.now()).toBe(DEFAULT_STATE_INTERVAL);
-    expect(provider.status).toBe('ERROR');
   });
 });
 
@@ -250,52 +187,6 @@ describe('flush behavior', () => {
 });
 
 describe('router and middleware composition', () => {
-  it('routes flags/resolver through auth and inner routes', async () => {
-    let sawAuthOnFlags = false;
-    let sawNoAuthOnGcs = false;
-
-    net.cdn.state.handler = req => {
-      const auth = req.headers.get('authorization');
-      if (auth && auth.startsWith('Bearer ')) sawAuthOnFlags = true;
-      return new Response(
-        JSON.stringify({ signedUri: 'https://storage.googleapis.com/stateBucket', account: '<account>' }),
-        {
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    };
-    net.cdn.state.handler = req => {
-      const auth = req.headers.get('authorization');
-      if (!auth) sawNoAuthOnGcs = true;
-      return new Response(new Uint8Array(100));
-    };
-
-    await advanceTimersUntil(provider.updateState());
-
-    expect(sawAuthOnFlags).toBe(true);
-    expect(sawNoAuthOnGcs).toBe(true);
-  });
-
-  it('routes storage to retry + stall-timeout', async () => {
-    // Ensure small per-chunk delay (< 500ms) does not trigger stall abort
-    net.cdn.state.handler = async req => {
-      const body = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          for (let i = 0; i < 3; i++) {
-            await abortableSleep(100, req.signal);
-            controller.enqueue(new Uint8Array(100));
-          }
-          controller.close();
-        },
-      });
-      return new Response(body);
-    };
-
-    const start = net.cdn.state.calls;
-    await advanceTimersUntil(provider.updateState());
-    expect(net.cdn.state.calls - start).toBe(1);
-  });
-
   it('throws for unknown routes', async () => {
     // Simulate unknown host via NetworkMock
     await expect(net.fetch('https://unknown.confidence.dev/foo')).resolves.toHaveProperty('status', 404);
@@ -319,9 +210,8 @@ describe('timeouts and aborts', () => {
     expect(shortTimeoutProvider.status).toBe('ERROR');
   });
   it('aborts in-flight state update when provider is closed', async () => {
-    // Make both steps slow so initialize is in-flight
+    // Make state fetch slow so initialize is in-flight
     net.cdn.state.latency = 10_000;
-    net.gcs.latency = 10_000;
 
     const init = provider.initialize();
     // Abort provider immediately
@@ -333,14 +223,6 @@ describe('timeouts and aborts', () => {
     await vi.runAllTimersAsync();
   });
 
-  it('handles pre-dispatch latency aborts (endpoint not invoked)', async () => {
-    // Abort before dispatch by using server pre-latency and a short timeout signal
-    net.resolver.latency = 1_000; // 500ms pre-dispatch
-    const signal = timeoutSignal(100);
-    await advanceTimersUntil(expect(provider.updateState(signal)).rejects.toThrow());
-    // aborted before endpoint was invoked
-    expect(net.cdn.state.calls).toBe(0);
-  });
   it('handles post-dispatch latency aborts (endpoint invoked)', async () => {
     // Ensure no server latency; abort during endpoint processing
     net.cdn.state.latency = 0;

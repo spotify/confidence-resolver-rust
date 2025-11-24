@@ -11,15 +11,7 @@ import type {
 import { ResolveReason, SdkId } from './proto/api';
 import { ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyRequest } from './proto/api';
 import { VERSION } from './version';
-import {
-  Fetch,
-  withLogging,
-  withResponse,
-  withRetry,
-  withRouter,
-  withStallTimeout,
-  withTimeout,
-} from './fetch';
+import { Fetch, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
 import { AccessToken, LocalResolver } from './LocalResolver';
 
@@ -283,13 +275,11 @@ export class ConfidenceServerProviderLocal implements Provider {
       signal,
       headers: {
         'Content-Type': 'application/x-protobuf',
-        'Authorization': `ClientSecret ${this.options.flagClientSecret}`,
+        Authorization: `ClientSecret ${this.options.flagClientSecret}`,
       },
       body: writeFlagLogRequest as Uint8Array<ArrayBuffer>,
     });
   }
-
-
 
   private static convertReason(reason: ResolveReason): ResolutionReason {
     switch (reason) {
