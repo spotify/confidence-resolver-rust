@@ -21,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class ChannelFactoryTest {
 
-    private static final ApiSecret apiSecret = new ApiSecret("test-client-id", "test-client-secret");
     private final ResolverFallback noOpResolverFallback = new ResolverFallback() {
         @Override
         public CompletableFuture<

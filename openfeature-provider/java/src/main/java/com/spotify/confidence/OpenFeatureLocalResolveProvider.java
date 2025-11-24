@@ -89,13 +89,12 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
      *         .intercept(interceptors.toArray(new ClientInterceptor[0]))
      *         .build();
      *
-     * ApiSecret apiSecret = new ApiSecret("client-id", "client-secret");
-     * LocalProviderConfig config = new LocalProviderConfig(apiSecret, mockFactory);
+     * LocalProviderConfig config = new LocalProviderConfig(mockFactory);
      * OpenFeatureLocalResolveProvider provider =
      *     new OpenFeatureLocalResolveProvider(config, "client-secret");
      * }</pre>
      *
-     * @param config       the provider configuration including API credentials and optional channel factory
+     * @param config       the provider configuration including optional channel factory
      * @param clientSecret the client secret for your application, used for flag resolution
      *                     authentication
      */
