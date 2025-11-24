@@ -48,6 +48,7 @@ COPY wasm/rust-guest/Cargo.toml ./wasm/rust-guest/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
 COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
+COPY openfeature-provider/python/Cargo.toml ./openfeature-provider/python/
 
 # Copy proto files (needed by build.rs)
 COPY confidence-resolver/protos ./confidence-resolver/protos/
@@ -101,6 +102,7 @@ COPY wasm/proto/ ./wasm/proto/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
 COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
+COPY openfeature-provider/python/Cargo.toml ./openfeature-provider/python/
 
 # Touch files to ensure rebuild (dependencies are cached)
 RUN find . -type f -name "*.rs" -exec touch {} +
@@ -155,6 +157,7 @@ COPY wasm/proto/ ./wasm/proto/
 COPY openfeature-provider/java/Cargo.toml ./openfeature-provider/java/
 COPY openfeature-provider/js/Cargo.toml ./openfeature-provider/js/
 COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
+COPY openfeature-provider/python/Cargo.toml ./openfeature-provider/python/
 
 # Copy data directory (needed by confidence-cloudflare-resolver include_str! macros)
 COPY data/ ./data/
@@ -512,6 +515,102 @@ RUN --mount=type=secret,id=rubygem_api_key \
     gem push pkg/*.gem
 
 # ==============================================================================
+# OpenFeature Provider (Python) - Build and test
+# ==============================================================================
+FROM python:3.9-slim AS openfeature-provider-python-base
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        make \
+        protobuf-compiler \
+        libprotobuf-dev \
+        build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Create wasm directory and copy WASM artifact (needed for runtime)
+RUN mkdir -p ./confidence/wasm
+COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ./confidence/wasm/confidence_resolver.wasm
+
+# Copy pyproject.toml for dependency caching
+COPY openfeature-provider/python/pyproject.toml ./
+COPY openfeature-provider/python/Makefile ./
+
+# Copy proto files and generation script
+COPY openfeature-provider/python/confidence/proto/*.proto ./confidence/proto/
+COPY openfeature-provider/python/confidence/proto/__init__.py ./confidence/proto/
+COPY openfeature-provider/python/scripts ./scripts/
+
+# Copy test data (needed for integration tests)
+COPY data /data
+
+# Generate proto files first
+ENV IN_DOCKER_BUILD=1
+RUN python3 scripts/generate_proto.py
+
+# Install dependencies (this layer will be cached)
+RUN make install
+
+# Copy source code (excluding wasm/ and proto/ which are already copied)
+COPY openfeature-provider/python/confidence/__init__.py ./confidence/
+COPY openfeature-provider/python/confidence/py.typed ./confidence/
+COPY openfeature-provider/python/confidence/*.py ./confidence/
+COPY openfeature-provider/python/tests ./tests/
+
+# Regenerate proto files with installed protoc
+RUN python3 scripts/generate_proto.py
+
+# ==============================================================================
+# Test OpenFeature Provider (Python)
+# ==============================================================================
+FROM openfeature-provider-python-base AS openfeature-provider-python.test
+
+RUN make test
+
+# ==============================================================================
+# Test E2E OpenFeature Provider (Python)
+# ==============================================================================
+FROM openfeature-provider-python-base AS openfeature-provider-python.test_e2e
+
+RUN --mount=type=secret,id=confidence_client_secret \
+    export CONFIDENCE_CLIENT_SECRET=$(cat /run/secrets/confidence_client_secret) && \
+    make test-e2e
+
+# ==============================================================================
+# Lint OpenFeature Provider (Python)
+# ==============================================================================
+FROM openfeature-provider-python-base AS openfeature-provider-python.lint
+
+RUN make lint
+
+# ==============================================================================
+# Build OpenFeature Provider (Python)
+# ==============================================================================
+FROM openfeature-provider-python-base AS openfeature-provider-python.build
+
+RUN make build
+
+# ==============================================================================
+# Extract OpenFeature Provider (Python) wheel artifact
+# ==============================================================================
+FROM scratch AS openfeature-provider-python.artifact
+
+COPY --from=openfeature-provider-python.build /app/dist/*.whl /
+
+# ==============================================================================
+# Publish OpenFeature Provider (Python) to PyPI
+# ==============================================================================
+FROM openfeature-provider-python.build AS openfeature-provider-python.publish
+
+RUN pip install twine && \
+    --mount=type=secret,id=pypi_token \
+    export TWINE_PASSWORD=$(cat /run/secrets/pypi_token) && \
+    export TWINE_USERNAME=__token__ && \
+    twine upload dist/*.whl
+
+# ==============================================================================
 # OpenFeature Provider (Java) - Build and test
 # ==============================================================================
 FROM eclipse-temurin:17-jdk AS openfeature-provider-java-base
@@ -597,6 +696,7 @@ COPY --from=openfeature-provider-java.test /app/pom.xml /markers/test-openfeatur
 COPY --from=openfeature-provider-java.test_e2e /app/pom.xml /markers/test-openfeature-java-e2e
 COPY --from=openfeature-provider-go.test /app/go.mod /markers/test-openfeature-go
 COPY --from=openfeature-provider-ruby.test /app/Gemfile /markers/test-openfeature-ruby
+COPY --from=openfeature-provider-python.test /app/pyproject.toml /markers/test-openfeature-python
 
 # Force validation stages to run
 COPY --from=openfeature-provider-go.validate-wasm /built/confidence_resolver.wasm /markers/validate-wasm-go
@@ -610,6 +710,7 @@ COPY --from=wasm-msg.lint /workspace/Cargo.toml /markers/lint-wasm-msg
 COPY --from=wasm-rust-guest.lint /workspace/Cargo.toml /markers/lint-guest
 COPY --from=openfeature-provider-go.lint /app/go.mod /markers/lint-openfeature-go
 COPY --from=openfeature-provider-ruby.lint /app/Gemfile /markers/lint-openfeature-ruby
+COPY --from=openfeature-provider-python.lint /app/pyproject.toml /markers/lint-openfeature-python
 COPY --from=confidence-cloudflare-resolver.lint /workspace/Cargo.toml /markers/lint-cloudflare
 
 # Force build stages to run
@@ -618,3 +719,4 @@ COPY --from=openfeature-provider-js.build /app/dist/index.node.js /artifacts/ope
 COPY --from=openfeature-provider-java.build /app/target/*.jar /artifacts/openfeature-java/
 COPY --from=openfeature-provider-go.build /app/.build.stamp /artifacts/openfeature-go/
 COPY --from=openfeature-provider-ruby.build /app/.build.stamp /artifacts/openfeature-ruby/
+COPY --from=openfeature-provider-python.build /app/.build.stamp /artifacts/openfeature-python/
