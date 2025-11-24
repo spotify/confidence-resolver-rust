@@ -57,26 +57,23 @@ public class ChannelFactoryTest {
                 };
 
 
-        // Call the constructor that uses ChannelFactory
-        new OpenFeatureLocalResolveProvider(new LocalProviderConfig(apiSecret, customFactory), "clientsecret", noOpResolverFallback);
+        new OpenFeatureLocalResolveProvider(new LocalProviderConfig(customFactory), "clientsecret", noOpResolverFallback);
 
-        // called by tokenservice and flag logger (state service now uses HTTP directly)
-        assertEquals(2, factoryCallCount.get(), "ChannelFactory should have been called twice, but was called "
+        assertEquals(1, factoryCallCount.get(), "ChannelFactory should have been called once for flag logger, but was called "
                 + factoryCallCount.get()
                 + " times");
 
         assertFalse(targetsReceived.isEmpty(), "Factory should have received target addresses");
 
-        // Verify it received the confidence domain as target
         assertTrue(
                 targetsReceived.get(0).contains("grpc") || targetsReceived.get(0).contains("edge"),
                 "Target should be a gRPC endpoint, got: " + targetsReceived.get(0));
-        assertEquals(2, interceptorCounts.size(), "Interceptors should have been called");
+        assertEquals(1, interceptorCounts.size(), "Interceptors should have been called");
     }
 
     @Test
     public void verifyDefaultChannelFactoryIsUsedWhenNoneProvided() {
-        final LocalProviderConfig config = new LocalProviderConfig(apiSecret);
+        final LocalProviderConfig config = new LocalProviderConfig();
         assertInstanceOf(DefaultChannelFactory.class, config.getChannelFactory(), "LocalProviderConfig should use DefaultChannelFactory when none is provided");
     }
 }

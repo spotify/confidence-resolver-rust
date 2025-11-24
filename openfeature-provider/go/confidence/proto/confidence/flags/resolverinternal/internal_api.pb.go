@@ -578,7 +578,7 @@ const file_confidence_flags_resolver_v1_internal_api_proto_rawDesc = "" +
 	"\x02\xf2\x02\"\aaccount*\x17can_write_flag_assigned0\x01\x82\xd3\xe4\x93\x02I:\x01*Z,:\rflag_assigned\"\x1b/v1/flagAssigned:writeArray\"\x16/v1/flagAssigned:write\x12\xc4\x01\n" +
 	"\rWriteFlagLogs\x122.confidence.flags.resolver.v1.WriteFlagLogsRequest\x1a3.confidence.flags.resolver.v1.WriteFlagLogsResponse\"Jʇ\xe4\x10(\n" +
 	"\x02\xf2\x02\"\aaccount*\x17can_write_flag_assigned0\x01\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/flagLogs:write\x12\xa3\x01\n" +
-	"\x13ClientWriteFlagLogs\x122.confidence.flags.resolver.v1.WriteFlagLogsRequest\x1a3.confidence.flags.resolver.v1.WriteFlagLogsResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/v1/flagLogs:clientWrite\x1ae\xe2\x87\xe4\x10\x1aresolver.eu.confidence.dev\xe2\x87\xe4\x10\x1aresolver.us.confidence.dev\xea\x87\xe4\x10\x12InternalFlagLogger\xfa\xd2\xe4\x93\x02\n" +
+	"\x13ClientWriteFlagLogs\x122.confidence.flags.resolver.v1.WriteFlagLogsRequest\x1a3.confidence.flags.resolver.v1.WriteFlagLogsResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/v1/clientFlagLogs:write\x1ae\xe2\x87\xe4\x10\x1aresolver.eu.confidence.dev\xe2\x87\xe4\x10\x1aresolver.us.confidence.dev\xea\x87\xe4\x10\x12InternalFlagLogger\xfa\xd2\xe4\x93\x02\n" +
 	"\x12\bINTERNALB>\n" +
 	"(com.spotify.confidence.flags.resolver.v1B\x10InternalApiProtoP\x01b\x06proto3"
 

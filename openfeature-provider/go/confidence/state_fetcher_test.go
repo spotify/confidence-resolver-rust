@@ -61,15 +61,18 @@ func TestFlagsAdminStateFetcher_GetAccountID(t *testing.T) {
 // TestFlagsAdminStateFetcher_Reload_Success tests successful state fetching from CDN
 // Note: This is a unit test that verifies the parsing logic, not actual CDN access
 func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
-	// Create a test HTTP server that serves ClientResolverState
+	// Create a test HTTP server that serves SetResolverStateRequest
 	testState := &adminv1.ResolverState{
-		Flags: []*adminv1.Flag{},
+		Flags: []*adminv1.Flag{
+			{Name: "flags/test-flag"},
+		},
 	}
-	clientState := &adminv1.ClientResolverState{
-		Account: "test-account-123",
-		State:   testState,
+	testStateBytes, _ := proto.Marshal(testState)
+	stateRequest := &adminv1.SetResolverStateRequest{
+		State:     testStateBytes,
+		AccountId: "test-account-123",
 	}
-	stateBytes, _ := proto.Marshal(clientState)
+	stateBytes, _ := proto.Marshal(stateRequest)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("ETag", "test-etag")
@@ -88,8 +91,8 @@ func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
 
 	// Verify state was updated
 	state := fetcher.GetRawState()
-	if state == nil {
-		t.Fatal("Expected state to be loaded")
+	if state == nil || len(state) == 0 {
+		t.Fatalf("Expected state to be loaded, got: %v (len: %d)", state, len(state))
 	}
 
 	// Verify account ID was set
@@ -106,12 +109,15 @@ func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
 // TestFlagsAdminStateFetcher_Reload_NotModified tests ETag-based caching
 func TestFlagsAdminStateFetcher_Reload_NotModified(t *testing.T) {
 	requestCount := 0
-	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{}}
-	clientState := &adminv1.ClientResolverState{
-		Account: "test-account",
-		State:   testState,
+	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{
+		{Name: "flags/test-flag"},
+	}}
+	testStateBytes, _ := proto.Marshal(testState)
+	stateRequest := &adminv1.SetResolverStateRequest{
+		State:     testStateBytes,
+		AccountId: "test-account",
 	}
-	stateBytes, _ := proto.Marshal(clientState)
+	stateBytes, _ := proto.Marshal(stateRequest)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -181,12 +187,15 @@ func TestFlagsAdminStateFetcher_Reload_Error(t *testing.T) {
 
 // TestFlagsAdminStateFetcher_Provide tests the Provide method
 func TestFlagsAdminStateFetcher_Provide(t *testing.T) {
-	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{}}
-	clientState := &adminv1.ClientResolverState{
-		Account: "test-account",
-		State:   testState,
+	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{
+		{Name: "flags/test-flag"},
+	}}
+	testStateBytes, _ := proto.Marshal(testState)
+	stateRequest := &adminv1.SetResolverStateRequest{
+		State:     testStateBytes,
+		AccountId: "test-account",
 	}
-	stateBytes, _ := proto.Marshal(clientState)
+	stateBytes, _ := proto.Marshal(stateRequest)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -212,12 +221,15 @@ func TestFlagsAdminStateFetcher_Provide(t *testing.T) {
 
 // TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError tests error handling in Provide
 func TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError(t *testing.T) {
-	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{}}
-	clientState := &adminv1.ClientResolverState{
-		Account: "test-account",
-		State:   testState,
+	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{
+		{Name: "flags/test-flag"},
+	}}
+	testStateBytes, _ := proto.Marshal(testState)
+	stateRequest := &adminv1.SetResolverStateRequest{
+		State:     testStateBytes,
+		AccountId: "test-account",
 	}
-	stateBytes, _ := proto.Marshal(clientState)
+	stateBytes, _ := proto.Marshal(stateRequest)
 
 	httpCallCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

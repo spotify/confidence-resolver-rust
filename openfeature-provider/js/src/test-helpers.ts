@@ -2,8 +2,7 @@ import { vi } from 'vitest';
 import { AccessToken } from './LocalResolver';
 import { abortableSleep, isObject, TimeUnit } from './util';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
-import { ResolveFlagsResponse } from './proto/api';
-import { ClientResolverState } from './proto/messages';
+import { ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
 
 type PayloadFactory = (req: Request) => BodyInit | null;
 type ByteStream = ReadableStream<Uint8Array<ArrayBuffer>>;
@@ -152,12 +151,12 @@ class CdnServerMock extends RequestHandler {
   readonly state: EndpointMock;
   constructor() {
     const stateEndpoint = new EndpointMock(() => {
-      // Return ClientResolverState protobuf
-      const clientState = ClientResolverState.encode({
-        account: '<account>',
+      // Return SetResolverStateRequest protobuf
+      const stateRequest = SetResolverStateRequest.encode({
         state: new Uint8Array(100), // Empty state for testing
+        accountId: '<account>',
       }).finish();
-      return clientState;
+      return stateRequest;
     });
     // CDN serves state at any path (using client secret as path)
     super(req => stateEndpoint.handle(req));

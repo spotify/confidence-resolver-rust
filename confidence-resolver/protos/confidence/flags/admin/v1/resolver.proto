@@ -64,13 +64,13 @@ message ResolverStateUriResponse {
 message ResolverStateRequest {
 }
 
-// Client-specific resolver state downloaded from CDN
-message ClientResolverState {
-  // The account the referenced state belongs to
-  string account = 1;
+// Request to set resolver state for a specific client
+message SetResolverStateRequest {
+  // The resolver state bytes (encoded ResolverState)
+  bytes state = 1;
 
-  // The resolver state for operating a flags resolver but sliced to only contain what is needed for a specific client
-  ResolverState state = 2;
+  // The account ID the state belongs to
+  string account_id = 2;
 }
 
 // The full state for operating a flags resolver

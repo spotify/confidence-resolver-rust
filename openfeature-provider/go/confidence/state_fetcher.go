@@ -2,6 +2,8 @@ package confidence
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -89,13 +91,15 @@ func (f *FlagsAdminStateFetcher) Provide(ctx context.Context) ([]byte, string, e
 
 // fetchAndUpdateStateIfChanged fetches the state from the CDN if it has changed
 func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Context) error {
-	// Build CDN URL directly using client secret
+	// Build CDN URL using SHA256 hash of client secret
 	// If client secret starts with http:// or https://, use it as-is (for testing)
 	var cdnURL string
 	if len(f.clientSecret) > 7 && (f.clientSecret[:7] == "http://" || f.clientSecret[:8] == "https://") {
 		cdnURL = f.clientSecret
 	} else {
-		cdnURL = "https://confidence-resolver-state-cdn.spotifycdn.com/" + f.clientSecret
+		hash := sha256.Sum256([]byte(f.clientSecret))
+		hashHex := hex.EncodeToString(hash[:])
+		cdnURL = "https://confidence-resolver-state-cdn.spotifycdn.com/" + hashHex
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cdnURL, nil)
@@ -130,29 +134,23 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 		return err
 	}
 
-	// Parse ClientResolverState
-	clientState := &adminv1.ClientResolverState{}
-	if err := proto.Unmarshal(bytes, clientState); err != nil {
-		return fmt.Errorf("failed to unmarshal ClientResolverState: %w", err)
+	// Parse SetResolverStateRequest
+	stateRequest := &adminv1.SetResolverStateRequest{}
+	if err := proto.Unmarshal(bytes, stateRequest); err != nil {
+		return fmt.Errorf("failed to unmarshal SetResolverStateRequest: %w", err)
 	}
 
-	// Extract account ID
-	f.accountID.Store(clientState.Account)
-
-	// Serialize the nested ResolverState back to bytes
-	stateBytes, err := proto.Marshal(clientState.State)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ResolverState: %w", err)
-	}
+	// Extract account ID and state bytes
+	f.accountID.Store(stateRequest.AccountId)
 
 	// Get and store the new ETag
 	etag := resp.Header.Get("ETag")
 	f.etag.Store(etag)
 
-	// Update the raw state
-	f.rawResolverState.Store(stateBytes)
+	// Update the raw state (state is already in bytes format)
+	f.rawResolverState.Store(stateRequest.State)
 
-	f.logger.Info("Loaded resolver state", "etag", etag, "account", clientState.Account)
+	f.logger.Info("Loaded resolver state", "etag", etag, "account", stateRequest.AccountId)
 
 	return nil
 }

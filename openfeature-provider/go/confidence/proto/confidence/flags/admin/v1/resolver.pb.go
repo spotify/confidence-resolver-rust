@@ -217,31 +217,31 @@ func (*ResolverStateRequest) Descriptor() ([]byte, []int) {
 	return file_confidence_flags_admin_v1_resolver_proto_rawDescGZIP(), []int{2}
 }
 
-// Client-specific resolver state downloaded from CDN
-type ClientResolverState struct {
+// Request to set resolver state for a specific client
+type SetResolverStateRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The account the referenced state belongs to
-	Account string `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
-	// The resolver state for operating a flags resolver but sliced to only contain what is needed for a specific client
-	State         *ResolverState `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	// The resolver state bytes (encoded ResolverState)
+	State []byte `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	// The account ID the state belongs to
+	AccountId     string `protobuf:"bytes,2,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ClientResolverState) Reset() {
-	*x = ClientResolverState{}
+func (x *SetResolverStateRequest) Reset() {
+	*x = SetResolverStateRequest{}
 	mi := &file_confidence_flags_admin_v1_resolver_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ClientResolverState) String() string {
+func (x *SetResolverStateRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ClientResolverState) ProtoMessage() {}
+func (*SetResolverStateRequest) ProtoMessage() {}
 
-func (x *ClientResolverState) ProtoReflect() protoreflect.Message {
+func (x *SetResolverStateRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_confidence_flags_admin_v1_resolver_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -253,23 +253,23 @@ func (x *ClientResolverState) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ClientResolverState.ProtoReflect.Descriptor instead.
-func (*ClientResolverState) Descriptor() ([]byte, []int) {
+// Deprecated: Use SetResolverStateRequest.ProtoReflect.Descriptor instead.
+func (*SetResolverStateRequest) Descriptor() ([]byte, []int) {
 	return file_confidence_flags_admin_v1_resolver_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *ClientResolverState) GetAccount() string {
-	if x != nil {
-		return x.Account
-	}
-	return ""
-}
-
-func (x *ClientResolverState) GetState() *ResolverState {
+func (x *SetResolverStateRequest) GetState() []byte {
 	if x != nil {
 		return x.State
 	}
 	return nil
+}
+
+func (x *SetResolverStateRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
 }
 
 // The full state for operating a flags resolver
@@ -471,10 +471,11 @@ const file_confidence_flags_admin_v1_resolver_proto_rawDesc = "" +
 	"\vexpire_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"expireTime\x12\x18\n" +
 	"\aaccount\x18\x03 \x01(\tR\aaccount\"\x16\n" +
-	"\x14ResolverStateRequest\"o\n" +
-	"\x13ClientResolverState\x12\x18\n" +
-	"\aaccount\x18\x01 \x01(\tR\aaccount\x12>\n" +
-	"\x05state\x18\x02 \x01(\v2(.confidence.flags.admin.v1.ResolverStateR\x05state\"\xa1\x05\n" +
+	"\x14ResolverStateRequest\"N\n" +
+	"\x17SetResolverStateRequest\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\fR\x05state\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x02 \x01(\tR\taccountId\"\xa1\x05\n" +
 	"\rResolverState\x125\n" +
 	"\x05flags\x18\x01 \x03(\v2\x1f.confidence.flags.admin.v1.FlagR\x05flags\x12R\n" +
 	"\x13segments_no_bitsets\x18\x02 \x03(\v2\".confidence.flags.admin.v1.SegmentR\x11segmentsNoBitsets\x12O\n" +
@@ -517,7 +518,7 @@ var file_confidence_flags_admin_v1_resolver_proto_goTypes = []any{
 	(*ResolverStateUriRequest)(nil),    // 1: confidence.flags.admin.v1.ResolverStateUriRequest
 	(*ResolverStateUriResponse)(nil),   // 2: confidence.flags.admin.v1.ResolverStateUriResponse
 	(*ResolverStateRequest)(nil),       // 3: confidence.flags.admin.v1.ResolverStateRequest
-	(*ClientResolverState)(nil),        // 4: confidence.flags.admin.v1.ClientResolverState
+	(*SetResolverStateRequest)(nil),    // 4: confidence.flags.admin.v1.SetResolverStateRequest
 	(*ResolverState)(nil),              // 5: confidence.flags.admin.v1.ResolverState
 	(*ResolverState_PackedBitset)(nil), // 6: confidence.flags.admin.v1.ResolverState.PackedBitset
 	(*timestamppb.Timestamp)(nil),      // 7: google.protobuf.Timestamp
@@ -528,22 +529,21 @@ var file_confidence_flags_admin_v1_resolver_proto_goTypes = []any{
 }
 var file_confidence_flags_admin_v1_resolver_proto_depIdxs = []int32{
 	7,  // 0: confidence.flags.admin.v1.ResolverStateUriResponse.expire_time:type_name -> google.protobuf.Timestamp
-	5,  // 1: confidence.flags.admin.v1.ClientResolverState.state:type_name -> confidence.flags.admin.v1.ResolverState
-	8,  // 2: confidence.flags.admin.v1.ResolverState.flags:type_name -> confidence.flags.admin.v1.Flag
-	9,  // 3: confidence.flags.admin.v1.ResolverState.segments_no_bitsets:type_name -> confidence.flags.admin.v1.Segment
-	6,  // 4: confidence.flags.admin.v1.ResolverState.bitsets:type_name -> confidence.flags.admin.v1.ResolverState.PackedBitset
-	10, // 5: confidence.flags.admin.v1.ResolverState.clients:type_name -> confidence.iam.v1.Client
-	11, // 6: confidence.flags.admin.v1.ResolverState.client_credentials:type_name -> confidence.iam.v1.ClientCredential
-	0,  // 7: confidence.flags.admin.v1.ResolverState.region:type_name -> confidence.flags.admin.v1.ResolverState.Region
-	3,  // 8: confidence.flags.admin.v1.ResolverStateService.FullResolverState:input_type -> confidence.flags.admin.v1.ResolverStateRequest
-	1,  // 9: confidence.flags.admin.v1.ResolverStateService.ResolverStateUri:input_type -> confidence.flags.admin.v1.ResolverStateUriRequest
-	5,  // 10: confidence.flags.admin.v1.ResolverStateService.FullResolverState:output_type -> confidence.flags.admin.v1.ResolverState
-	2,  // 11: confidence.flags.admin.v1.ResolverStateService.ResolverStateUri:output_type -> confidence.flags.admin.v1.ResolverStateUriResponse
-	10, // [10:12] is the sub-list for method output_type
-	8,  // [8:10] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	8,  // 1: confidence.flags.admin.v1.ResolverState.flags:type_name -> confidence.flags.admin.v1.Flag
+	9,  // 2: confidence.flags.admin.v1.ResolverState.segments_no_bitsets:type_name -> confidence.flags.admin.v1.Segment
+	6,  // 3: confidence.flags.admin.v1.ResolverState.bitsets:type_name -> confidence.flags.admin.v1.ResolverState.PackedBitset
+	10, // 4: confidence.flags.admin.v1.ResolverState.clients:type_name -> confidence.iam.v1.Client
+	11, // 5: confidence.flags.admin.v1.ResolverState.client_credentials:type_name -> confidence.iam.v1.ClientCredential
+	0,  // 6: confidence.flags.admin.v1.ResolverState.region:type_name -> confidence.flags.admin.v1.ResolverState.Region
+	3,  // 7: confidence.flags.admin.v1.ResolverStateService.FullResolverState:input_type -> confidence.flags.admin.v1.ResolverStateRequest
+	1,  // 8: confidence.flags.admin.v1.ResolverStateService.ResolverStateUri:input_type -> confidence.flags.admin.v1.ResolverStateUriRequest
+	5,  // 9: confidence.flags.admin.v1.ResolverStateService.FullResolverState:output_type -> confidence.flags.admin.v1.ResolverState
+	2,  // 10: confidence.flags.admin.v1.ResolverStateService.ResolverStateUri:output_type -> confidence.flags.admin.v1.ResolverStateUriResponse
+	9,  // [9:11] is the sub-list for method output_type
+	7,  // [7:9] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_confidence_flags_admin_v1_resolver_proto_init() }

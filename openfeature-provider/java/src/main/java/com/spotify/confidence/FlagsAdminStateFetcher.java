@@ -8,6 +8,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -61,8 +64,8 @@ class FlagsAdminStateFetcher implements AccountStateProvider {
     }
 
     private void fetchAndUpdateStateIfChanged() {
-        // Build CDN URL directly from client secret
-        final var cdnUrl = CDN_BASE_URL + clientSecret;
+        // Build CDN URL using SHA256 hash of client secret
+        final var cdnUrl = CDN_BASE_URL + sha256Hex(clientSecret);
         try {
             final HttpURLConnection conn = (HttpURLConnection) new URL(cdnUrl).openConnection();
             final String previousEtag = etagHolder.get();
@@ -77,17 +80,33 @@ class FlagsAdminStateFetcher implements AccountStateProvider {
             try (final InputStream stream = conn.getInputStream()) {
                 final byte[] bytes = stream.readAllBytes();
 
-                // Parse ClientResolverState from CDN response
-                final var clientState = com.spotify.confidence.flags.admin.v1.ClientResolverState.parseFrom(bytes);
-                this.accountId = clientState.getAccount();
+                // Parse SetResolverStateRequest from CDN response
+                final var stateRequest = com.spotify.confidence.flags.admin.v1.SetResolverStateRequest.parseFrom(bytes);
+                this.accountId = stateRequest.getAccountId();
 
-                // Store the nested ResolverState
-                rawResolverStateHolder.set(clientState.getState().toByteArray());
+                // Store the state bytes (already in bytes format)
+                rawResolverStateHolder.set(stateRequest.getState().toByteArray());
                 etagHolder.set(etag);
             }
             logger.info("Loaded resolver state for account={}, etag={}", accountId, etag);
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private static String sha256Hex(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm not available", e);
         }
     }
 }
