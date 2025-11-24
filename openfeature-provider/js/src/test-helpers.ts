@@ -2,8 +2,9 @@ import { vi } from 'vitest';
 import { AccessToken } from './LocalResolver';
 import { abortableSleep, isObject, TimeUnit } from './util';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
-import { ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
-import { LoggerBackend } from './logger';
+import { ResolveFlagsResponse } from './proto/resolver/api';
+import { SetResolverStateRequest } from './proto/messages';
+import { HashProvider } from './HashProvider';
 
 type PayloadFactory = (req: Request) => BodyInit | null;
 type ByteStream = ReadableStream<Uint8Array<ArrayBuffer>>;

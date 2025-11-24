@@ -52,7 +52,6 @@ COPY openfeature-provider/go/Cargo.toml ./openfeature-provider/go/
 # Copy proto files (needed by build.rs)
 COPY confidence-resolver/protos ./confidence-resolver/protos/
 COPY wasm-msg/proto ./wasm-msg/proto/
-COPY wasm/rust-guest/proto ./wasm/rust-guest/proto/
 COPY wasm/proto ./wasm/proto/
 
 # Copy build.rs files
@@ -256,8 +255,9 @@ WORKDIR /app
 COPY wasm/python-host/Makefile ./
 COPY wasm/python-host/generate_proto.py ./
 
-# Copy proto files
+# Copy proto files (wasm proto + confidence-resolver protos needed for imports)
 COPY wasm/proto ../proto/
+COPY confidence-resolver/protos ../../confidence-resolver/protos/
 
 # Build using Makefile (creates venv + installs deps + generates proto)
 ENV IN_DOCKER_BUILD=1
@@ -297,12 +297,15 @@ COPY \
     openfeature-provider/js/package.json \
     openfeature-provider/js/yarn.lock \
     openfeature-provider/js/.yarnrc.yml \
-    openfeature-provider/js/proto \
     openfeature-provider/js/README.md \
     openfeature-provider/js/CHANGELOG.md \
     openfeature-provider/js/LICENSE \
     ./
 COPY openfeature-provider/js/proto ./proto
+
+# Copy wasm and confidence-resolver proto files (needed for proto generation)
+COPY wasm/proto ../../../wasm/proto
+COPY confidence-resolver/protos ../../../confidence-resolver/protos
 
 # Install dependencies (this layer will be cached)
 ENV IN_DOCKER_BUILD=1
