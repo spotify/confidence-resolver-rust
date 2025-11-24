@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0](https://github.com/spotify/confidence-resolver/compare/confidence_resolver-v0.6.0...confidence_resolver-v0.7.0) (2025-11-24)
+
+
+### Features
+
+* Request per second in TelemetryData ([#150](https://github.com/spotify/confidence-resolver/issues/150)) ([b91669d](https://github.com/spotify/confidence-resolver/commit/b91669d75caa0971ab71d0589634ab039dae6081))
+* send java sdk info in resolve request ([#160](https://github.com/spotify/confidence-resolver/issues/160)) ([8e10327](https://github.com/spotify/confidence-resolver/commit/8e103271886624187246ae86d8a78f74121a2f33))
+* send js sdk info in resolve request ([#161](https://github.com/spotify/confidence-resolver/issues/161)) ([5cbc7d9](https://github.com/spotify/confidence-resolver/commit/5cbc7d9e2ada26c52298d74faaba50ec6cb4c3e7))
+* size limited flush api  ([#149](https://github.com/spotify/confidence-resolver/issues/149)) ([6ac60d6](https://github.com/spotify/confidence-resolver/commit/6ac60d6195421c9355941e4201993b521c831fcd))
+
 ## [0.6.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence_resolver-v0.5.2...confidence_resolver-v0.6.0) (2025-10-23)
 
 

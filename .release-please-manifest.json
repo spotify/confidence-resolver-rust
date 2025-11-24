@@ -1,10 +1,10 @@
 {
-  "confidence-resolver": "0.6.0",
-  "confidence-cloudflare-resolver": "0.3.0",
+  "confidence-resolver": "0.7.0",
+  "confidence-cloudflare-resolver": "0.4.0",
   "wasm-msg": "0.2.1",
-  "wasm/rust-guest": "0.1.9",
-  "openfeature-provider/java": "0.7.4",
-  "openfeature-provider/js": "0.1.1",
-  "openfeature-provider/go": "0.1.0",
+  "wasm/rust-guest": "0.1.10",
+  "openfeature-provider/java": "0.8.0",
+  "openfeature-provider/js": "0.2.0",
+  "openfeature-provider/go": "0.2.0",
   "openfeature-provider/ruby": "0.1.1"
 }
