@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.7.4...openfeature-provider-java-v0.8.0) (2025-11-24)
+
+
+### Features
+
+* **openfeature-provider/java:** connectionfactory for testing ([#147](https://github.com/spotify/confidence-resolver/issues/147)) ([e1ca77e](https://github.com/spotify/confidence-resolver/commit/e1ca77efc26cbd8cfc6f822e691b385328bf8f53))
+* **openfeature-provider/java:** make java provider init as in the OF spec ([#151](https://github.com/spotify/confidence-resolver/issues/151)) ([1adf48e](https://github.com/spotify/confidence-resolver/commit/1adf48eea2c70ad94d85c8e803e5c81ab439c02b))
+* Request per second in TelemetryData ([#150](https://github.com/spotify/confidence-resolver/issues/150)) ([b91669d](https://github.com/spotify/confidence-resolver/commit/b91669d75caa0971ab71d0589634ab039dae6081))
+* send java sdk info in resolve request ([#160](https://github.com/spotify/confidence-resolver/issues/160)) ([8e10327](https://github.com/spotify/confidence-resolver/commit/8e103271886624187246ae86d8a78f74121a2f33))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * rust-guest bumped from 0.1.9 to 0.1.10
+
 ## [0.7.4](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.7.3...openfeature-provider-java-v0.7.4) (2025-11-11)
 
 

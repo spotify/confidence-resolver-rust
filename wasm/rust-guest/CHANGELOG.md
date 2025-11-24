@@ -2,6 +2,12 @@
 
 * The following workspace dependencies were updated
   * dependencies
+    * confidence_resolver bumped from 0.6.0 to 0.7.0
+
+## Changelog
+
+* The following workspace dependencies were updated
+  * dependencies
     * wasm-msg bumped from 0.2.0 to 0.2.1
     * confidence_resolver bumped from 0.5.2 to 0.6.0
 

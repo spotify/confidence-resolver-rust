@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/spotify/confidence-resolver/compare/confidence-cloudflare-resolver-v0.3.0...confidence-cloudflare-resolver-v0.4.0) (2025-11-24)
+
+
+### Features
+
+* Request per second in TelemetryData ([#150](https://github.com/spotify/confidence-resolver/issues/150)) ([b91669d](https://github.com/spotify/confidence-resolver/commit/b91669d75caa0971ab71d0589634ab039dae6081))
+* size limited flush api  ([#149](https://github.com/spotify/confidence-resolver/issues/149)) ([6ac60d6](https://github.com/spotify/confidence-resolver/commit/6ac60d6195421c9355941e4201993b521c831fcd))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * confidence_resolver bumped from 0.6.0 to 0.7.0
+
 ## [0.3.0](https://github.com/spotify/confidence-resolver-rust/compare/confidence-cloudflare-resolver-v0.2.7...confidence-cloudflare-resolver-v0.3.0) (2025-10-23)
 
 

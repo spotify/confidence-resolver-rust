@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/go/v0.1.0...openfeature-provider/go/v0.2.0) (2025-11-24)
+
+
+### Features
+
+* **openfeature-provider/go:** add slog-based logging ([#134](https://github.com/spotify/confidence-resolver/issues/134)) ([10362d9](https://github.com/spotify/confidence-resolver/commit/10362d9d6d80f25e63e12ba8c6257eb7e996a2c2))
+* Request per second in TelemetryData ([#150](https://github.com/spotify/confidence-resolver/issues/150)) ([b91669d](https://github.com/spotify/confidence-resolver/commit/b91669d75caa0971ab71d0589634ab039dae6081))
+* size limited flush api  ([#149](https://github.com/spotify/confidence-resolver/issues/149)) ([6ac60d6](https://github.com/spotify/confidence-resolver/commit/6ac60d6195421c9355941e4201993b521c831fcd))
+
+
+### Bug Fixes
+
+* **openfeature-provider/go:** move initialize work to provider.init ([#142](https://github.com/spotify/confidence-resolver/issues/142)) ([e1ef08a](https://github.com/spotify/confidence-resolver/commit/e1ef08a992fb980449ea267c7855eae396fe9e7e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * rust-guest bumped from 0.1.9 to 0.1.10
+
 ## [0.1.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/go/v0.0.1...openfeature-provider/go/v0.1.0) (2025-11-11)
 
 
