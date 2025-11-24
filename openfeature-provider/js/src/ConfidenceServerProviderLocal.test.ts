@@ -43,8 +43,8 @@ describe('idealized conditions', () => {
     // the token ttl is one hour, since it renews at 80% of ttl, it will be fetched twice
     expect(net.iam.token.calls).toBe(2);
     // since we fetch state every 30s we should fetch 120 times, but we also do an initial fetch in initialize
-    expect(net.resolver.stateUri.calls).toBe(121);
-    expect(net.gcs.stateBucket.calls).toBe(121);
+    expect(net.cdn.state.calls).toBe(121);
+    expect(net.cdn.state.calls).toBe(121);
     // flush is called every 10s so 360 times in an hour
     expect(net.resolver.flagLogs.calls).toBe(360);
 
@@ -103,14 +103,14 @@ describe('auth token handling', () => {
   });
   it('refreshes token on 401 and retries once', async () => {
     // First authed request returns 401
-    net.resolver.stateUri.status = req => (req.headers.get('authorization') === 'Bearer token1' ? 401 : 200);
+    net.cdn.state.status = req => (req.headers.get('authorization') === 'Bearer token1' ? 401 : 200);
 
     await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
 
     // Token should have been fetched initially and then renewed after 401
     expect(net.iam.token.calls).toBe(2);
     // The resolverStateUri should have been attempted twice (initial + retry)
-    expect(net.resolver.stateUri.calls).toBe(2);
+    expect(net.cdn.state.calls).toBe(2);
   });
   it('propagates failure when token cannot be obtained', async () => {
     // Make IAM token fetch permanently fail (network-level)
@@ -121,7 +121,7 @@ describe('auth token handling', () => {
     // We should have attempted token fetch multiple times due to retry
     expect(net.iam.token.calls).toBeGreaterThanOrEqual(1);
     // No authed calls should have proceeded without a token
-    expect(net.resolver.stateUri.calls).toBe(0);
+    expect(net.cdn.state.calls).toBe(0);
     // Initialize should time out and mark provider as ERROR
     expect(Date.now()).toBe(DEFAULT_STATE_INTERVAL);
     expect(provider.status).toBe('ERROR');
@@ -131,26 +131,26 @@ describe('auth token handling', () => {
 describe('state update scheduling', () => {
   it('fetches resolverStateUri on initialize', async () => {
     await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
-    expect(net.resolver.stateUri.calls).toBe(1);
-    expect(net.gcs.stateBucket.calls).toBe(1);
+    expect(net.cdn.state.calls).toBe(1);
+    expect(net.cdn.state.calls).toBe(1);
   });
   it('polls state at fixed interval', async () => {
     await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
-    expect(net.resolver.stateUri.calls).toBe(1);
-    expect(net.gcs.stateBucket.calls).toBe(1);
+    expect(net.cdn.state.calls).toBe(1);
+    expect(net.cdn.state.calls).toBe(1);
 
     await vi.advanceTimersByTimeAsync(DEFAULT_STATE_INTERVAL);
-    expect(net.resolver.stateUri.calls).toBe(2);
-    expect(net.gcs.stateBucket.calls).toBe(2);
+    expect(net.cdn.state.calls).toBe(2);
+    expect(net.cdn.state.calls).toBe(2);
 
     await vi.advanceTimersByTimeAsync(DEFAULT_STATE_INTERVAL);
-    expect(net.resolver.stateUri.calls).toBe(3);
-    expect(net.gcs.stateBucket.calls).toBe(3);
+    expect(net.cdn.state.calls).toBe(3);
+    expect(net.cdn.state.calls).toBe(3);
   });
   it('honors If-None-Match and handles 304 Not Modified', async () => {
     let eTag = 'v1';
     const payload = new Uint8Array(100);
-    net.gcs.stateBucket.handler = req => {
+    net.cdn.state.handler = req => {
       const ifNoneMatch = req.headers.get('If-None-Match');
       if (ifNoneMatch === eTag) {
         return new Response(null, { status: 304 });
@@ -169,19 +169,19 @@ describe('state update scheduling', () => {
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(2);
   });
   it('retries resolverStateUri on 5xx/network errors with fast backoff', async () => {
-    net.resolver.stateUri.status = 503;
+    net.cdn.state.status = 503;
     setTimeout(() => {
-      net.resolver.stateUri.status = 200;
+      net.cdn.state.status = 200;
     }, 1500);
 
     await advanceTimersUntil(provider.updateState());
 
-    expect(net.resolver.stateUri.calls).toBeGreaterThan(1);
+    expect(net.cdn.state.calls).toBeGreaterThan(1);
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(1);
   });
   it('retries GCS state download with backoff and stall-timeout', async () => {
     let chunkDelay = 600;
-    net.gcs.stateBucket.handler = req => {
+    net.cdn.state.handler = req => {
       const body = new ReadableStream<Uint8Array>({
         async start(controller) {
           for (let i = 0; i < 10; i++) {
@@ -199,7 +199,7 @@ describe('state update scheduling', () => {
     }, 2500);
 
     await advanceTimersUntil(provider.updateState());
-    expect(net.gcs.stateBucket.calls).toBeGreaterThan(1);
+    expect(net.cdn.state.calls).toBeGreaterThan(1);
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(1);
   });
 });
@@ -256,7 +256,7 @@ describe('router and middleware composition', () => {
     let sawAuthOnFlags = false;
     let sawNoAuthOnGcs = false;
 
-    net.resolver.stateUri.handler = req => {
+    net.cdn.state.handler = req => {
       const auth = req.headers.get('authorization');
       if (auth && auth.startsWith('Bearer ')) sawAuthOnFlags = true;
       return new Response(
@@ -266,7 +266,7 @@ describe('router and middleware composition', () => {
         },
       );
     };
-    net.gcs.stateBucket.handler = req => {
+    net.cdn.state.handler = req => {
       const auth = req.headers.get('authorization');
       if (!auth) sawNoAuthOnGcs = true;
       return new Response(new Uint8Array(100));
@@ -280,7 +280,7 @@ describe('router and middleware composition', () => {
 
   it('routes storage to retry + stall-timeout', async () => {
     // Ensure small per-chunk delay (< 500ms) does not trigger stall abort
-    net.gcs.stateBucket.handler = async req => {
+    net.cdn.state.handler = async req => {
       const body = new ReadableStream<Uint8Array>({
         async start(controller) {
           for (let i = 0; i < 3; i++) {
@@ -293,9 +293,9 @@ describe('router and middleware composition', () => {
       return new Response(body);
     };
 
-    const start = net.gcs.stateBucket.calls;
+    const start = net.cdn.state.calls;
     await advanceTimersUntil(provider.updateState());
-    expect(net.gcs.stateBucket.calls - start).toBe(1);
+    expect(net.cdn.state.calls - start).toBe(1);
   });
 
   it('throws for unknown routes', async () => {
@@ -307,7 +307,7 @@ describe('router and middleware composition', () => {
 describe('timeouts and aborts', () => {
   it('initialize times out if state not fetched before initializeTimeout', async () => {
     // Make resolverStateUri unreachable so initialize must rely on initializeTimeout
-    net.resolver.stateUri.status = 'No network';
+    net.cdn.state.status = 'No network';
 
     const shortTimeoutProvider = new ConfidenceServerProviderLocal(mockedWasmResolver, {
       flagClientSecret: 'flagClientSecret',
@@ -324,7 +324,7 @@ describe('timeouts and aborts', () => {
   });
   it('aborts in-flight state update when provider is closed', async () => {
     // Make both steps slow so initialize is in-flight
-    net.resolver.stateUri.latency = 10_000;
+    net.cdn.state.latency = 10_000;
     net.gcs.latency = 10_000;
 
     const init = provider.initialize();
@@ -343,27 +343,27 @@ describe('timeouts and aborts', () => {
     const signal = timeoutSignal(100);
     await advanceTimersUntil(expect(provider.updateState(signal)).rejects.toThrow());
     // aborted before endpoint was invoked
-    expect(net.resolver.stateUri.calls).toBe(0);
+    expect(net.cdn.state.calls).toBe(0);
   });
   it('handles post-dispatch latency aborts (endpoint invoked)', async () => {
     // Ensure no server latency; abort during endpoint processing
-    net.resolver.stateUri.latency = 0;
-    net.resolver.stateUri.latency = 200;
+    net.cdn.state.latency = 0;
+    net.cdn.state.latency = 200;
     const signal = timeoutSignal(100);
     await advanceTimersUntil(expect(provider.updateState(signal)).rejects.toThrow());
     // endpoint was invoked once
-    expect(net.resolver.stateUri.calls).toBe(1);
+    expect(net.cdn.state.calls).toBe(1);
   });
 });
 
 describe('network error modes', () => {
   it('treats HTTP 5xx as Response (no throw) and retries appropriately', async () => {
-    net.resolver.stateUri.status = 503;
+    net.cdn.state.status = 503;
     setTimeout(() => {
-      net.resolver.stateUri.status = 200;
+      net.cdn.state.status = 200;
     }, 1500);
     await advanceTimersUntil(provider.updateState());
-    expect(net.resolver.stateUri.calls).toBeGreaterThan(1);
+    expect(net.cdn.state.calls).toBeGreaterThan(1);
   });
 
   it('treats DNS/connect/TLS failures as throws and retries appropriately', async () => {

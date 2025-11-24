@@ -23,7 +23,7 @@ import {
   withTimeout,
 } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
-import { AccessToken, LocalResolver, ResolveStateUri } from './LocalResolver';
+import { AccessToken, LocalResolver } from './LocalResolver';
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
@@ -76,7 +76,7 @@ export class ConfidenceServerProviderLocal implements Provider {
       [
         withRouter({
           'https://iam.confidence.dev/v1/oauth/token': [withFastRetry],
-          'https://storage.googleapis.com/*': [
+          'https://confidence-resolver-state-cdn.spotifycdn.com/*': [
             withRetry({
               maxAttempts: Infinity,
               baseInterval: 500,
@@ -85,17 +85,17 @@ export class ConfidenceServerProviderLocal implements Provider {
             withStallTimeout(500),
           ],
           'https://resolver.confidence.dev/*': [
-            withConfidenceAuth,
             withRouter({
-              '*/v1/resolverState:resolverStateUri': [withFastRetry],
               '*/v1/flags:resolve': [
+                withConfidenceAuth,
                 withRetry({
                   maxAttempts: 3,
                   baseInterval: 100,
                 }),
                 withTimeout(3 * TimeUnit.SECOND), // TODO make configurable
               ],
-              '*/v1/flagLogs:write': [
+              '*/v1/flagLogs:clientWrite': [
+                // clientWrite uses client secret auth header, no JWT needed
                 withRetry({
                   maxAttempts: 3,
                   baseInterval: 500,
@@ -256,12 +256,14 @@ export class ConfidenceServerProviderLocal implements Provider {
   }
 
   async updateState(signal?: AbortSignal): Promise<void> {
-    const { signedUri, account } = await this.fetchResolveStateUri(signal);
+    // Build CDN URL directly from client secret
+    const cdnUrl = `https://confidence-resolver-state-cdn.spotifycdn.com/${this.options.flagClientSecret}`;
+
     const headers = new Headers();
     if (this.stateEtag) {
       headers.set('If-None-Match', this.stateEtag);
     }
-    const resp = await this.fetch(signedUri, { headers, signal });
+    const resp = await this.fetch(cdnUrl, { headers, signal });
     if (resp.status === 304) {
       // not changed
       return;
@@ -270,10 +272,15 @@ export class ConfidenceServerProviderLocal implements Provider {
       throw new Error(`Failed to fetch state: ${resp.status} ${resp.statusText}`);
     }
     this.stateEtag = resp.headers.get('etag');
-    const state = new Uint8Array(await resp.arrayBuffer());
+
+    // Parse ClientResolverState from response
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    const { ClientResolverState } = await import('./proto/messages');
+    const clientState = ClientResolverState.decode(bytes);
+
     this.resolver.setResolverState({
-      accountId: account,
-      state,
+      accountId: clientState.account,
+      state: clientState.state,
     });
   }
 
@@ -284,23 +291,18 @@ export class ConfidenceServerProviderLocal implements Provider {
       // nothing to send
       return;
     }
-    await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
+    await this.fetch('https://resolver.confidence.dev/v1/flagLogs:clientWrite', {
       method: 'post',
       signal,
       headers: {
         'Content-Type': 'application/x-protobuf',
+        // Use client secret authentication instead of JWT
+        'Authorization': `ClientSecret ${this.options.flagClientSecret}`,
       },
       body: writeFlagLogRequest as Uint8Array<ArrayBuffer>,
     });
   }
 
-  private async fetchResolveStateUri(signal?: AbortSignal): Promise<ResolveStateUri> {
-    const resp = await this.fetch('https://resolver.confidence.dev/v1/resolverState:resolverStateUri', { signal });
-    if (!resp.ok) {
-      throw new Error('Failed to get resolve state url');
-    }
-    return resp.json();
-  }
 
   private async fetchToken(): Promise<AccessToken> {
     const resp = await this.fetch('https://iam.confidence.dev/v1/oauth/token', {

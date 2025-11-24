@@ -60,8 +60,8 @@ public class ChannelFactoryTest {
         // Call the constructor that uses ChannelFactory
         new OpenFeatureLocalResolveProvider(new LocalProviderConfig(apiSecret, customFactory), "clientsecret", noOpResolverFallback);
 
-        // called by tokenservice, state service and flag logger
-        assertEquals(3, factoryCallCount.get(), "ChannelFactory should have been called twice, but was called "
+        // called by tokenservice and flag logger (state service now uses HTTP directly)
+        assertEquals(2, factoryCallCount.get(), "ChannelFactory should have been called twice, but was called "
                 + factoryCallCount.get()
                 + " times");
 
@@ -71,7 +71,7 @@ public class ChannelFactoryTest {
         assertTrue(
                 targetsReceived.get(0).contains("grpc") || targetsReceived.get(0).contains("edge"),
                 "Target should be a gRPC endpoint, got: " + targetsReceived.get(0));
-        assertEquals(3, interceptorCounts.size(), "Interceptors should have been called");
+        assertEquals(2, interceptorCounts.size(), "Interceptors should have been called");
     }
 
     @Test

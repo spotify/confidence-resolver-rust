@@ -11,8 +11,3 @@ export interface AccessToken {
   /// lifetime seconds
   expiresIn: number;
 }
-
-export interface ResolveStateUri {
-  signedUri: string;
-  account: string;
-}

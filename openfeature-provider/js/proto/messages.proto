@@ -12,3 +12,12 @@ message Response {
         string error = 2;
     }
 }
+
+// Client-specific resolver state downloaded from CDN
+message ClientResolverState {
+  // The account the referenced state belongs to
+  string account = 1;
+
+  // The resolver state for operating a flags resolver but sliced to only contain what is needed for a specific client
+  bytes state = 2;
+}

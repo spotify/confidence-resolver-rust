@@ -2,7 +2,6 @@ package confidence
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,33 +10,20 @@ import (
 	"time"
 
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// mockResolverStateServiceClient is a mock implementation for testing
-type mockResolverStateServiceClient struct {
-	adminv1.ResolverStateServiceClient
-	resolverStateUriFunc func(ctx context.Context, req *adminv1.ResolverStateUriRequest) (*adminv1.ResolverStateUriResponse, error)
-}
-
-func (m *mockResolverStateServiceClient) ResolverStateUri(ctx context.Context, req *adminv1.ResolverStateUriRequest, opts ...grpc.CallOption) (*adminv1.ResolverStateUriResponse, error) {
-	if m.resolverStateUriFunc != nil {
-		return m.resolverStateUriFunc(ctx, req)
-	}
-	return nil, errors.New("not implemented")
-}
-
 func TestNewFlagsAdminStateFetcher(t *testing.T) {
-	mockService := &mockResolverStateServiceClient{}
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	if fetcher == nil {
 		t.Fatal("Expected fetcher to be created, got nil")
 	}
 	if fetcher.httpClient == nil {
 		t.Error("Expected HTTP client to be initialized")
+	}
+	if fetcher.clientSecret != "test-client-secret" {
+		t.Errorf("Expected clientSecret to be 'test-client-secret', got %s", fetcher.clientSecret)
 	}
 
 	// Should have empty state initially
@@ -48,8 +34,7 @@ func TestNewFlagsAdminStateFetcher(t *testing.T) {
 }
 
 func TestFlagsAdminStateFetcher_GetRawState(t *testing.T) {
-	mockService := &mockResolverStateServiceClient{}
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	// Initial state should be empty but not nil
 	state := fetcher.GetRawState()
@@ -59,8 +44,7 @@ func TestFlagsAdminStateFetcher_GetRawState(t *testing.T) {
 }
 
 func TestFlagsAdminStateFetcher_GetAccountID(t *testing.T) {
-	mockService := &mockResolverStateServiceClient{}
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	// Initially empty
 	if fetcher.GetAccountID() != "" {
@@ -74,12 +58,18 @@ func TestFlagsAdminStateFetcher_GetAccountID(t *testing.T) {
 	}
 }
 
+// TestFlagsAdminStateFetcher_Reload_Success tests successful state fetching from CDN
+// Note: This is a unit test that verifies the parsing logic, not actual CDN access
 func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
-	// Create a test HTTP server that serves resolver state
+	// Create a test HTTP server that serves ClientResolverState
 	testState := &adminv1.ResolverState{
 		Flags: []*adminv1.Flag{},
 	}
-	stateBytes, _ := proto.Marshal(testState)
+	clientState := &adminv1.ClientResolverState{
+		Account: "test-account-123",
+		State:   testState,
+	}
+	stateBytes, _ := proto.Marshal(clientState)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("ETag", "test-etag")
@@ -88,18 +78,7 @@ func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Mock service that returns signed URI
-	mockService := &mockResolverStateServiceClient{
-		resolverStateUriFunc: func(ctx context.Context, req *adminv1.ResolverStateUriRequest) (*adminv1.ResolverStateUriResponse, error) {
-			return &adminv1.ResolverStateUriResponse{
-				SignedUri:  server.URL,
-				Account:    "test-account-123",
-				ExpireTime: timestamppb.New(time.Now().Add(1 * time.Hour)),
-			}, nil
-		},
-	}
-
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	err := fetcher.Reload(ctx)
@@ -124,10 +103,15 @@ func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
 	}
 }
 
+// TestFlagsAdminStateFetcher_Reload_NotModified tests ETag-based caching
 func TestFlagsAdminStateFetcher_Reload_NotModified(t *testing.T) {
 	requestCount := 0
 	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{}}
-	stateBytes, _ := proto.Marshal(testState)
+	clientState := &adminv1.ClientResolverState{
+		Account: "test-account",
+		State:   testState,
+	}
+	stateBytes, _ := proto.Marshal(clientState)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -151,17 +135,7 @@ func TestFlagsAdminStateFetcher_Reload_NotModified(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mockService := &mockResolverStateServiceClient{
-		resolverStateUriFunc: func(ctx context.Context, req *adminv1.ResolverStateUriRequest) (*adminv1.ResolverStateUriResponse, error) {
-			return &adminv1.ResolverStateUriResponse{
-				SignedUri:  server.URL,
-				Account:    "test-account",
-				ExpireTime: timestamppb.New(time.Now().Add(1 * time.Hour)),
-			}, nil
-		},
-	}
-
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// First reload - gets state
@@ -189,49 +163,14 @@ func TestFlagsAdminStateFetcher_Reload_NotModified(t *testing.T) {
 	}
 }
 
-func TestFlagsAdminStateFetcher_Reload_URICaching(t *testing.T) {
-	uriCallCount := 0
+// TestFlagsAdminStateFetcher_Reload_Error tests error handling
+func TestFlagsAdminStateFetcher_Reload_Error(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("state"))
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	mockService := &mockResolverStateServiceClient{
-		resolverStateUriFunc: func(ctx context.Context, req *adminv1.ResolverStateUriRequest) (*adminv1.ResolverStateUriResponse, error) {
-			uriCallCount++
-			return &adminv1.ResolverStateUriResponse{
-				SignedUri:  server.URL,
-				Account:    "test-account",
-				ExpireTime: timestamppb.New(time.Now().Add(10 * time.Second)),
-			}, nil
-		},
-	}
-
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	ctx := context.Background()
-
-	// First reload
-	_ = fetcher.Reload(ctx)
-	if uriCallCount != 1 {
-		t.Errorf("Expected 1 URI call, got %d", uriCallCount)
-	}
-
-	// Second reload immediately - should use cached URI
-	_ = fetcher.Reload(ctx)
-	if uriCallCount != 1 {
-		t.Errorf("Expected still 1 URI call (cached), got %d", uriCallCount)
-	}
-}
-
-func TestFlagsAdminStateFetcher_Reload_Error(t *testing.T) {
-	mockService := &mockResolverStateServiceClient{
-		resolverStateUriFunc: func(ctx context.Context, req *adminv1.ResolverStateUriRequest) (*adminv1.ResolverStateUriResponse, error) {
-			return nil, errors.New("service error")
-		},
-	}
-
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	err := fetcher.Reload(ctx)
@@ -240,9 +179,14 @@ func TestFlagsAdminStateFetcher_Reload_Error(t *testing.T) {
 	}
 }
 
+// TestFlagsAdminStateFetcher_Provide tests the Provide method
 func TestFlagsAdminStateFetcher_Provide(t *testing.T) {
 	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{}}
-	stateBytes, _ := proto.Marshal(testState)
+	clientState := &adminv1.ClientResolverState{
+		Account: "test-account",
+		State:   testState,
+	}
+	stateBytes, _ := proto.Marshal(clientState)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -250,17 +194,7 @@ func TestFlagsAdminStateFetcher_Provide(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mockService := &mockResolverStateServiceClient{
-		resolverStateUriFunc: func(ctx context.Context, req *adminv1.ResolverStateUriRequest) (*adminv1.ResolverStateUriResponse, error) {
-			return &adminv1.ResolverStateUriResponse{
-				SignedUri:  server.URL,
-				Account:    "test-account",
-				ExpireTime: timestamppb.New(time.Now().Add(1 * time.Hour)),
-			}, nil
-		},
-	}
-
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// Provide should fetch and return state and accountID
@@ -276,9 +210,14 @@ func TestFlagsAdminStateFetcher_Provide(t *testing.T) {
 	}
 }
 
+// TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError tests error handling in Provide
 func TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError(t *testing.T) {
 	testState := &adminv1.ResolverState{Flags: []*adminv1.Flag{}}
-	stateBytes, _ := proto.Marshal(testState)
+	clientState := &adminv1.ClientResolverState{
+		Account: "test-account",
+		State:   testState,
+	}
+	stateBytes, _ := proto.Marshal(clientState)
 
 	httpCallCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -295,23 +234,7 @@ func TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	uriCallCount := 0
-	mockService := &mockResolverStateServiceClient{
-		resolverStateUriFunc: func(ctx context.Context, req *adminv1.ResolverStateUriRequest) (*adminv1.ResolverStateUriResponse, error) {
-			uriCallCount++
-			if uriCallCount > 1 {
-				return nil, errors.New("service error")
-			}
-			// Return short expiration so second call will try to refresh
-			return &adminv1.ResolverStateUriResponse{
-				SignedUri:  server.URL,
-				Account:    "test-account",
-				ExpireTime: timestamppb.New(time.Now().Add(100 * time.Millisecond)),
-			}, nil
-		},
-	}
-
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	ctx := context.Background()
 
 	// First call succeeds
@@ -323,10 +246,7 @@ func TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError(t *testing.T) {
 		t.Errorf("Expected accountID 'test-account', got %s", accountID1)
 	}
 
-	// Wait for URI to expire
-	time.Sleep(200 * time.Millisecond)
-
-	// Second call will try to refresh and fail
+	// Second call will fail
 	state2, accountID2, err := fetcher.Provide(ctx)
 	if err == nil {
 		t.Error("Expected error to be returned when service fails")
@@ -342,6 +262,7 @@ func TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError(t *testing.T) {
 	}
 }
 
+// TestFlagsAdminStateFetcher_HTTPTimeout tests HTTP timeout handling
 func TestFlagsAdminStateFetcher_HTTPTimeout(t *testing.T) {
 	// Create a server that delays response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -350,17 +271,7 @@ func TestFlagsAdminStateFetcher_HTTPTimeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mockService := &mockResolverStateServiceClient{
-		resolverStateUriFunc: func(ctx context.Context, req *adminv1.ResolverStateUriRequest) (*adminv1.ResolverStateUriResponse, error) {
-			return &adminv1.ResolverStateUriResponse{
-				SignedUri:  server.URL,
-				Account:    "test-account",
-				ExpireTime: timestamppb.New(time.Now().Add(1 * time.Hour)),
-			}, nil
-		},
-	}
-
-	fetcher := NewFlagsAdminStateFetcher(mockService, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	// Set short timeout for test
 	fetcher.httpClient.Timeout = 100 * time.Millisecond
 
@@ -369,23 +280,5 @@ func TestFlagsAdminStateFetcher_HTTPTimeout(t *testing.T) {
 	err := fetcher.Reload(ctx)
 	if err == nil {
 		t.Error("Expected timeout error")
-	}
-}
-
-func TestToInstant(t *testing.T) {
-	// Test with valid timestamp
-	now := time.Now()
-	ts := timestamppb.New(now)
-	result := toInstant(ts)
-
-	// Allow small difference due to precision
-	if result.Sub(now).Abs() > time.Millisecond {
-		t.Errorf("Expected time to match, got difference of %v", result.Sub(now))
-	}
-
-	// Test with nil timestamp
-	nilResult := toInstant(nil)
-	if !nilResult.IsZero() {
-		t.Error("Expected zero time for nil timestamp")
 	}
 }

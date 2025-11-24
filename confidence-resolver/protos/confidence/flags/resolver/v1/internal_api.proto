@@ -63,6 +63,17 @@ service InternalFlagLoggerService {
     };
   }
 
+  // Client writes flag assignment events and resolve logs using client secret authentication.
+  // This method uses Authorization: ClientSecret {client_secret} header instead of JWT.
+  // (-- api-linter: core::0136::http-uri-suffix=disabled
+  //     aip.dev/not-precedent: Disabled because the additional binding. --)
+  rpc ClientWriteFlagLogs(WriteFlagLogsRequest) returns (WriteFlagLogsResponse){
+    option (google.api.http) = {
+      post: "/v1/clientFlagLogs:write"
+      body: "*"
+    };
+  }
+
 }
 
 // The service that allows to report flag assigned and other client-side flag

@@ -3,7 +3,6 @@ package com.spotify.confidence;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Struct;
-import com.spotify.confidence.flags.admin.v1.ResolverStateServiceGrpc;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
@@ -166,7 +165,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
 
         var tokenHolder = createTokenHolder(config.getApiSecret(), config.getChannelFactory(), confidenceDomain);
         this.stateProvider = getStateProvider(tokenHolder, confidenceDomain, config.getChannelFactory());
-        final var wasmFlagLogger = new GrpcWasmFlagLogger(config.getApiSecret(), config.getChannelFactory());
+        final var wasmFlagLogger = new GrpcWasmFlagLogger(clientSecret, config.getChannelFactory());
         this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(
                 wasmFlagLogger,
                 stickyResolveStrategy);
@@ -195,13 +194,8 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     }
 
     private AccountStateProvider getStateProvider(TokenHolder tokenHolder, String confidenceDomain, ChannelFactory channelFactory) {
-        // Create authenticated channel with JWT interceptor
-        final var jwtInterceptor = new JwtAuthClientInterceptor(tokenHolder);
-        final var authenticatedChannel =
-                channelFactory.create(confidenceDomain, Collections.singletonList(jwtInterceptor));
-        final ResolverStateServiceGrpc.ResolverStateServiceBlockingStub resolverStateService =
-                ResolverStateServiceGrpc.newBlockingStub(authenticatedChannel);
-        return new FlagsAdminStateFetcher(resolverStateService);
+        // State fetcher now uses direct CDN access with client secret, no gRPC needed
+        return new FlagsAdminStateFetcher(clientSecret);
     }
 
 

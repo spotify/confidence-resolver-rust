@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
 	"google.golang.org/grpc"
@@ -14,12 +13,13 @@ import (
 
 const confidenceDomain = "edge-grpc.spotify.com"
 
-// NewGrpcClients creates a StateProvider and FlagLogger backed by Confidence gRPC services
-// Returns the StateProvider and FlagLogger
+// NewGrpcClients creates a StateProvider and FlagLogger backed by Confidence services
+// Returns the StateProvider (which fetches from CDN) and FlagLogger (which uses gRPC)
 func NewGrpcClients(
 	ctx context.Context,
 	apiClientID string,
 	apiClientSecret string,
+	clientSecret string,
 	connFactory ConnFactory,
 	logger *slog.Logger,
 ) (StateProvider, FlagLogger, error) {
@@ -54,15 +54,16 @@ func NewGrpcClients(
 		return nil, nil, fmt.Errorf("failed to create authenticated connection: %w", err)
 	}
 
-	// Create gRPC service clients
-	resolverStateService := adminv1.NewResolverStateServiceClient(authConnection)
+	// Create gRPC service client for flag logging
+	// Note: Flag logging no longer requires JWT authentication, uses client secret header instead
 	flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(authConnection)
 
 	// Create state fetcher (implements StateProvider interface)
-	stateFetcher := NewFlagsAdminStateFetcher(resolverStateService, logger)
+	// Note: State fetcher now uses direct CDN access, not gRPC
+	stateFetcher := NewFlagsAdminStateFetcher(clientSecret, logger)
 
-	// Create flag logger
-	flagLogger := NewGrpcWasmFlagLogger(flagLoggerService, logger)
+	// Create flag logger with client secret for header authentication
+	flagLogger := NewGrpcWasmFlagLogger(flagLoggerService, clientSecret, logger)
 
 	return stateFetcher, flagLogger, nil
 }

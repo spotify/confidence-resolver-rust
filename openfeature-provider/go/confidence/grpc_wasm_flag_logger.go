@@ -2,11 +2,13 @@ package confidence
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -21,18 +23,20 @@ type FlagLogger interface {
 }
 
 type GrpcFlagLogger struct {
-	stub   resolverv1.InternalFlagLoggerServiceClient
-	logger *slog.Logger
-	wg     sync.WaitGroup
+	stub         resolverv1.InternalFlagLoggerServiceClient
+	clientSecret string
+	logger       *slog.Logger
+	wg           sync.WaitGroup
 }
 
 // Compile-time interface conformance check
 var _ FlagLogger = (*GrpcFlagLogger)(nil)
 
-func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, logger *slog.Logger) *GrpcFlagLogger {
+func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, clientSecret string, logger *slog.Logger) *GrpcFlagLogger {
 	return &GrpcFlagLogger{
-		stub:   stub,
-		logger: logger,
+		stub:         stub,
+		clientSecret: clientSecret,
+		logger:       logger,
 	}
 }
 
@@ -76,7 +80,7 @@ func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFla
 
 	chunks := g.createFlagAssignedChunks(request)
 	for _, chunk := range chunks {
-		if err := g.sendAsync(ctx, chunk); err != nil {
+		if err := g.sendAsyncChunk(ctx, chunk); err != nil {
 			g.logger.Error("Failed to send flag log chunk", "error", err)
 			return err
 		}
@@ -115,6 +119,27 @@ func (g *GrpcFlagLogger) createFlagAssignedChunks(request *resolverv1.WriteFlagL
 	return chunks
 }
 
+func (g *GrpcFlagLogger) sendAsyncChunk(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+	g.wg.Add(1)
+	go func() {
+		defer g.wg.Done()
+		// Create a context with timeout for the RPC
+		rpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Add Authorization header with client secret
+		md := metadata.Pairs("authorization", fmt.Sprintf("ClientSecret %s", g.clientSecret))
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, md)
+
+		if _, err := g.stub.ClientWriteFlagLogs(rpcCtx, request); err != nil {
+			g.logger.Error("Failed to write flag logs", "error", err)
+		} else {
+			g.logger.Info("Successfully sent flag log", "entries", len(request.FlagAssigned))
+		}
+	}()
+	return nil
+}
+
 func (g *GrpcFlagLogger) sendAsync(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
 	g.wg.Add(1)
 	go func() {
@@ -123,7 +148,11 @@ func (g *GrpcFlagLogger) sendAsync(ctx context.Context, request *resolverv1.Writ
 		rpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		if _, err := g.stub.WriteFlagLogs(rpcCtx, request); err != nil {
+		// Add Authorization header with client secret
+		md := metadata.Pairs("authorization", fmt.Sprintf("ClientSecret %s", g.clientSecret))
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, md)
+
+		if _, err := g.stub.ClientWriteFlagLogs(rpcCtx, request); err != nil {
 			g.logger.Error("Failed to write flag logs", "error", err)
 		} else {
 			g.logger.Info("Successfully sent flag log", "entries", len(request.FlagAssigned))

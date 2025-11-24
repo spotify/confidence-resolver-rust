@@ -82,6 +82,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		ctx,
 		config.APIClientID,
 		config.APIClientSecret,
+		config.ClientSecret,
 		connFactory,
 		logger,
 	)

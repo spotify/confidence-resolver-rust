@@ -80,6 +80,18 @@ func (m *mockGrpcStubForIntegration) WriteFlagLogs(ctx context.Context, req *res
 	return &resolverv1.WriteFlagLogsResponse{}, nil
 }
 
+func (m *mockGrpcStubForIntegration) ClientWriteFlagLogs(ctx context.Context, req *resolverv1.WriteFlagLogsRequest, opts ...grpc.CallOption) (*resolverv1.WriteFlagLogsResponse, error) {
+	atomic.AddInt32(&m.callsReceived, 1)
+	// Signal that a call was received
+	select {
+	case m.onCallReceived <- struct{}{}:
+	default:
+	}
+	// Simulate some processing time to verify shutdown waits for completion
+	time.Sleep(50 * time.Millisecond)
+	return &resolverv1.WriteFlagLogsResponse{}, nil
+}
+
 func (m *mockGrpcStubForIntegration) GetCallsReceived() int32 {
 	return atomic.LoadInt32(&m.callsReceived)
 }
@@ -108,7 +120,7 @@ func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
 	mockStub := &mockGrpcStubForIntegration{
 		onCallReceived: make(chan struct{}, 100), // Buffer to prevent blocking
 	}
-	actualGrpcLogger := NewGrpcWasmFlagLogger(mockStub, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	actualGrpcLogger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	trackingLogger := &trackingFlagLogger{
 		actualLogger:       actualGrpcLogger,
