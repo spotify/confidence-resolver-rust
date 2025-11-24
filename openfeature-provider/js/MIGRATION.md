@@ -10,7 +10,7 @@ This migration moves from an **"online" evaluation model** (network call per fla
 - **Higher throughput** for high-traffic applications
 - **Better resilience** (continues working with cached state if temporarily disconnected)
 
-The main change is adding two new credentials (`apiClientId` and `apiClientSecret`) that require someone with workspace admin access to create an API client.
+The provider now uses client secret header authentication, simplifying the setup by requiring only the `flagClientSecret`.
 
 ## Dependencies
 

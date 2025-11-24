@@ -4,18 +4,11 @@ import { ConfidenceServerProviderLocal } from './ConfidenceServerProviderLocal';
 import { readFileSync } from 'node:fs';
 import { WasmResolver } from './WasmResolver';
 
-const { JS_E2E_CONFIDENCE_API_CLIENT_ID, JS_E2E_CONFIDENCE_API_CLIENT_SECRET } = requireEnv(
-  'JS_E2E_CONFIDENCE_API_CLIENT_ID',
-  'JS_E2E_CONFIDENCE_API_CLIENT_SECRET',
-);
-
 const moduleBytes = readFileSync(__dirname + '/../../../wasm/confidence_resolver.wasm');
 const module = new WebAssembly.Module(moduleBytes);
 const resolver = new WasmResolver(module);
 const confidenceProvider = new ConfidenceServerProviderLocal(resolver, {
   flagClientSecret: 'RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV',
-  apiClientId: JS_E2E_CONFIDENCE_API_CLIENT_ID,
-  apiClientSecret: JS_E2E_CONFIDENCE_API_CLIENT_SECRET,
 });
 
 describe('ConfidenceServerProvider E2E tests', () => {

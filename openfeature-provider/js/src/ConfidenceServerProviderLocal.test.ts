@@ -26,8 +26,6 @@ beforeEach(() => {
   net = new NetworkMock();
   provider = new ConfidenceServerProviderLocal(mockedWasmResolver, {
     flagClientSecret: 'flagClientSecret',
-    apiClientId: 'apiClientId',
-    apiClientSecret: 'apiClientSecret',
     fetch: net.fetch,
   });
 });
@@ -311,8 +309,6 @@ describe('timeouts and aborts', () => {
 
     const shortTimeoutProvider = new ConfidenceServerProviderLocal(mockedWasmResolver, {
       flagClientSecret: 'flagClientSecret',
-      apiClientId: 'apiClientId',
-      apiClientSecret: 'apiClientSecret',
       initializeTimeout: 1000,
       fetch: net.fetch,
     });
