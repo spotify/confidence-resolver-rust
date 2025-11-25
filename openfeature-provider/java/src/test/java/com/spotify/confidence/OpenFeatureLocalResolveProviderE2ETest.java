@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * <p>These tests verify the provider against real Confidence service flags.
  */
 class OpenFeatureLocalResolveProviderE2ETest {
-  private static final String FLAG_CLIENT_SECRET = "RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV";
+  private static final String FLAG_CLIENT_SECRET = "ti5Sipq5EluCYRG7I5cdbpWC3xq7JTWv";
   private static Client client;
 
   @BeforeAll

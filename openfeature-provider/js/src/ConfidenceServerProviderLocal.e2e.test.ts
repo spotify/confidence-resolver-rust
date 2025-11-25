@@ -8,7 +8,7 @@ const moduleBytes = readFileSync(__dirname + '/../../../wasm/confidence_resolver
 const module = new WebAssembly.Module(moduleBytes);
 const resolver = new WasmResolver(module);
 const confidenceProvider = new ConfidenceServerProviderLocal(resolver, {
-  flagClientSecret: 'RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV',
+  flagClientSecret: 'ti5Sipq5EluCYRG7I5cdbpWC3xq7JTWv',
 });
 
 describe('ConfidenceServerProvider E2E tests', () => {
