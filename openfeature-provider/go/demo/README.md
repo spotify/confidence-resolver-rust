@@ -9,11 +9,9 @@ Demo application showing how to use the Confidence OpenFeature Local Provider in
 
 ## Setup
 
-Set the required environment variables:
+Set the required environment variable:
 
 ```bash
-export CONFIDENCE_API_CLIENT_ID="your-api-client-id"
-export CONFIDENCE_API_CLIENT_SECRET="your-api-client-secret"
 export CONFIDENCE_CLIENT_SECRET="your-client-secret"
 ```
 
