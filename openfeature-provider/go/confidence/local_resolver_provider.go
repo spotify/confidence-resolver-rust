@@ -21,15 +21,16 @@ const defaultPollIntervalSeconds = 10
 // LocalResolverProvider implements the OpenFeature FeatureProvider interface
 // for local flag resolution using the Confidence WASM resolver
 type LocalResolverProvider struct {
-	resolverAPI   WasmResolverApi
-	stateProvider StateProvider
-	flagLogger    FlagLogger
-	clientSecret  string
-	logger        *slog.Logger
-	cancelFunc    context.CancelFunc
-	wg            sync.WaitGroup
-	mu            sync.Mutex
-	pollInterval  time.Duration
+	resolverAPI           WasmResolverApi
+	stateProvider         StateProvider
+	flagLogger            FlagLogger
+	clientSecret          string
+	logger                *slog.Logger
+	cancelFunc            context.CancelFunc
+	wg                    sync.WaitGroup
+	mu                    sync.Mutex
+	pollInterval          time.Duration
+	stickyResolveStrategy StickyResolveStrategy
 }
 
 // Compile-time interface conformance checks
@@ -45,6 +46,7 @@ func NewLocalResolverProvider(
 	flagLogger FlagLogger,
 	clientSecret string,
 	logger *slog.Logger,
+	stickyResolveStrategy StickyResolveStrategy,
 ) *LocalResolverProvider {
 	// Create a default logger if none provided
 	if logger == nil {
@@ -54,12 +56,13 @@ func NewLocalResolverProvider(
 	}
 
 	return &LocalResolverProvider{
-		resolverAPI:   resolverAPI,
-		stateProvider: stateProvider,
-		flagLogger:    flagLogger,
-		clientSecret:  clientSecret,
-		logger:        logger,
-		pollInterval:  getPollIntervalSeconds(),
+		resolverAPI:           resolverAPI,
+		stateProvider:         stateProvider,
+		flagLogger:            flagLogger,
+		clientSecret:          clientSecret,
+		logger:                logger,
+		pollInterval:          getPollIntervalSeconds(),
+		stickyResolveStrategy: stickyResolveStrategy,
 	}
 }
 
@@ -261,16 +264,23 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 		},
 	}
 
+	// Determine if we should fail fast on sticky (use fallback) or not
+	// ResolverFallback uses fail fast, MaterializationRepository retries with loaded data
+	failFastOnSticky := false
+	if _, ok := p.stickyResolveStrategy.(ResolverFallback); ok {
+		failFastOnSticky = true
+	}
+
 	// Create ResolveWithSticky request
 	stickyRequest := &resolver.ResolveWithStickyRequest{
 		ResolveRequest:          request,
 		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
-		FailFastOnSticky:        true,
+		FailFastOnSticky:        failFastOnSticky,
 		NotProcessSticky:        false,
 	}
 
 	// Resolve flags with sticky support
-	stickyResponse, err := p.resolverAPI.ResolveWithSticky(stickyRequest)
+	response, err := p.resolverAPI.ResolveWithSticky(ctx, stickyRequest)
 	if err != nil {
 		p.logger.Error("Failed to resolve flag", "flag", flagPath, "error", err)
 		return openfeature.InterfaceResolutionDetail{
@@ -278,31 +288,6 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewGeneralResolutionError(fmt.Sprintf("resolve failed: %v", err)),
-			},
-		}
-	}
-
-	// Extract the actual resolve response from the sticky response
-	var response *resolver.ResolveFlagsResponse
-	switch result := stickyResponse.ResolveResult.(type) {
-	case *resolver.ResolveWithStickyResponse_Success_:
-		response = result.Success.Response
-	case *resolver.ResolveWithStickyResponse_MissingMaterializations_:
-		p.logger.Error("Missing materializations for flag", "flag", flagPath)
-		return openfeature.InterfaceResolutionDetail{
-			Value: defaultValue,
-			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewGeneralResolutionError("missing materializations"),
-			},
-		}
-	default:
-		p.logger.Error("Unexpected resolve result type for flag", "flag", flagPath)
-		return openfeature.InterfaceResolutionDetail{
-			Value: defaultValue,
-			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewGeneralResolutionError("unexpected resolve result"),
 			},
 		}
 	}
@@ -447,6 +432,14 @@ func (p *LocalResolverProvider) Shutdown() {
 		p.flagLogger.Shutdown()
 		if p.logger != nil {
 			p.logger.Info("Shut down flag logger")
+		}
+	}
+
+	// Close sticky resolve strategy
+	if p.stickyResolveStrategy != nil {
+		p.stickyResolveStrategy.Close()
+		if p.logger != nil {
+			p.logger.Info("Closed sticky resolve strategy")
 		}
 	}
 

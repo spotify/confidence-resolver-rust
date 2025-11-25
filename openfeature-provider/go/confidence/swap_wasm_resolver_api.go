@@ -3,6 +3,7 @@ package confidence
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -18,7 +19,7 @@ type WasmResolverApi interface {
 	// UpdateStateAndFlushLogs updates the resolver with new state and flushes any pending logs
 	UpdateStateAndFlushLogs(state []byte, accountId string) error
 	// ResolveWithSticky resolves flags with sticky assignment support
-	ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
+	ResolveWithSticky(ctx context.Context, request *resolver.ResolveWithStickyRequest) (*resolver.ResolveFlagsResponse, error)
 	// Close closes the resolver and flushes any pending logs
 	Close(ctx context.Context)
 }
@@ -34,10 +35,11 @@ type SwapWasmResolverApi struct {
 	swapMu sync.Mutex
 
 	// Dependencies needed to create new instances
-	runtime        wazero.Runtime
-	compiledModule wazero.CompiledModule
-	flagLogger     FlagLogger
-	logger         *slog.Logger
+	runtime               wazero.Runtime
+	compiledModule        wazero.CompiledModule
+	flagLogger            FlagLogger
+	logger                *slog.Logger
+	stickyResolveStrategy StickyResolveStrategy
 }
 
 // Compile-time interface conformance check
@@ -52,6 +54,7 @@ func NewSwapWasmResolverApi(
 	wasmBytes []byte,
 	flagLogger FlagLogger,
 	logger *slog.Logger,
+	stickyResolveStrategy StickyResolveStrategy,
 ) (*SwapWasmResolverApi, error) {
 	// Initialize host functions and compile module once
 	compiledModule, err := InitializeWasmRuntime(ctx, runtime, wasmBytes)
@@ -60,10 +63,11 @@ func NewSwapWasmResolverApi(
 	}
 
 	swap := &SwapWasmResolverApi{
-		runtime:        runtime,
-		compiledModule: compiledModule,
-		flagLogger:     flagLogger,
-		logger:         logger,
+		runtime:               runtime,
+		compiledModule:        compiledModule,
+		flagLogger:            flagLogger,
+		logger:                logger,
+		stickyResolveStrategy: stickyResolveStrategy,
 	}
 
 	// Store nil to indicate lazy initialization
@@ -96,7 +100,7 @@ func (s *SwapWasmResolverApi) UpdateStateAndFlushLogs(state []byte, accountId st
 	return nil
 }
 
-func (s *SwapWasmResolverApi) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
+func (s *SwapWasmResolverApi) ResolveWithSticky(ctx context.Context, request *resolver.ResolveWithStickyRequest) (*resolver.ResolveFlagsResponse, error) {
 	// Load the current instance
 	instance := s.currentInstance.Load().(*ResolverApi)
 
@@ -114,10 +118,139 @@ func (s *SwapWasmResolverApi) ResolveWithSticky(request *resolver.ResolveWithSti
 		if instance == nil {
 			return nil, ErrNotInitialized
 		}
-		return instance.ResolveWithSticky(request)
+		response, err = instance.ResolveWithSticky(request)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
 	}
 
-	return response, err
+	// Handle the response based on result type
+	switch result := response.ResolveResult.(type) {
+	case *resolver.ResolveWithStickyResponse_Success_:
+		success := result.Success
+		// Store updates if present and we have a MaterializationRepository
+		if len(success.GetUpdates()) > 0 {
+			s.storeUpdates(ctx, success.GetUpdates())
+		}
+		return success.Response, nil
+
+	case *resolver.ResolveWithStickyResponse_MissingMaterializations_:
+		missingMaterializations := result.MissingMaterializations
+
+		// Check for ResolverFallback first - return early if so
+		if fallback, ok := s.stickyResolveStrategy.(ResolverFallback); ok {
+			return fallback.Resolve(ctx, request.GetResolveRequest())
+		}
+
+		// Handle MaterializationRepository case
+		if repo, ok := s.stickyResolveStrategy.(MaterializationRepository); ok {
+			updatedRequest, err := s.handleMissingMaterializations(ctx, request, missingMaterializations.GetItems(), repo)
+			if err != nil {
+				return nil, fmt.Errorf("failed to handle missing materializations: %w", err)
+			}
+			return s.ResolveWithSticky(ctx, updatedRequest)
+		}
+
+		// If no strategy is configured, return an error
+		if s.stickyResolveStrategy == nil {
+			return nil, fmt.Errorf("missing materializations and no sticky resolve strategy configured")
+		}
+
+		return nil, fmt.Errorf("unknown sticky resolve strategy type: %T", s.stickyResolveStrategy)
+
+	default:
+		return nil, fmt.Errorf("unexpected resolve result type: %T", response.ResolveResult)
+	}
+}
+
+// storeUpdates stores materialization updates asynchronously if we have a MaterializationRepository
+func (s *SwapWasmResolverApi) storeUpdates(ctx context.Context, updates []*resolver.ResolveWithStickyResponse_MaterializationUpdate) {
+	repo, ok := s.stickyResolveStrategy.(MaterializationRepository)
+	if !ok {
+		return
+	}
+
+	// Store updates asynchronously
+	go func() {
+		// Group updates by unit
+		updatesByUnit := make(map[string][]*resolver.ResolveWithStickyResponse_MaterializationUpdate)
+		for _, update := range updates {
+			updatesByUnit[update.GetUnit()] = append(updatesByUnit[update.GetUnit()], update)
+		}
+
+		// Store assignments for each unit
+		for unit, unitUpdates := range updatesByUnit {
+			assignments := make(map[string]*MaterializationInfo)
+			for _, update := range unitUpdates {
+				ruleToVariant := map[string]string{update.GetRule(): update.GetVariant()}
+				assignments[update.GetWriteMaterialization()] = &MaterializationInfo{
+					UnitInMaterialization: true,
+					RuleToVariant:         ruleToVariant,
+				}
+			}
+
+			if err := repo.StoreAssignment(ctx, unit, assignments); err != nil {
+				s.logger.Error("Failed to store materialization updates",
+					"unit", unit,
+					"error", err)
+			}
+		}
+	}()
+}
+
+// handleMissingMaterializations loads missing materializations from the repository
+// and returns an updated request with the materializations added
+func (s *SwapWasmResolverApi) handleMissingMaterializations(
+	ctx context.Context,
+	request *resolver.ResolveWithStickyRequest,
+	missingItems []*resolver.ResolveWithStickyResponse_MissingMaterializationItem,
+	repo MaterializationRepository,
+) (*resolver.ResolveWithStickyRequest, error) {
+	// Group missing items by unit for efficient loading
+	missingByUnit := make(map[string][]*resolver.ResolveWithStickyResponse_MissingMaterializationItem)
+	for _, item := range missingItems {
+		missingByUnit[item.GetUnit()] = append(missingByUnit[item.GetUnit()], item)
+	}
+
+	// Create the materializations per unit map
+	materializationsPerUnit := make(map[string]*resolver.MaterializationMap)
+
+	// Copy existing materializations
+	for k, v := range request.GetMaterializationsPerUnit() {
+		materializationsPerUnit[k] = v
+	}
+
+	// Load materialized assignments for all missing units
+	for unit, items := range missingByUnit {
+		for _, item := range items {
+			loadedAssignments, err := repo.LoadMaterializedAssignmentsForUnit(ctx, unit, item.GetReadMaterialization())
+			if err != nil {
+				return nil, fmt.Errorf("failed to load materializations for unit %s: %w", unit, err)
+			}
+
+			// Ensure the map exists for this unit
+			if materializationsPerUnit[unit] == nil {
+				materializationsPerUnit[unit] = &resolver.MaterializationMap{
+					InfoMap: make(map[string]*resolver.MaterializationInfo),
+				}
+			}
+
+			// Add loaded assignments to the materialization map
+			for name, info := range loadedAssignments {
+				materializationsPerUnit[unit].InfoMap[name] = info.ToProto()
+			}
+		}
+	}
+
+	// Create a new request with the updated materializations
+	return &resolver.ResolveWithStickyRequest{
+		ResolveRequest:          request.GetResolveRequest(),
+		MaterializationsPerUnit: materializationsPerUnit,
+		FailFastOnSticky:        request.GetFailFastOnSticky(),
+		NotProcessSticky:        request.GetNotProcessSticky(),
+	}, nil
 }
 
 // Close closes the current ResolverApi instance

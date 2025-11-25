@@ -34,7 +34,7 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	stateBytes, _ := proto.Marshal(state)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	}
 
 	// Use different client secret that won't match
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)), nil))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -85,7 +85,7 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	testAcctID := loadTestAccountID(t)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	}
 
 	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)), nil))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -172,7 +172,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		testAcctID := loadTestAccountID(t)
 
 		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
 		if err != nil {
 			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 		}
@@ -183,7 +183,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			t.Fatalf("Failed to initialize swap with state: %v", err)
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)), nil))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -217,7 +217,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		accountId := "test-account"
 
 		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
 		if err != nil {
 			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 		}
@@ -228,7 +228,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			t.Fatalf("Failed to initialize swap with state: %v", err)
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)), nil))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -239,8 +239,8 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		result, error := client.BooleanValueDetails(ctx, "sticky-test-flag.enabled", defaultValue, evalCtx)
 		if error == nil {
 			t.Error("Expected error when materializations missing, got nil")
-		} else if error.Error() != "error code: GENERAL: missing materializations" {
-			t.Errorf("Expected 'error code: GENERAL: missing materializations', got: %v", error.Error())
+		} else if error.Error() != "error code: GENERAL: resolve failed: missing materializations and no sticky resolve strategy configured" {
+			t.Errorf("Expected 'error code: GENERAL: resolve failed: missing materializations and no sticky resolve strategy configured', got: %v", error.Error())
 		}
 
 		if result.Value != defaultValue {

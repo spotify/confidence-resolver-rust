@@ -191,13 +191,13 @@ func createProviderWithTestState(
 	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, logger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, logger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create provider with the client secret from test state
 	// The test state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
-	provider := NewLocalResolverProvider(resolverAPI, stateProvider, logger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	provider := NewLocalResolverProvider(resolverAPI, stateProvider, logger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
 	return provider, nil
 }

@@ -19,15 +19,31 @@ const confidenceDomain = "edge-grpc.spotify.com"
 type ConnFactory func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error)
 
 type ProviderConfig struct {
-	ClientSecret string
-	Logger       *slog.Logger
-	ConnFactory  ConnFactory // Optional: for testing/advanced use cases
+	// Required: API credentials
+	APIClientID     string
+	APIClientSecret string
+	ClientSecret    string
+
+	// Optional: Custom logger for provider operations
+	// If not provided, a default slog.Logger will be created
+	Logger *slog.Logger
+
+	// Advanced/testing: override connection creation
+	ConnFactory ConnFactory
+
+	// Optional: Strategy for handling sticky resolve scenarios
+	// If not provided, defaults to RemoteResolverFallback which calls the remote
+	// Confidence resolver service when materializations are missing.
+	// You can implement MaterializationRepository to store sticky assignments locally
+	// and eliminate network calls for improved latency.
+	StickyResolveStrategy StickyResolveStrategy
 }
 
 type ProviderTestConfig struct {
-	StateProvider StateProvider
-	FlagLogger    FlagLogger
-	Logger        *slog.Logger
+	StateProvider         StateProvider
+	FlagLogger            FlagLogger
+	Logger                *slog.Logger
+	StickyResolveStrategy StickyResolveStrategy
 }
 
 func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProvider, error) {
@@ -69,13 +85,25 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	stateProvider := NewFlagsAdminStateFetcher(config.ClientSecret, logger)
 	flagLogger := NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
 
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger)
+	// Use provided StickyResolveStrategy or create default RemoteResolverFallback
+	stickyStrategy := config.StickyResolveStrategy
+	if stickyStrategy == nil {
+		stickyStrategy, err = NewRemoteResolverFallbackWithConnFactory(ctx, connFactory, logger)
+		if err != nil {
+			wasmRuntime.Close(ctx)
+			return nil, fmt.Errorf("failed to create remote resolver fallback: %w", err)
+		}
+	}
+
+	// Create SwapWasmResolverApi without initial state (lazy initialization)
+	// State will be set during Provider.Init()
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger, stickyStrategy)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
-	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger)
+	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger, stickyStrategy)
 
 	return provider, nil
 }
@@ -99,13 +127,18 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, config.FlagLogger, logger)
+	// Use provided StickyResolveStrategy (may be nil for testing)
+	stickyStrategy := config.StickyResolveStrategy
+
+	// Create SwapWasmResolverApi without initial state (lazy initialization)
+	// State will be set during Provider.Init()
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, config.FlagLogger, logger, stickyStrategy)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
-	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, "", logger)
+	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, "", logger, stickyStrategy)
 
 	return provider, nil
 }

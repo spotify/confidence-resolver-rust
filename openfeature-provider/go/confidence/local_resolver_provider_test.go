@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewLocalResolverProvider(t *testing.T) {
-	provider := NewLocalResolverProvider(nil, nil, nil, "test-secret", nil)
+	provider := NewLocalResolverProvider(nil, nil, nil, "test-secret", nil, nil)
 
 	if provider == nil {
 		t.Fatal("Expected provider to be created, got nil")
@@ -21,7 +21,7 @@ func TestNewLocalResolverProvider(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Metadata(t *testing.T) {
-	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil)
+	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil, nil)
 	metadata := provider.Metadata()
 
 	if metadata.Name != "confidence-sdk-go-local" {
@@ -30,7 +30,7 @@ func TestLocalResolverProvider_Metadata(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Hooks(t *testing.T) {
-	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil)
+	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil, nil)
 	hooks := provider.Hooks()
 
 	if hooks == nil {
@@ -392,7 +392,7 @@ func TestFlattenedContextToProto_InvalidValue(t *testing.T) {
 }
 
 func TestLocalResolverProvider_Shutdown(t *testing.T) {
-	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil)
+	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil, nil)
 	provider.Shutdown()
 
 	// Verify the method can be called without panicking even with nil components
@@ -400,7 +400,7 @@ func TestLocalResolverProvider_Shutdown(t *testing.T) {
 }
 
 func TestLocalResolverProvider_ShutdownWithCancelFunc(t *testing.T) {
-	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil)
+	provider := NewLocalResolverProvider(nil, nil, nil, "secret", nil, nil)
 
 	// Simulate Init having been called by setting cancelFunc
 	cancelCalled := false
@@ -437,7 +437,7 @@ func (m *mockStateProviderForInit) Provide(ctx context.Context) ([]byte, string,
 type mockResolverAPIForInit struct {
 	updateStateFunc   func(state []byte, accountID string) error
 	closeFunc         func(ctx context.Context)
-	resolveWithSticky func(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
+	resolveWithSticky func(ctx context.Context, request *resolver.ResolveWithStickyRequest) (*resolver.ResolveFlagsResponse, error)
 }
 
 func (m *mockResolverAPIForInit) UpdateStateAndFlushLogs(state []byte, accountID string) error {
@@ -453,9 +453,9 @@ func (m *mockResolverAPIForInit) Close(ctx context.Context) {
 	}
 }
 
-func (m *mockResolverAPIForInit) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
+func (m *mockResolverAPIForInit) ResolveWithSticky(ctx context.Context, request *resolver.ResolveWithStickyRequest) (*resolver.ResolveFlagsResponse, error) {
 	if m.resolveWithSticky != nil {
-		return m.resolveWithSticky(request)
+		return m.resolveWithSticky(ctx, request)
 	}
 	return nil, nil
 }
@@ -467,6 +467,7 @@ func TestLocalResolverProvider_Init_NilStateProvider(t *testing.T) {
 		nil, // nil state provider
 		nil,
 		"secret",
+		nil,
 		nil,
 	)
 
@@ -486,6 +487,7 @@ func TestLocalResolverProvider_Init_NilResolverAPI(t *testing.T) {
 		&mockStateProviderForInit{},
 		nil,
 		"secret",
+		nil,
 		nil,
 	)
 
@@ -512,6 +514,7 @@ func TestLocalResolverProvider_Init_StateProviderError(t *testing.T) {
 		mockStateProvider,
 		nil,
 		"secret",
+		nil,
 		nil,
 	)
 
@@ -550,6 +553,7 @@ func TestLocalResolverProvider_Init_EmptyAccountID(t *testing.T) {
 		nil,
 		"secret",
 		nil,
+		nil,
 	)
 
 	err := provider.Init(openfeature.EvaluationContext{})
@@ -586,6 +590,7 @@ func TestLocalResolverProvider_Init_UpdateStateError(t *testing.T) {
 		mockStateProvider,
 		nil,
 		"secret",
+		nil,
 		nil,
 	)
 
@@ -624,6 +629,7 @@ func TestLocalResolverProvider_Init_Success(t *testing.T) {
 		mockStateProvider,
 		nil,
 		"secret",
+		nil,
 		nil,
 	)
 
