@@ -15,33 +15,22 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Load configuration from environment variables
-	apiClientID := getEnvOrDefault("CONFIDENCE_API_CLIENT_ID", "API_ID")
-	apiClientSecret := getEnvOrDefault("CONFIDENCE_API_CLIENT_SECRET", "API_SECRET")
 	clientSecret := getEnvOrDefault("CONFIDENCE_CLIENT_SECRET", "CLIENT_SECRET")
 
-	// Validate configuration - fail fast on placeholder credentials
-	if apiClientID == "API_ID" || apiClientSecret == "API_SECRET" || clientSecret == "CLIENT_SECRET" {
+	if clientSecret == "CLIENT_SECRET" {
 		log.Fatalf("ERROR: Placeholder credentials detected. Please set environment variables:\n" +
-			"  - CONFIDENCE_API_CLIENT_ID\n" +
-			"  - CONFIDENCE_API_CLIENT_SECRET\n" +
 			"  - CONFIDENCE_CLIENT_SECRET\n\n" +
 			"Example:\n" +
-			"  export CONFIDENCE_API_CLIENT_ID=\"your-api-client-id\"\n" +
-			"  export CONFIDENCE_API_CLIENT_SECRET=\"your-api-client-secret\"\n" +
 			"  export CONFIDENCE_CLIENT_SECRET=\"your-client-secret\"\n")
 	}
 
 	log.Println("Starting Confidence OpenFeature Local Provider Demo")
 	log.Println("")
 
-	// Create provider with simple configuration
 	log.Println("Creating Confidence provider...")
 
 	provider, err := confidence.NewProvider(ctx, confidence.ProviderConfig{
-		APIClientID:     apiClientID,
-		APIClientSecret: apiClientSecret,
-		ClientSecret:    clientSecret,
+		ClientSecret: clientSecret,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)

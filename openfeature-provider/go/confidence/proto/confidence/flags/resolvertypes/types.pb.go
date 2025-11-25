@@ -117,6 +117,8 @@ const (
 	SdkId_SDK_ID_FLUTTER_ANDROID_CONFIDENCE SdkId = 18
 	SdkId_SDK_ID_DOTNET_CONFIDENCE          SdkId = 19
 	SdkId_SDK_ID_GO_LOCAL_PROVIDER          SdkId = 20
+	SdkId_SDK_ID_JAVA_LOCAL_PROVIDER        SdkId = 21
+	SdkId_SDK_ID_JS_LOCAL_SERVER_PROVIDER   SdkId = 22
 )
 
 // Enum value maps for SdkId.
@@ -143,6 +145,8 @@ var (
 		18: "SDK_ID_FLUTTER_ANDROID_CONFIDENCE",
 		19: "SDK_ID_DOTNET_CONFIDENCE",
 		20: "SDK_ID_GO_LOCAL_PROVIDER",
+		21: "SDK_ID_JAVA_LOCAL_PROVIDER",
+		22: "SDK_ID_JS_LOCAL_SERVER_PROVIDER",
 	}
 	SdkId_value = map[string]int32{
 		"SDK_ID_UNSPECIFIED":                0,
@@ -166,6 +170,8 @@ var (
 		"SDK_ID_FLUTTER_ANDROID_CONFIDENCE": 18,
 		"SDK_ID_DOTNET_CONFIDENCE":          19,
 		"SDK_ID_GO_LOCAL_PROVIDER":          20,
+		"SDK_ID_JAVA_LOCAL_PROVIDER":        21,
+		"SDK_ID_JS_LOCAL_SERVER_PROVIDER":   22,
 	}
 )
 
@@ -311,7 +317,7 @@ const file_confidence_flags_resolver_v1_types_proto_rawDesc = "" +
 	"!RESOLVE_REASON_NO_TREATMENT_MATCH\x10\x03\x1a\x02\b\x01\x12 \n" +
 	"\x1cRESOLVE_REASON_FLAG_ARCHIVED\x10\x04\x12&\n" +
 	"\"RESOLVE_REASON_TARGETING_KEY_ERROR\x10\x05\x12\x18\n" +
-	"\x14RESOLVE_REASON_ERROR\x10\x06*\xde\x04\n" +
+	"\x14RESOLVE_REASON_ERROR\x10\x06*\xa3\x05\n" +
 	"\x05SdkId\x12\x16\n" +
 	"\x12SDK_ID_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14SDK_ID_JAVA_PROVIDER\x10\x01\x12\x1a\n" +
@@ -334,7 +340,9 @@ const file_confidence_flags_resolver_v1_types_proto_rawDesc = "" +
 	"\x1dSDK_ID_FLUTTER_IOS_CONFIDENCE\x10\x11\x12%\n" +
 	"!SDK_ID_FLUTTER_ANDROID_CONFIDENCE\x10\x12\x12\x1c\n" +
 	"\x18SDK_ID_DOTNET_CONFIDENCE\x10\x13\x12\x1c\n" +
-	"\x18SDK_ID_GO_LOCAL_PROVIDER\x10\x14B8\n" +
+	"\x18SDK_ID_GO_LOCAL_PROVIDER\x10\x14\x12\x1e\n" +
+	"\x1aSDK_ID_JAVA_LOCAL_PROVIDER\x10\x15\x12#\n" +
+	"\x1fSDK_ID_JS_LOCAL_SERVER_PROVIDER\x10\x16B8\n" +
 	"(com.spotify.confidence.flags.resolver.v1B\n" +
 	"TypesProtoP\x01b\x06proto3"
 

@@ -6,57 +6,31 @@ import (
 	"log/slog"
 	"os"
 
+	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"github.com/tetratelabs/wazero"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
-// ConnFactory is an advanced/testing hook allowing callers to customize how
-// gRPC connections are created. The provider will pass the computed target and
-// its default DialOptions (TLS and required interceptors where applicable).
-// Implementations may modify options, change targets, or replace the dialing
-// mechanism entirely. Returning a connection with incompatible security/auth
-// can break functionality; use with care.
+const confidenceDomain = "edge-grpc.spotify.com"
+
+// ConnFactory is an optional testing/advanced hook for customizing gRPC connections.
+// If nil, a default connection to the Confidence service is created.
 type ConnFactory func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error)
 
-// ProviderConfig holds configuration for the Confidence provider
 type ProviderConfig struct {
-	// Required: API credentials
-	APIClientID     string
-	APIClientSecret string
-	ClientSecret    string
-
-	// Optional: Custom logger for provider operations
-	// If not provided, a default slog.Logger will be created
-	Logger *slog.Logger
-
-	// Advanced/testing: override connection creation
-	ConnFactory ConnFactory
-}
-
-// ProviderConfigWithStateProvider holds configuration for the Confidence provider with a custom StateProvider
-// WARNING: This configuration is intended for testing and advanced use cases ONLY.
-// For production deployments, use NewProvider() with ProviderConfig instead.
-// Only use this when you need to provide a custom state source (e.g., local file cache for testing).
-type ProviderConfigWithStateProvider struct {
-	// Required: Client secret for signing evaluations
 	ClientSecret string
-
-	// Required: State provider for fetching resolver state
-	StateProvider StateProvider
-
-	// Optional: Custom logger for provider operations
-	// If not provided, a default slog.Logger will be created
-	Logger *slog.Logger
+	Logger       *slog.Logger
+	ConnFactory  ConnFactory // Optional: for testing/advanced use cases
 }
 
-// NewProvider creates a new Confidence OpenFeature provider
+type ProviderTestConfig struct {
+	StateProvider StateProvider
+	FlagLogger    FlagLogger
+	Logger        *slog.Logger
+}
+
 func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProvider, error) {
-	if config.APIClientID == "" {
-		return nil, fmt.Errorf("APIClientID is required")
-	}
-	if config.APIClientSecret == "" {
-		return nil, fmt.Errorf("APIClientSecret is required")
-	}
 	if config.ClientSecret == "" {
 		return nil, fmt.Errorf("ClientSecret is required")
 	}
@@ -71,6 +45,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
+	// Create gRPC connection for flag logger
 	connFactory := config.ConnFactory
 	if connFactory == nil {
 		connFactory = func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
@@ -78,20 +53,22 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		}
 	}
 
-	stateProvider, flagLogger, err := NewGrpcClients(
-		ctx,
-		config.APIClientID,
-		config.APIClientSecret,
-		connFactory,
-		logger,
-	)
-	if err != nil {
-		wasmRuntime.Close(ctx)
-		return nil, fmt.Errorf("failed to create gRPC clients: %w", err)
+	tlsCreds := credentials.NewTLS(nil)
+	baseOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(tlsCreds),
 	}
 
-	// Create SwapWasmResolverApi without initial state (lazy initialization)
-	// State will be set during Provider.Init()
+	conn, err := connFactory(ctx, confidenceDomain, baseOpts)
+	if err != nil {
+		wasmRuntime.Close(ctx)
+		return nil, fmt.Errorf("failed to create connection: %w", err)
+	}
+
+	// Create state provider and flag logger
+	flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(conn)
+	stateProvider := NewFlagsAdminStateFetcher(config.ClientSecret, logger)
+	flagLogger := NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
+
 	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger)
 	if err != nil {
 		wasmRuntime.Close(ctx)
@@ -103,14 +80,13 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	return provider, nil
 }
 
-// NewProviderWithStateProvider creates a new Confidence OpenFeature provider with a custom StateProvider
-// Should only be used for testing purposes. _Will not emit exposure logging._
-func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWithStateProvider) (*LocalResolverProvider, error) {
-	if config.ClientSecret == "" {
-		return nil, fmt.Errorf("ClientSecret is required")
-	}
+// NewProviderForTest creates a provider with mocked StateProvider and FlagLogger for testing
+func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalResolverProvider, error) {
 	if config.StateProvider == nil {
 		return nil, fmt.Errorf("StateProvider is required")
+	}
+	if config.FlagLogger == nil {
+		return nil, fmt.Errorf("FlagLogger is required")
 	}
 
 	logger := config.Logger
@@ -123,19 +99,13 @@ func NewProviderWithStateProvider(ctx context.Context, config ProviderConfigWith
 	runtimeConfig := wazero.NewRuntimeConfig()
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
-	// When using custom StateProvider, no gRPC logger service is available
-	// Exposure logging is disabled
-	flagLogger := NewNoOpWasmFlagLogger()
-
-	// Create SwapWasmResolverApi without initial state (lazy initialization)
-	// State will be set during Provider.Init()
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, config.FlagLogger, logger)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
-	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, flagLogger, config.ClientSecret, logger)
+	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, "", logger)
 
 	return provider, nil
 }

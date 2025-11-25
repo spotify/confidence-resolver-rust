@@ -3,14 +3,12 @@ package com.spotify.confidence;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Struct;
-import com.spotify.confidence.flags.admin.v1.ResolverStateServiceGrpc;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolvedFlag;
 import com.spotify.confidence.flags.resolver.v1.Sdk;
 import com.spotify.confidence.flags.resolver.v1.SdkId;
-import com.spotify.confidence.iam.v1.AuthServiceGrpc;
 import dev.openfeature.sdk.*;
 import dev.openfeature.sdk.exceptions.FlagNotFoundError;
 import dev.openfeature.sdk.exceptions.GeneralError;
@@ -20,7 +18,6 @@ import io.grpc.StatusRuntimeException;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -34,25 +31,20 @@ import org.slf4j.Logger;
 /**
  * OpenFeature provider for Confidence feature flags using local resolution.
  *
- * <p>This provider evaluates feature flags locally using either a WebAssembly (WASM) resolver. It
+ * <p>This provider evaluates feature flags locally using a WebAssembly (WASM) resolver. It
  * periodically syncs flag configurations from the Confidence service and caches them locally for
  * fast, low-latency flag evaluation.
  *
  * <p><strong>Usage Example:</strong>
  *
  * <pre>{@code
- * // Create API credentials
- * ApiSecret apiSecret = new ApiSecret("your-client-id", "your-client-secret");
  * String clientSecret = "your-application-client-secret";
- *
- * // Create provider with default settings (exposure logs enabled)
+ * LocalProviderConfig config = new LocalProviderConfig();
  * OpenFeatureLocalResolveProvider provider =
- *     new OpenFeatureLocalResolveProvider(apiSecret, clientSecret);
+ *     new OpenFeatureLocalResolveProvider(config, clientSecret);
  *
- * // Register with OpenFeature
  * OpenFeatureAPI.getInstance().setProvider(provider);
  *
- * // Use with OpenFeature client
  * Client client = OpenFeatureAPI.getInstance().getClient();
  * String flagValue = client.getStringValue("my-flag", "default-value");
  * }</pre>
@@ -82,42 +74,6 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     /**
      * Creates a new OpenFeature provider for local flag resolution with full configuration control.
      *
-     * <p>This is the primary constructor that allows full control over the provider configuration,
-     * including retry strategy.
-     *
-     * @param apiSecret             the API credentials containing client ID and client secret for authenticating
-     *                              with the Confidence service. Create using {@code new ApiSecret("client-id",
-     *                              "client-secret")}
-     * @param clientSecret          the client secret for your application, used for flag resolution
-     *                              authentication. This is different from the API secret and is specific to your application
-     *                              configuration
-     * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
-     */
-    public OpenFeatureLocalResolveProvider(
-            ApiSecret apiSecret, String clientSecret, StickyResolveStrategy stickyResolveStrategy) {
-        this(new LocalProviderConfig(apiSecret), clientSecret, stickyResolveStrategy);
-    }
-
-
-    /**
-     * Creates a new OpenFeature provider for local flag resolution with sticky default fallback
-     * strategy and no retry.
-     *
-     * <p>This constructor uses {@link RemoteResolverFallback} as the default sticky resolve strategy,
-     * which provides fallback to the remote Confidence service when the WASM resolver encounters
-     * missing materializations. By default, no retry strategy is applied.
-     *
-     * @param apiSecret    the API credentials containing client ID and client secret for authenticating
-     *                     with the Confidence service. Create using {@code new ApiSecret("client-id",
-     *                     "client-secret")}
-     * @param clientSecret the client secret for your application, used for flag resolution
-     *                     authentication. This is different from the API secret and is specific to your application
-     *                     configuration
-     */
-    public OpenFeatureLocalResolveProvider(ApiSecret apiSecret, String clientSecret) {
-        this(apiSecret, clientSecret, new RemoteResolverFallback(new DefaultChannelFactory()));
-    }
-
     /**
      * Creates a new OpenFeature provider for local flag resolution with custom channel factory.
      *
@@ -133,13 +89,12 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
      *         .intercept(interceptors.toArray(new ClientInterceptor[0]))
      *         .build();
      *
-     * ApiSecret apiSecret = new ApiSecret("client-id", "client-secret");
-     * LocalProviderConfig config = new LocalProviderConfig(apiSecret, mockFactory);
+     * LocalProviderConfig config = new LocalProviderConfig(mockFactory);
      * OpenFeatureLocalResolveProvider provider =
      *     new OpenFeatureLocalResolveProvider(config, "client-secret");
      * }</pre>
      *
-     * @param config       the provider configuration including API credentials and optional channel factory
+     * @param config       the provider configuration including optional channel factory
      * @param clientSecret the client secret for your application, used for flag resolution
      *                     authentication
      */
@@ -160,27 +115,13 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
             LocalProviderConfig config, String clientSecret, StickyResolveStrategy stickyResolveStrategy) {
         this.clientSecret = clientSecret;
         this.stickyResolveStrategy = stickyResolveStrategy;
-        final String confidenceDomain =
-                Optional.ofNullable(System.getenv("CONFIDENCE_DOMAIN"))
-                        .orElse("edge-grpc.spotify.com");
-
-        var tokenHolder = createTokenHolder(config.getApiSecret(), config.getChannelFactory(), confidenceDomain);
-        this.stateProvider = getStateProvider(tokenHolder, confidenceDomain, config.getChannelFactory());
-        final var wasmFlagLogger = new GrpcWasmFlagLogger(config.getApiSecret(), config.getChannelFactory());
+        this.stateProvider = new FlagsAdminStateFetcher(clientSecret);
+        final var wasmFlagLogger = new GrpcWasmFlagLogger(clientSecret, config.getChannelFactory());
         this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(
                 wasmFlagLogger,
                 stickyResolveStrategy);
     }
 
-
-    /**
-     * To be used for testing purposes only! This constructor allows to inject flags state for testing
-     * the WASM resolver with full control over retry strategy.
-     *
-     * @param accountStateProvider  a functional interface that provides AccountState instances
-     * @param clientSecret          the flag client key used to filter the flags
-     * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
-     */
     @VisibleForTesting
     public OpenFeatureLocalResolveProvider(
             AccountStateProvider accountStateProvider,
@@ -192,24 +133,6 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
         this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(
                 new NoOpWasmFlagLogger(),
                 stickyResolveStrategy);
-    }
-
-    private AccountStateProvider getStateProvider(TokenHolder tokenHolder, String confidenceDomain, ChannelFactory channelFactory) {
-        // Create authenticated channel with JWT interceptor
-        final var jwtInterceptor = new JwtAuthClientInterceptor(tokenHolder);
-        final var authenticatedChannel =
-                channelFactory.create(confidenceDomain, Collections.singletonList(jwtInterceptor));
-        final ResolverStateServiceGrpc.ResolverStateServiceBlockingStub resolverStateService =
-                ResolverStateServiceGrpc.newBlockingStub(authenticatedChannel);
-        return new FlagsAdminStateFetcher(resolverStateService);
-    }
-
-
-    private TokenHolder createTokenHolder(ApiSecret apiSecret, ChannelFactory channelFactory, String confidenceDomain) {
-        // Create base channel for auth service (no JWT auth interceptor)
-        final var channel = channelFactory.create(confidenceDomain, Collections.emptyList());
-        final AuthServiceGrpc.AuthServiceBlockingStub authService = AuthServiceGrpc.newBlockingStub(channel);
-        return new TokenHolder(apiSecret.clientId(), apiSecret.clientSecret(), authService);
     }
 
     @Override

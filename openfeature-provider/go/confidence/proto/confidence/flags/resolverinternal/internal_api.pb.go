@@ -572,12 +572,13 @@ const file_confidence_flags_resolver_v1_internal_api_proto_rawDesc = "" +
 	"\x19flags.confidence.dev/RuleR\x04rule\x12C\n" +
 	"\x06reason\x18\x06 \x01(\x0e2+.confidence.flags.resolver.v1.ResolveReasonR\x06reason\x12s\n" +
 	"\x17fallthrough_assignments\x18\t \x03(\v2:.confidence.flags.resolver.v1.events.FallthroughAssignmentR\x16fallthroughAssignments\x12#\n" +
-	"\rassignment_id\x18\b \x01(\tR\fassignmentId2\xce\x04\n" +
+	"\rassignment_id\x18\b \x01(\tR\fassignmentId2\xf4\x05\n" +
 	"\x19InternalFlagLoggerService\x12\x82\x02\n" +
 	"\x11WriteFlagAssigned\x126.confidence.flags.resolver.v1.WriteFlagAssignedRequest\x1a7.confidence.flags.resolver.v1.WriteFlagAssignedResponse\"|ʇ\xe4\x10(\n" +
 	"\x02\xf2\x02\"\aaccount*\x17can_write_flag_assigned0\x01\x82\xd3\xe4\x93\x02I:\x01*Z,:\rflag_assigned\"\x1b/v1/flagAssigned:writeArray\"\x16/v1/flagAssigned:write\x12\xc4\x01\n" +
 	"\rWriteFlagLogs\x122.confidence.flags.resolver.v1.WriteFlagLogsRequest\x1a3.confidence.flags.resolver.v1.WriteFlagLogsResponse\"Jʇ\xe4\x10(\n" +
-	"\x02\xf2\x02\"\aaccount*\x17can_write_flag_assigned0\x01\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/flagLogs:write\x1ae\xe2\x87\xe4\x10\x1aresolver.eu.confidence.dev\xe2\x87\xe4\x10\x1aresolver.us.confidence.dev\xea\x87\xe4\x10\x12InternalFlagLogger\xfa\xd2\xe4\x93\x02\n" +
+	"\x02\xf2\x02\"\aaccount*\x17can_write_flag_assigned0\x01\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/flagLogs:write\x12\xa3\x01\n" +
+	"\x13ClientWriteFlagLogs\x122.confidence.flags.resolver.v1.WriteFlagLogsRequest\x1a3.confidence.flags.resolver.v1.WriteFlagLogsResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/v1/clientFlagLogs:write\x1ae\xe2\x87\xe4\x10\x1aresolver.eu.confidence.dev\xe2\x87\xe4\x10\x1aresolver.us.confidence.dev\xea\x87\xe4\x10\x12InternalFlagLogger\xfa\xd2\xe4\x93\x02\n" +
 	"\x12\bINTERNALB>\n" +
 	"(com.spotify.confidence.flags.resolver.v1B\x10InternalApiProtoP\x01b\x06proto3"
 
@@ -628,10 +629,12 @@ var file_confidence_flags_resolver_v1_internal_api_proto_depIdxs = []int32{
 	15, // 12: confidence.flags.resolver.v1.ResolveTokenV1.AssignedFlag.fallthrough_assignments:type_name -> confidence.flags.resolver.v1.events.FallthroughAssignment
 	2,  // 13: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagAssigned:input_type -> confidence.flags.resolver.v1.WriteFlagAssignedRequest
 	0,  // 14: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:input_type -> confidence.flags.resolver.v1.WriteFlagLogsRequest
-	3,  // 15: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagAssigned:output_type -> confidence.flags.resolver.v1.WriteFlagAssignedResponse
-	1,  // 16: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:output_type -> confidence.flags.resolver.v1.WriteFlagLogsResponse
-	15, // [15:17] is the sub-list for method output_type
-	13, // [13:15] is the sub-list for method input_type
+	0,  // 15: confidence.flags.resolver.v1.InternalFlagLoggerService.ClientWriteFlagLogs:input_type -> confidence.flags.resolver.v1.WriteFlagLogsRequest
+	3,  // 16: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagAssigned:output_type -> confidence.flags.resolver.v1.WriteFlagAssignedResponse
+	1,  // 17: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:output_type -> confidence.flags.resolver.v1.WriteFlagLogsResponse
+	1,  // 18: confidence.flags.resolver.v1.InternalFlagLoggerService.ClientWriteFlagLogs:output_type -> confidence.flags.resolver.v1.WriteFlagLogsResponse
+	16, // [16:19] is the sub-list for method output_type
+	13, // [13:16] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name

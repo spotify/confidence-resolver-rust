@@ -2,15 +2,18 @@ package confidence
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"time"
 
+	pb "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // StateProvider is an interface for providing resolver state and account ID
@@ -18,16 +21,14 @@ type StateProvider interface {
 	Provide(ctx context.Context) ([]byte, string, error)
 }
 
-// FlagsAdminStateFetcher fetches and updates the resolver state from the admin service
+// FlagsAdminStateFetcher fetches and updates the resolver state from the CDN
 type FlagsAdminStateFetcher struct {
-	resolverStateService adminv1.ResolverStateServiceClient
-	etag                 atomic.Value // stores string
-	rawResolverState     atomic.Value // stores []byte
-	resolverStateURI     atomic.Value // stores *adminv1.ResolverStateUriResponse
-	refreshTime          atomic.Value // stores time.Time
-	accountID            atomic.Value // stores string
-	httpClient           *http.Client
-	logger               *slog.Logger
+	clientSecret     string
+	etag             atomic.Value // stores string
+	rawResolverState atomic.Value // stores []byte
+	accountID        atomic.Value // stores string
+	HTTPClient       *http.Client // Exported for testing
+	logger           *slog.Logger
 }
 
 // Compile-time interface conformance check
@@ -35,13 +36,13 @@ var _ StateProvider = (*FlagsAdminStateFetcher)(nil)
 
 // NewFlagsAdminStateFetcher creates a new FlagsAdminStateFetcher
 func NewFlagsAdminStateFetcher(
-	resolverStateService adminv1.ResolverStateServiceClient,
+	clientSecret string,
 	logger *slog.Logger,
 ) *FlagsAdminStateFetcher {
 	f := &FlagsAdminStateFetcher{
-		resolverStateService: resolverStateService,
-		logger:               logger,
-		httpClient: &http.Client{
+		clientSecret: clientSecret,
+		logger:       logger,
+		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
@@ -89,51 +90,14 @@ func (f *FlagsAdminStateFetcher) Provide(ctx context.Context) ([]byte, string, e
 	return f.GetRawState(), f.GetAccountID(), err
 }
 
-// getResolverFileURI gets the signed URI for downloading the resolver state
-func (f *FlagsAdminStateFetcher) getResolverFileURI(ctx context.Context) (*adminv1.ResolverStateUriResponse, error) {
-	now := time.Now()
-
-	// Check if we have a cached URI that's still valid
-	if cached := f.resolverStateURI.Load(); cached != nil {
-		cachedURI := cached.(*adminv1.ResolverStateUriResponse)
-		if refreshTime := f.refreshTime.Load(); refreshTime != nil {
-			if now.Before(refreshTime.(time.Time)) {
-				return cachedURI, nil
-			}
-		}
-	}
-
-	// Fetch new URI with timeout
-	rpcCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	resp, err := f.resolverStateService.ResolverStateUri(rpcCtx, &adminv1.ResolverStateUriRequest{})
-	if err != nil {
-		return nil, err
-	}
-
-	f.resolverStateURI.Store(resp)
-
-	// Calculate refresh time (half of TTL)
-	expireTime := resp.ExpireTime.AsTime()
-	ttl := expireTime.Sub(now)
-	refreshTime := now.Add(ttl / 2)
-	f.refreshTime.Store(refreshTime)
-
-	return resp, nil
-}
-
-// fetchAndUpdateStateIfChanged fetches the state from the signed URI if it has changed
+// fetchAndUpdateStateIfChanged fetches the state from the CDN if it has changed
 func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Context) error {
-	response, err := f.getResolverFileURI(ctx)
-	if err != nil {
-		return err
-	}
+	// Build CDN URL using SHA256 hash of client secret
+	hash := sha256.Sum256([]byte(f.clientSecret))
+	hashHex := hex.EncodeToString(hash[:])
+	cdnURL := "https://confidence-resolver-state-cdn.spotifycdn.com/" + hashHex
 
-	f.accountID.Store(response.Account)
-	uri := response.SignedUri
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cdnURL, nil)
 	if err != nil {
 		return err
 	}
@@ -143,7 +107,7 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 		req.Header.Set("If-None-Match", previousEtag.(string))
 	}
 
-	resp, err := f.httpClient.Do(req)
+	resp, err := f.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -156,7 +120,7 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return err
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	// Read the new state
@@ -165,22 +129,23 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 		return err
 	}
 
+	// Parse SetResolverStateRequest
+	stateRequest := &pb.SetResolverStateRequest{}
+	if err := proto.Unmarshal(bytes, stateRequest); err != nil {
+		return fmt.Errorf("failed to unmarshal SetResolverStateRequest: %w", err)
+	}
+
+	// Extract account ID and state bytes
+	f.accountID.Store(stateRequest.AccountId)
+
 	// Get and store the new ETag
 	etag := resp.Header.Get("ETag")
 	f.etag.Store(etag)
 
-	// Update the raw state
-	f.rawResolverState.Store(bytes)
+	// Update the raw state (state is already in bytes format)
+	f.rawResolverState.Store(stateRequest.State)
 
-	f.logger.Info("Loaded resolver state", "etag", etag)
+	f.logger.Info("Loaded resolver state", "etag", etag, "account", stateRequest.AccountId)
 
 	return nil
-}
-
-// toInstant converts a protobuf Timestamp to time.Time
-func toInstant(ts *timestamppb.Timestamp) time.Time {
-	if ts == nil {
-		return time.Time{}
-	}
-	return ts.AsTime()
 }

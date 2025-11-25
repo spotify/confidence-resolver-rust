@@ -11,29 +11,26 @@ import type {
 import { ResolveReason, SdkId } from './proto/api';
 import { ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyRequest } from './proto/api';
 import { VERSION } from './version';
-import {
-  Fetch,
-  FetchMiddleware,
-  withAuth,
-  withLogging,
-  withResponse,
-  withRetry,
-  withRouter,
-  withStallTimeout,
-  withTimeout,
-} from './fetch';
+import { Fetch, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
-import { AccessToken, LocalResolver, ResolveStateUri } from './LocalResolver';
+import { AccessToken, LocalResolver } from './LocalResolver';
+import { HashProvider, WebCryptoHashProvider } from './HashProvider';
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
 export interface ProviderOptions {
   flagClientSecret: string;
-  apiClientId: string;
-  apiClientSecret: string;
   initializeTimeout?: number;
   flushInterval?: number;
   fetch?: typeof fetch;
+}
+
+/**
+ * Internal options for testing only. Not part of the public API.
+ * @internal
+ */
+export interface InternalProviderOptions extends ProviderOptions {
+  hashProvider?: HashProvider;
 }
 
 /**
@@ -51,32 +48,19 @@ export class ConfidenceServerProviderLocal implements Provider {
   private readonly main = new AbortController();
   private readonly fetch: Fetch;
   private readonly flushInterval: number;
+  private readonly hashProvider: HashProvider;
   private stateEtag: string | null = null;
 
   // TODO Maybe pass in a resolver factory, so that we can initialize it in initialize and transition to fatal if not.
   constructor(private resolver: LocalResolver, private options: ProviderOptions) {
-    // TODO better error handling
-    // TODO validate options
     this.flushInterval = options.flushInterval ?? DEFAULT_FLUSH_INTERVAL;
-    const withConfidenceAuth = withAuth(async () => {
-      const { accessToken, expiresIn } = await this.fetchToken();
-      return [accessToken, new Date(Date.now() + 1000 * expiresIn)];
-    }, this.main.signal);
-
-    const withFastRetry = FetchMiddleware.compose(
-      withRetry({
-        maxAttempts: Infinity,
-        baseInterval: 300,
-        maxInterval: 5 * TimeUnit.SECOND,
-      }),
-      withTimeout(5 * TimeUnit.SECOND),
-    );
+    // Allow hashProvider override for testing, but default to WebCrypto
+    this.hashProvider = (options as InternalProviderOptions).hashProvider ?? new WebCryptoHashProvider();
 
     this.fetch = Fetch.create(
       [
         withRouter({
-          'https://iam.confidence.dev/v1/oauth/token': [withFastRetry],
-          'https://storage.googleapis.com/*': [
+          'https://confidence-resolver-state-cdn.spotifycdn.com/*': [
             withRetry({
               maxAttempts: Infinity,
               baseInterval: 500,
@@ -85,17 +69,15 @@ export class ConfidenceServerProviderLocal implements Provider {
             withStallTimeout(500),
           ],
           'https://resolver.confidence.dev/*': [
-            withConfidenceAuth,
             withRouter({
-              '*/v1/resolverState:resolverStateUri': [withFastRetry],
               '*/v1/flags:resolve': [
                 withRetry({
                   maxAttempts: 3,
                   baseInterval: 100,
                 }),
-                withTimeout(3 * TimeUnit.SECOND), // TODO make configurable
+                withTimeout(3 * TimeUnit.SECOND),
               ],
-              '*/v1/flagLogs:write': [
+              '*/v1/clientFlagLogs:write': [
                 withRetry({
                   maxAttempts: 3,
                   baseInterval: 500,
@@ -104,7 +86,6 @@ export class ConfidenceServerProviderLocal implements Provider {
               ],
             }),
           ],
-          // non-configured requests
           '*': [
             withResponse(url => {
               throw new Error(`Unknown route ${url}`);
@@ -256,12 +237,15 @@ export class ConfidenceServerProviderLocal implements Provider {
   }
 
   async updateState(signal?: AbortSignal): Promise<void> {
-    const { signedUri, account } = await this.fetchResolveStateUri(signal);
+    // Build CDN URL using SHA256 hash of client secret
+    const hashHex = await this.hashProvider.sha256Hex(this.options.flagClientSecret);
+    const cdnUrl = `https://confidence-resolver-state-cdn.spotifycdn.com/${hashHex}`;
+
     const headers = new Headers();
     if (this.stateEtag) {
       headers.set('If-None-Match', this.stateEtag);
     }
-    const resp = await this.fetch(signedUri, { headers, signal });
+    const resp = await this.fetch(cdnUrl, { headers, signal });
     if (resp.status === 304) {
       // not changed
       return;
@@ -270,11 +254,12 @@ export class ConfidenceServerProviderLocal implements Provider {
       throw new Error(`Failed to fetch state: ${resp.status} ${resp.statusText}`);
     }
     this.stateEtag = resp.headers.get('etag');
-    const state = new Uint8Array(await resp.arrayBuffer());
-    this.resolver.setResolverState({
-      accountId: account,
-      state,
-    });
+
+    // Parse SetResolverStateRequest from response
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    const { SetResolverStateRequest } = await import('./proto/api');
+
+    this.resolver.setResolverState(SetResolverStateRequest.decode(bytes));
   }
 
   // TODO should this return success/failure, or even throw?
@@ -284,40 +269,15 @@ export class ConfidenceServerProviderLocal implements Provider {
       // nothing to send
       return;
     }
-    await this.fetch('https://resolver.confidence.dev/v1/flagLogs:write', {
+    await this.fetch('https://resolver.confidence.dev/v1/clientFlagLogs:write', {
       method: 'post',
       signal,
       headers: {
         'Content-Type': 'application/x-protobuf',
+        Authorization: `ClientSecret ${this.options.flagClientSecret}`,
       },
       body: writeFlagLogRequest as Uint8Array<ArrayBuffer>,
     });
-  }
-
-  private async fetchResolveStateUri(signal?: AbortSignal): Promise<ResolveStateUri> {
-    const resp = await this.fetch('https://resolver.confidence.dev/v1/resolverState:resolverStateUri', { signal });
-    if (!resp.ok) {
-      throw new Error('Failed to get resolve state url');
-    }
-    return resp.json();
-  }
-
-  private async fetchToken(): Promise<AccessToken> {
-    const resp = await this.fetch('https://iam.confidence.dev/v1/oauth/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        clientId: this.options.apiClientId,
-        clientSecret: this.options.apiClientSecret,
-        grantType: 'client_credentials',
-      }),
-    });
-    if (!resp.ok) {
-      throw new Error('Failed to fetch access token');
-    }
-    return resp.json();
   }
 
   private static convertReason(reason: ResolveReason): ResolutionReason {

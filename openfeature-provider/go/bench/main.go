@@ -32,8 +32,6 @@ func main() {
 		gomaxprocs      int
 		flagKey         string
 		clientSecret    string
-		apiClientID     string
-		apiClientSecret string
 		pollInterval    int
 	)
 
@@ -44,8 +42,6 @@ func main() {
 	flag.IntVar(&gomaxprocs, "gomaxprocs", 0, "set GOMAXPROCS (0=leave default)")
 	flag.StringVar(&flagKey, "flag", "example-flag", "flag key (without 'flags/' prefix)")
 	flag.StringVar(&clientSecret, "client-secret", "secret", "client secret for request signing")
-	flag.StringVar(&apiClientID, "api-client-id", "mock-client", "API client ID for token requests")
-	flag.StringVar(&apiClientSecret, "api-client-secret", "mock-secret", "API client secret for token requests")
 	flag.IntVar(&pollInterval, "poll-interval", 10, "resolver state/log poll interval in seconds (env override)")
 	flag.Parse()
 
@@ -62,27 +58,17 @@ func main() {
 		durationSeconds = 1
 	}
 
-	// Ensure state/log polling is exercised during the run
-	// os.Setenv("CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS", fmt.Sprintf("%d", pollInterval))
-
 	ctx := context.Background()
 
-	// Build a provider wired to the mock server via ConnFactory. The factory ignores the
-	// target passed by the provider and always dials the mock address with insecure creds,
-	// while preserving any supplied interceptors (e.g., JWT auth).
 	connFactory := func(ctx context.Context, _ string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
-		// Keep the default options (notably auth interceptors), but ensure we use insecure transport
-		// to match the mock server and override any TLS transport credentials.
 		opts := append([]grpc.DialOption{}, defaultOpts...)
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return grpc.NewClient(mockGRPCAddr, opts...)
 	}
 
 	provider, err := confidence.NewProvider(ctx, confidence.ProviderConfig{
-		APIClientID:     apiClientID,
-		APIClientSecret: apiClientSecret,
-		ClientSecret:    clientSecret,
-		ConnFactory:     connFactory,
+		ClientSecret: clientSecret,
+		ConnFactory:  connFactory,
 	})
 	provider.Init(openfeature.NewTargetlessEvaluationContext(map[string]any{}))
 	if err != nil {

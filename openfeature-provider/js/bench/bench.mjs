@@ -28,8 +28,6 @@ const DURATION = Number(args['duration'] ?? process.env.DURATION ?? 30); // seco
 const WARMUP = Number(args['warmup'] ?? process.env.WARMUP ?? 5); // seconds
 const FLAG_KEY = args['flag'] ?? process.env.FLAG_KEY ?? 'tutorial-feature';
 const CLIENT_SECRET = args['client-secret'] ?? process.env.CONFIDENCE_FLAG_CLIENT_SECRET ?? 'secret';
-const API_CLIENT_ID = args['api-client-id'] ?? process.env.CONFIDENCE_API_CLIENT_ID ?? 'api-client-id';
-const API_CLIENT_SECRET = args['api-client-secret'] ?? process.env.CONFIDENCE_API_CLIENT_SECRET ?? 'api-client-secret';
 
 // Rewrite all provider HTTP requests to the mock server (grpc-gateway and /state)
 const proxyFetch = async (input, init) => {
@@ -42,8 +40,6 @@ const proxyFetch = async (input, init) => {
 
 const provider = createConfidenceServerProvider({
   flagClientSecret: CLIENT_SECRET,
-  apiClientId: API_CLIENT_ID,
-  apiClientSecret: API_CLIENT_SECRET,
   flushInterval: 1000,
   fetch: proxyFetch,
 });

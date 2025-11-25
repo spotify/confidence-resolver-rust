@@ -5,9 +5,13 @@ import static com.spotify.confidence.GrpcUtil.createConfidenceChannel;
 import com.google.common.annotations.VisibleForTesting;
 import com.spotify.confidence.flags.resolver.v1.InternalFlagLoggerServiceGrpc;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsRequest;
-import com.spotify.confidence.iam.v1.AuthServiceGrpc;
+import io.grpc.CallOptions;
 import io.grpc.Channel;
-import io.grpc.ClientInterceptors;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ForwardingClientCall;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -25,25 +29,47 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
   // Max number of flag_assigned entries per chunk to avoid exceeding gRPC max message size
   private static final int MAX_FLAG_ASSIGNED_PER_CHUNK = 1000;
   private final InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub stub;
+  private final String clientSecret;
   private final ExecutorService executorService;
   private final FlagLogWriter writer;
 
   @VisibleForTesting
-  public GrpcWasmFlagLogger(ApiSecret apiSecret, FlagLogWriter writer) {
-    this.stub = createAuthenticatedStub(apiSecret, new DefaultChannelFactory());
+  public GrpcWasmFlagLogger(String clientSecret, FlagLogWriter writer) {
+    this.stub = createStub(new DefaultChannelFactory());
+    this.clientSecret = clientSecret;
     this.executorService = Executors.newCachedThreadPool();
     this.writer = writer;
   }
 
-  public GrpcWasmFlagLogger(ApiSecret apiSecret, ChannelFactory channelFactory) {
-    this.stub = createAuthenticatedStub(apiSecret, channelFactory);
+  public GrpcWasmFlagLogger(String clientSecret, ChannelFactory channelFactory) {
+    this.stub = createStub(channelFactory);
+    this.clientSecret = clientSecret;
     this.executorService = Executors.newCachedThreadPool();
     this.writer =
         request ->
             executorService.submit(
                 () -> {
                   try {
-                    stub.writeFlagLogs(request);
+                    // Create a stub with authorization header interceptor
+                    InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub stubWithAuth =
+                        stub.withInterceptors(new ClientInterceptor() {
+                          @Override
+                          public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+                              MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+                            return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
+                                next.newCall(method, callOptions)) {
+                              @Override
+                              public void start(Listener<RespT> responseListener, Metadata headers) {
+                                Metadata.Key<String> authKey =
+                                    Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
+                                headers.put(authKey, "ClientSecret " + clientSecret);
+                                super.start(responseListener, headers);
+                              }
+                            };
+                          }
+                        });
+
+                    stubWithAuth.clientWriteFlagLogs(request);
                     logger.debug(
                         "Successfully sent flag log with {} entries",
                         request.getFlagAssignedCount());
@@ -53,16 +79,10 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
                 });
   }
 
-  private static InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub
-      createAuthenticatedStub(ApiSecret apiSecret, ChannelFactory channelFactory) {
+  private static InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub createStub(
+      ChannelFactory channelFactory) {
     final var channel = createConfidenceChannel(channelFactory);
-    final AuthServiceGrpc.AuthServiceBlockingStub authService =
-        AuthServiceGrpc.newBlockingStub(channel);
-    final TokenHolder tokenHolder =
-        new TokenHolder(apiSecret.clientId(), apiSecret.clientSecret(), authService);
-    final Channel authenticatedChannel =
-        ClientInterceptors.intercept(channel, new JwtAuthClientInterceptor(tokenHolder));
-    return InternalFlagLoggerServiceGrpc.newBlockingStub(authenticatedChannel);
+    return InternalFlagLoggerServiceGrpc.newBlockingStub(channel);
   }
 
   @Override

@@ -37,8 +37,6 @@ import { createConfidenceServerProvider } from '@spotify-confidence/openfeature-
 
 const provider = createConfidenceServerProvider({
   flagClientSecret: process.env.CONFIDENCE_FLAG_CLIENT_SECRET!,
-  apiClientId: process.env.CONFIDENCE_API_CLIENT_ID!,
-  apiClientSecret: process.env.CONFIDENCE_API_CLIENT_SECRET!,
   // initializeTimeout?: number
   // flushInterval?: number
   // fetch?: typeof fetch (Node <18 or custom transport)
@@ -65,9 +63,7 @@ await provider.onClose();
 
 ## Options
 
-- `flagClientSecret` (string, required): The flag client secret used during evaluation.
-- `apiClientId` (string, required): OAuth client ID for Confidence IAM.
-- `apiClientSecret` (string, required): OAuth client secret for Confidence IAM.
+- `flagClientSecret` (string, required): The flag client secret used during evaluation and authentication.
 - `initializeTimeout` (number, optional): Max ms to wait for initial state fetch. Defaults to 30_000.
 - `flushInterval` (number, optional): Interval in ms for sending evaluation logs. Defaults to 10_000.
 - `fetch` (optional): Custom `fetch` implementation. Required for Node < 18; for Node 18+ you can omit.
@@ -174,8 +170,8 @@ The package exports a browser ESM build that compiles the WASM via streaming and
 ## Troubleshooting
 
 - Provider stuck in NOT_READY/ERROR:
-  - Verify `apiClientId`/`apiClientSecret` and `flagClientSecret` are correct.
-  - Ensure outbound access to Confidence endpoints and GCS.
+  - Verify `flagClientSecret` is correct.
+  - Ensure outbound access to Confidence endpoints and CDN.
   - Enable `DEBUG=cnfd:*` for more detail.
 
 - No logs appear:

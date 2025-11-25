@@ -1,8 +1,9 @@
 import { vi } from 'vitest';
-import { AccessToken, ResolveStateUri } from './LocalResolver';
+import { AccessToken } from './LocalResolver';
 import { abortableSleep, isObject, TimeUnit } from './util';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
-import { ResolveFlagsResponse } from './proto/api';
+import { ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
+import { HashProvider } from './HashProvider';
 
 type PayloadFactory = (req: Request) => BodyInit | null;
 type ByteStream = ReadableStream<Uint8Array<ArrayBuffer>>;
@@ -128,7 +129,6 @@ class IamServerMock extends ServerMock {
 class ResolverServerMock extends ServerMock {
   readonly flagLogs: EndpointMock;
   readonly flagsResolve: EndpointMock;
-  readonly stateUri: EndpointMock;
 
   constructor() {
     const flagLogs = new EndpointMock();
@@ -139,55 +139,72 @@ class ResolverServerMock extends ServerMock {
         resolveId: 'resolve-default',
       } satisfies ResolveFlagsResponse),
     );
-    const stateUri = new EndpointMock(() =>
-      JSON.stringify({
-        signedUri: 'https://storage.googleapis.com/stateBucket',
-        account: '<account>',
-      } satisfies ResolveStateUri),
-    );
     super({
-      '/v1/flagLogs:write': flagLogs,
+      '/v1/clientFlagLogs:write': flagLogs,
       '/v1/flags:resolve': flagsResolve,
-      '/v1/resolverState:resolverStateUri': stateUri,
     });
     this.flagLogs = flagLogs;
     this.flagsResolve = flagsResolve;
-    this.stateUri = stateUri;
   }
 }
 
-class GcsServerMock extends ServerMock {
-  readonly stateBucket: EndpointMock;
+class CdnServerMock extends RequestHandler {
+  readonly state: EndpointMock;
   constructor() {
-    const stateBucket = new EndpointMock(() => new ArrayBuffer(100));
-    super({
-      '/stateBucket': stateBucket,
+    const stateEndpoint = new EndpointMock(() => {
+      // Return SetResolverStateRequest protobuf
+      const stateRequest = SetResolverStateRequest.encode({
+        state: new Uint8Array(100), // Empty state for testing
+        accountId: '<account>',
+      }).finish();
+      return stateRequest;
     });
-    this.stateBucket = stateBucket;
+    // CDN serves state at any path (using client secret as path)
+    super(req => stateEndpoint.handle(req));
+    this.state = stateEndpoint;
   }
 }
 
-export class NetworkMock extends RequestDispatcher<ServerMock> {
+export class NetworkMock extends RequestDispatcher<RequestHandler> {
   readonly iam: IamServerMock;
   readonly resolver: ResolverServerMock;
-  readonly gcs: GcsServerMock;
+  readonly cdn: CdnServerMock;
 
   constructor() {
     const iam = new IamServerMock();
     const resolver = new ResolverServerMock();
-    const gcs = new GcsServerMock();
+    const cdn = new CdnServerMock();
 
     super(req => new URL(req.url).hostname, {
       'iam.confidence.dev': iam,
       'resolver.confidence.dev': resolver,
-      'storage.googleapis.com': gcs,
+      'confidence-resolver-state-cdn.spotifycdn.com': cdn,
     });
     this.iam = iam;
     this.resolver = resolver;
-    this.gcs = gcs;
+    this.cdn = cdn;
   }
 
   readonly fetch: typeof fetch = (input, init) => this.handle(new Request(input, init));
+}
+
+/**
+ * Mock HashProvider for testing that avoids async crypto.subtle calls.
+ * Returns a simple deterministic hash without using real crypto.
+ */
+export class MockHashProvider implements HashProvider {
+  async sha256Hex(input: string): Promise<string> {
+    // Simple deterministic hash for testing - just convert string to hex
+    // This avoids the async crypto.subtle.digest that doesn't play well with fake timers
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+      const char = input.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    // Pad to 64 hex chars (SHA-256 size)
+    return Math.abs(hash).toString(16).padStart(64, '0');
+  }
 }
 
 function throttleStream(stream: ByteStream, bandwidth: number, signal?: AbortSignal): ByteStream {

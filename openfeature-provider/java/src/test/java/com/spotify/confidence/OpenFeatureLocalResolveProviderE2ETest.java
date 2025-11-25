@@ -17,28 +17,15 @@ import org.junit.jupiter.api.Test;
 /**
  * End-to-end tests for OpenFeatureLocalResolveProvider.
  *
- * <p>These tests verify the provider against real Confidence service flags. They require valid API
- * credentials to be set as environment variables.
- *
- * <p>Required environment variables:
- *
- * <ul>
- *   <li>JAVA_E2E_CONFIDENCE_API_CLIENT_ID - API client ID for authentication
- *   <li>JAVA_E2E_CONFIDENCE_API_CLIENT_SECRET - API client secret for authentication
- * </ul>
+ * <p>These tests verify the provider against real Confidence service flags.
  */
 class OpenFeatureLocalResolveProviderE2ETest {
-  private static final String FLAG_CLIENT_SECRET = "RxDVTrXvc6op1XxiQ4OaR31dKbJ39aYV";
+  private static final String FLAG_CLIENT_SECRET = "ti5Sipq5EluCYRG7I5cdbpWC3xq7JTWv";
   private static Client client;
 
   @BeforeAll
   static void setup() {
-    final String apiClientId = requireEnv("JS_E2E_CONFIDENCE_API_CLIENT_ID");
-    final String apiClientSecret = requireEnv("JS_E2E_CONFIDENCE_API_CLIENT_SECRET");
-
-    final ApiSecret apiSecret = new ApiSecret(apiClientId, apiClientSecret);
-
-    final var provider = new OpenFeatureLocalResolveProvider(apiSecret, FLAG_CLIENT_SECRET);
+    final var provider = new OpenFeatureLocalResolveProvider(new LocalProviderConfig(), FLAG_CLIENT_SECRET);
     final var start = System.currentTimeMillis();
     OpenFeatureAPI.getInstance().setProviderAndWait(provider);
     System.out.println("OpenFeatureAPI started: " + (System.currentTimeMillis() - start));
