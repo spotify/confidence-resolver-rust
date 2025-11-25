@@ -44,6 +44,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -289,15 +290,82 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
     final int logRequestsAfterShutdown = mockFlagLoggerService.getRequestCount();
     assertThat(logRequestsAfterShutdown).isGreaterThanOrEqualTo(logRequestsBeforeShutdown);
 
-    // Verify that all flag assignments were logged
-    // We expect at least numThreads * resolutionsPerThread flag assignments
-    final int totalFlagAssignments = mockFlagLoggerService.getTotalFlagAssignments();
-    assertThat(totalFlagAssignments)
-        .withFailMessage(
-            "Expected at least %d flag assignments but got %d",
-            numThreads * resolutionsPerThread, totalFlagAssignments)
-        .isGreaterThanOrEqualTo(numThreads * resolutionsPerThread);
-  }
+        // Verify that all flag assignments were logged
+        // We expect at least numThreads * resolutionsPerThread flag assignments
+        final int totalFlagAssignments = mockFlagLoggerService.getTotalFlagAssignments();
+        assertThat(totalFlagAssignments)
+                .withFailMessage("Expected at least %d flag assignments but got %d",
+                        numThreads * resolutionsPerThread, totalFlagAssignments)
+                .isGreaterThanOrEqualTo(numThreads * resolutionsPerThread);
+    }
+
+    @Nested
+    class WithOpenFeatureApis {
+
+        @Test
+        void testProviderInitialization() throws Exception {
+            assertEquals(ProviderState.NOT_READY, OpenFeatureAPI.getInstance().getClient().getProviderState());
+            OpenFeatureAPI.getInstance().setProviderAndWait(provider);
+            assertEquals(ProviderState.READY, OpenFeatureAPI.getInstance().getClient().getProviderState());
+        }
+
+
+        @Test
+        void testShutdownSendsAllLogData() throws Exception {
+            OpenFeatureAPI.getInstance().setProviderAndWait(provider);
+
+            // Wait for initialization to complete
+            assertEquals(ProviderState.READY, provider.getState());
+
+            final ImmutableContext context =
+                    new ImmutableContext("tutorial_visitor", Map.of("visitor_id", new Value("tutorial_visitor")));
+
+            // Perform multiple flag resolutions across multiple threads to ensure all WASM instances
+            // have log data
+            final int numThreads = Runtime.getRuntime().availableProcessors();
+            final int resolutionsPerThread = 5;
+            final ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+            final CountDownLatch latch = new CountDownLatch(numThreads * resolutionsPerThread);
+
+            for (int i = 0; i < numThreads; i++) {
+                for (int j = 0; j < resolutionsPerThread; j++) {
+                    executor.submit(() -> {
+                        try {
+                            OpenFeatureAPI.getInstance().getClient().getObjectDetails("tutorial-feature", new Value("default"), context);
+                        } catch (Exception e) {
+                            // Ignore resolution errors for this test
+                        } finally {
+                            latch.countDown();
+                        }
+                    });
+                }
+            }
+
+            // Wait for all resolutions to complete
+            assertTrue(latch.await(10, TimeUnit.SECONDS), "All resolutions should complete");
+            executor.shutdown();
+
+            // Record the number of log requests before shutdown
+            final int logRequestsBeforeShutdown = mockFlagLoggerService.getRequestCount();
+
+            // Shutdown the provider - this should flush all pending logs
+            OpenFeatureAPI.getInstance().getProvider().shutdown(); // Note the use of getProvider().shutdown()!!
+            OpenFeatureAPI.getInstance().shutdown();
+
+            // Verify that log requests were made during shutdown
+            // Note: The exact number depends on batching, but there should be at least some logs
+            final int logRequestsAfterShutdown = mockFlagLoggerService.getRequestCount();
+            assertThat(logRequestsAfterShutdown).isGreaterThanOrEqualTo(logRequestsBeforeShutdown);
+
+            // Verify that all flag assignments were logged
+            // We expect at least numThreads * resolutionsPerThread flag assignments
+            final int totalFlagAssignments = mockFlagLoggerService.getTotalFlagAssignments();
+            assertThat(totalFlagAssignments)
+                    .withFailMessage("Expected at least %d flag assignments but got %d",
+                            numThreads * resolutionsPerThread, totalFlagAssignments)
+                    .isGreaterThanOrEqualTo(numThreads * resolutionsPerThread);
+        }
+    }
 
   /** Mock AuthService that returns a JWT token with required claims */
   private static class MockAuthService extends AuthServiceGrpc.AuthServiceImplBase {
