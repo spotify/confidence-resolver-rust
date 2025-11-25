@@ -46,23 +46,6 @@ service InternalFlagLoggerService {
     };
   }
 
-  // Writes flag assignment events and resolve logs together.
-  // (-- api-linter: core::0136::http-uri-suffix=disabled
-  //     aip.dev/not-precedent: Disabled because the additional binding. --)
-  rpc WriteFlagLogs(WriteFlagLogsRequest) returns (WriteFlagLogsResponse){
-    option (google.api.http) = {
-      post: "/v1/flagLogs:write"
-      body: "*"
-    };
-    option (confidence.auth.v1.auth) = {
-      required_permission: CREATE_FLAG_ASSIGNED
-      allow_basic_auth: true
-      // we use the same permission for writing both logs
-      required_relation: "can_write_flag_assigned"
-      object_field: "account"
-    };
-  }
-
   // Client writes flag assignment events and resolve logs using client secret authentication.
   // This method uses Authorization: ClientSecret {client_secret} header instead of JWT.
   // (-- api-linter: core::0136::http-uri-suffix=disabled

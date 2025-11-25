@@ -34,9 +34,9 @@ import "google/api/annotations.proto";
 
 service InternalFlagLoggerService {
   // Writes flag assignment events and resolve logs together.
-  rpc WriteFlagLogs(WriteFlagLogsRequest) returns (WriteFlagLogsResponse){
+  rpc ClientWriteFlagLogs(WriteFlagLogsRequest) returns (WriteFlagLogsResponse){
     option (google.api.http) = {
-      post: "/v1/flagLogs:write"
+      post: "/v1/clientFlagLogs:write"
       body: "*"
     };
   }

@@ -258,12 +258,8 @@ export class ConfidenceServerProviderLocal implements Provider {
     // Parse SetResolverStateRequest from response
     const bytes = new Uint8Array(await resp.arrayBuffer());
     const { SetResolverStateRequest } = await import('./proto/api');
-    const stateRequest = SetResolverStateRequest.decode(bytes);
 
-    this.resolver.setResolverState({
-      accountId: stateRequest.accountId,
-      state: stateRequest.state,
-    });
+    this.resolver.setResolverState(SetResolverStateRequest.decode(bytes));
   }
 
   // TODO should this return success/failure, or even throw?

@@ -76,31 +76,6 @@ func TestFlagsAdminStateFetcher_GetAccountID(t *testing.T) {
 	}
 }
 
-func TestFlagsAdminStateFetcher_ManualStateUpdate(t *testing.T) {
-	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-
-	// Manually update state (simulating what would happen after a successful fetch)
-	testState := &adminv1.ResolverState{
-		Flags: []*adminv1.Flag{
-			{Name: "flags/test-flag"},
-		},
-	}
-	testStateBytes, _ := proto.Marshal(testState)
-	fetcher.rawResolverState.Store(testStateBytes)
-	fetcher.accountID.Store("test-account-123")
-
-	// Verify state was updated
-	state := fetcher.GetRawState()
-	if state == nil || len(state) == 0 {
-		t.Fatalf("Expected state to be loaded, got: %v (len: %d)", state, len(state))
-	}
-
-	// Verify account ID was set
-	if fetcher.GetAccountID() != "test-account-123" {
-		t.Errorf("Expected account ID to be 'test-account-123', got %s", fetcher.GetAccountID())
-	}
-}
-
 // TestFlagsAdminStateFetcher_Reload_Success tests successful state fetching from CDN
 func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
 	// Create a test HTTP server that serves SetResolverStateRequest

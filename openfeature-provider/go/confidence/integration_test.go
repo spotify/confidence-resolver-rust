@@ -68,18 +68,6 @@ type mockGrpcStubForIntegration struct {
 	onCallReceived chan struct{}
 }
 
-func (m *mockGrpcStubForIntegration) WriteFlagLogs(ctx context.Context, req *resolverv1.WriteFlagLogsRequest, opts ...grpc.CallOption) (*resolverv1.WriteFlagLogsResponse, error) {
-	atomic.AddInt32(&m.callsReceived, 1)
-	// Signal that a call was received
-	select {
-	case m.onCallReceived <- struct{}{}:
-	default:
-	}
-	// Simulate some processing time to verify shutdown waits for completion
-	time.Sleep(50 * time.Millisecond)
-	return &resolverv1.WriteFlagLogsResponse{}, nil
-}
-
 func (m *mockGrpcStubForIntegration) ClientWriteFlagLogs(ctx context.Context, req *resolverv1.WriteFlagLogsRequest, opts ...grpc.CallOption) (*resolverv1.WriteFlagLogsResponse, error) {
 	atomic.AddInt32(&m.callsReceived, 1)
 	// Signal that a call was received
