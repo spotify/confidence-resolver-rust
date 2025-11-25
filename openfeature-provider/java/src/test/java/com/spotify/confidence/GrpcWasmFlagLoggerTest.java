@@ -270,7 +270,12 @@ class GrpcWasmFlagLoggerTest {
         WriteFlagLogsRequest.newBuilder().addAllFlagAssigned(createFlagAssignedList(10)).build();
 
     // When
-    logger.write(request);
+    new Thread(new Runnable() {
+        @Override
+        public void run() {
+            logger.write(request);
+        }
+    }).start();
 
     // Shutdown should complete within timeout + small buffer, not wait for full 5s write
     final long startTime = System.currentTimeMillis();
