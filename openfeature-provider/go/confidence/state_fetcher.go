@@ -12,6 +12,7 @@ import (
 	"time"
 
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
+	pb "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -129,7 +130,7 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 	}
 
 	// Parse SetResolverStateRequest
-	stateRequest := &adminv1.SetResolverStateRequest{}
+	stateRequest := &pb.SetResolverStateRequest{}
 	if err := proto.Unmarshal(bytes, stateRequest); err != nil {
 		return fmt.Errorf("failed to unmarshal SetResolverStateRequest: %w", err)
 	}
