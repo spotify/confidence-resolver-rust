@@ -55,13 +55,14 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   private final ResolverApi wasmResolveApi;
   private static final Duration POLL_LOG_INTERVAL = Duration.ofSeconds(10);
   private static final Duration DEFAULT_POLL_INTERVAL = Duration.ofSeconds(30);
-  private static final ScheduledExecutorService flagsFetcherExecutor =
+  private final ScheduledExecutorService flagsFetcherExecutor =
       Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder().setDaemon(true).build());
-  private static final ScheduledExecutorService logPollExecutor =
+  private final ScheduledExecutorService logPollExecutor =
       Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder().setDaemon(true).build());
   private final AccountStateProvider stateProvider;
   private final AtomicReference<ProviderState> state =
       new AtomicReference<>(ProviderState.NOT_READY);
+  private final ChannelFactory channelFactory;
 
   private static long getPollIntervalSeconds() {
     return Optional.ofNullable(System.getenv("CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS"))
@@ -162,6 +163,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     this.stateProvider = new FlagsAdminStateFetcher(clientSecret);
     final var wasmFlagLogger = new GrpcWasmFlagLogger(clientSecret, config.getChannelFactory());
     this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, stickyResolveStrategy);
+    this.channelFactory = config.getChannelFactory();
   }
 
   @VisibleForTesting
@@ -193,6 +195,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     this.clientSecret = clientSecret;
     this.stateProvider = accountStateProvider;
     this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, stickyResolveStrategy);
+    this.channelFactory = new LocalProviderConfig().getChannelFactory();
   }
 
   @Override
@@ -282,10 +285,38 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
         .build();
   }
 
-  @Override
-  public void shutdown() {
+    @Override
+    public void shutdown() {
+        state.set(ProviderState.NOT_READY);
+        log.debug("Shutting down scheduled executors");
+        flagsFetcherExecutor.shutdown();
+        logPollExecutor.shutdown();
+
+    try {
+      if (!flagsFetcherExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
+        log.warn("Flags fetcher executor did not terminate gracefully");
+        flagsFetcherExecutor.shutdownNow();
+      }
+      if (!logPollExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
+        log.warn("Log poll executor did not terminate gracefully");
+        logPollExecutor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      log.warn("Interrupted while waiting for scheduled executors to shut down", e);
+      flagsFetcherExecutor.shutdownNow();
+      logPollExecutor.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
+
     this.stickyResolveStrategy.close();
+
+    // wasmResolveApi.close() flushes logs and calls flagLogger.shutdown() which waits for pending
+    // writes
     this.wasmResolveApi.close();
+
+    if (this.channelFactory != null) {
+      this.channelFactory.shutdown();
+    }
     FeatureProvider.super.shutdown();
   }
 

@@ -43,6 +43,9 @@ public class TestBase {
               public void write(WriteFlagLogsRequest request) {}
 
               @Override
+              public void writeSync(WriteFlagLogsRequest request) {}
+
+              @Override
               public void shutdown() {}
             },
             desiredStateBytes,
