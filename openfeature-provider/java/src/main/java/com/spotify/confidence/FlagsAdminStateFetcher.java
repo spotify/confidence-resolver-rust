@@ -81,7 +81,7 @@ class FlagsAdminStateFetcher implements AccountStateProvider {
                 final byte[] bytes = stream.readAllBytes();
 
                 // Parse SetResolverStateRequest from CDN response
-                final var stateRequest = com.spotify.confidence.flags.admin.v1.SetResolverStateRequest.parseFrom(bytes);
+                final var stateRequest = com.spotify.confidence.wasm.Messages.SetResolverStateRequest.parseFrom(bytes);
                 this.accountId = stateRequest.getAccountId();
 
                 // Store the state bytes (already in bytes format)
