@@ -80,7 +80,7 @@ func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFla
 
 	chunks := g.createFlagAssignedChunks(request)
 	for _, chunk := range chunks {
-		if err := g.sendAsyncChunk(ctx, chunk); err != nil {
+		if err := g.sendAsync(ctx, chunk); err != nil {
 			g.logger.Error("Failed to send flag log chunk", "error", err)
 			return err
 		}
@@ -117,27 +117,6 @@ func (g *GrpcFlagLogger) createFlagAssignedChunks(request *resolverv1.WriteFlagL
 	}
 
 	return chunks
-}
-
-func (g *GrpcFlagLogger) sendAsyncChunk(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
-	g.wg.Add(1)
-	go func() {
-		defer g.wg.Done()
-		// Create a context with timeout for the RPC
-		rpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		// Add Authorization header with client secret
-		md := metadata.Pairs("authorization", fmt.Sprintf("ClientSecret %s", g.clientSecret))
-		rpcCtx = metadata.NewOutgoingContext(rpcCtx, md)
-
-		if _, err := g.stub.ClientWriteFlagLogs(rpcCtx, request); err != nil {
-			g.logger.Error("Failed to write flag logs", "error", err)
-		} else {
-			g.logger.Info("Successfully sent flag log", "entries", len(request.FlagAssigned))
-		}
-	}()
-	return nil
 }
 
 func (g *GrpcFlagLogger) sendAsync(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {

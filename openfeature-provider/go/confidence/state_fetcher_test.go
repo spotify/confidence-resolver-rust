@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -13,13 +14,29 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// testTransport is a custom RoundTripper that redirects all requests to a test server
+type testTransport struct {
+	testServerURL string
+}
+
+func (t *testTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Replace the URL with the test server URL while preserving the request
+	testURL, err := url.Parse(t.testServerURL)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.Scheme = testURL.Scheme
+	req.URL.Host = testURL.Host
+	return http.DefaultTransport.RoundTrip(req)
+}
+
 func TestNewFlagsAdminStateFetcher(t *testing.T) {
 	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	if fetcher == nil {
 		t.Fatal("Expected fetcher to be created, got nil")
 	}
-	if fetcher.httpClient == nil {
+	if fetcher.HTTPClient == nil {
 		t.Error("Expected HTTP client to be initialized")
 	}
 	if fetcher.clientSecret != "test-client-secret" {
@@ -58,8 +75,32 @@ func TestFlagsAdminStateFetcher_GetAccountID(t *testing.T) {
 	}
 }
 
+func TestFlagsAdminStateFetcher_ManualStateUpdate(t *testing.T) {
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
+	// Manually update state (simulating what would happen after a successful fetch)
+	testState := &adminv1.ResolverState{
+		Flags: []*adminv1.Flag{
+			{Name: "flags/test-flag"},
+		},
+	}
+	testStateBytes, _ := proto.Marshal(testState)
+	fetcher.rawResolverState.Store(testStateBytes)
+	fetcher.accountID.Store("test-account-123")
+
+	// Verify state was updated
+	state := fetcher.GetRawState()
+	if state == nil || len(state) == 0 {
+		t.Fatalf("Expected state to be loaded, got: %v (len: %d)", state, len(state))
+	}
+
+	// Verify account ID was set
+	if fetcher.GetAccountID() != "test-account-123" {
+		t.Errorf("Expected account ID to be 'test-account-123', got %s", fetcher.GetAccountID())
+	}
+}
+
 // TestFlagsAdminStateFetcher_Reload_Success tests successful state fetching from CDN
-// Note: This is a unit test that verifies the parsing logic, not actual CDN access
 func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
 	// Create a test HTTP server that serves SetResolverStateRequest
 	testState := &adminv1.ResolverState{
@@ -81,7 +122,12 @@ func TestFlagsAdminStateFetcher_Reload_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	// Use custom transport to redirect to test server
+	fetcher.HTTPClient = &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &testTransport{testServerURL: server.URL},
+	}
 	ctx := context.Background()
 
 	err := fetcher.Reload(ctx)
@@ -141,7 +187,11 @@ func TestFlagsAdminStateFetcher_Reload_NotModified(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher.HTTPClient = &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &testTransport{testServerURL: server.URL},
+	}
 	ctx := context.Background()
 
 	// First reload - gets state
@@ -176,7 +226,11 @@ func TestFlagsAdminStateFetcher_Reload_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher.HTTPClient = &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &testTransport{testServerURL: server.URL},
+	}
 	ctx := context.Background()
 
 	err := fetcher.Reload(ctx)
@@ -203,7 +257,11 @@ func TestFlagsAdminStateFetcher_Provide(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher.HTTPClient = &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &testTransport{testServerURL: server.URL},
+	}
 	ctx := context.Background()
 
 	// Provide should fetch and return state and accountID
@@ -246,7 +304,11 @@ func TestFlagsAdminStateFetcher_Provide_ReturnsStateOnError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher.HTTPClient = &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &testTransport{testServerURL: server.URL},
+	}
 	ctx := context.Background()
 
 	// First call succeeds
@@ -283,9 +345,12 @@ func TestFlagsAdminStateFetcher_HTTPTimeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := NewFlagsAdminStateFetcher(server.URL, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	fetcher := NewFlagsAdminStateFetcher("test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	// Set short timeout for test
-	fetcher.httpClient.Timeout = 100 * time.Millisecond
+	fetcher.HTTPClient = &http.Client{
+		Timeout:   100 * time.Millisecond,
+		Transport: &testTransport{testServerURL: server.URL},
+	}
 
 	ctx := context.Background()
 

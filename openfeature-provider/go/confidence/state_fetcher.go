@@ -26,7 +26,7 @@ type FlagsAdminStateFetcher struct {
 	etag             atomic.Value // stores string
 	rawResolverState atomic.Value // stores []byte
 	accountID        atomic.Value // stores string
-	httpClient       *http.Client
+	HTTPClient       *http.Client // Exported for testing
 	logger           *slog.Logger
 }
 
@@ -41,7 +41,7 @@ func NewFlagsAdminStateFetcher(
 	f := &FlagsAdminStateFetcher{
 		clientSecret: clientSecret,
 		logger:       logger,
-		httpClient: &http.Client{
+		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
@@ -92,15 +92,9 @@ func (f *FlagsAdminStateFetcher) Provide(ctx context.Context) ([]byte, string, e
 // fetchAndUpdateStateIfChanged fetches the state from the CDN if it has changed
 func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Context) error {
 	// Build CDN URL using SHA256 hash of client secret
-	// If client secret starts with http:// or https://, use it as-is (for testing)
-	var cdnURL string
-	if len(f.clientSecret) > 7 && (f.clientSecret[:7] == "http://" || f.clientSecret[:8] == "https://") {
-		cdnURL = f.clientSecret
-	} else {
-		hash := sha256.Sum256([]byte(f.clientSecret))
-		hashHex := hex.EncodeToString(hash[:])
-		cdnURL = "https://confidence-resolver-state-cdn.spotifycdn.com/" + hashHex
-	}
+	hash := sha256.Sum256([]byte(f.clientSecret))
+	hashHex := hex.EncodeToString(hash[:])
+	cdnURL := "https://confidence-resolver-state-cdn.spotifycdn.com/" + hashHex
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cdnURL, nil)
 	if err != nil {
@@ -112,7 +106,7 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 		req.Header.Set("If-None-Match", previousEtag.(string))
 	}
 
-	resp, err := f.httpClient.Do(req)
+	resp, err := f.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
