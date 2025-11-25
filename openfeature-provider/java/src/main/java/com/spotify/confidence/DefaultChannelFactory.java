@@ -7,6 +7,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Default implementation of ChannelFactory that creates standard gRPC channels with security
@@ -18,9 +22,12 @@ import java.util.Optional;
  *   <li>Uses TLS by default, unless CONFIDENCE_GRPC_PLAINTEXT=true
  *   <li>Adds a default deadline interceptor (1 minute timeout)
  *   <li>Applies any additional interceptors passed via defaultInterceptors
+ *   <li>Tracks all created channels and shuts them down when {@link #shutdown()} is called
  * </ul>
  */
 public class DefaultChannelFactory implements ChannelFactory {
+  private static final Logger logger = LoggerFactory.getLogger(DefaultChannelFactory.class);
+  private final List<ManagedChannel> channels = new CopyOnWriteArrayList<>();
 
   @Override
   public ManagedChannel create(String target, List<ClientInterceptor> defaultInterceptors) {
@@ -38,6 +45,28 @@ public class DefaultChannelFactory implements ChannelFactory {
     List<ClientInterceptor> allInterceptors = new ArrayList<>(defaultInterceptors);
     allInterceptors.add(new DefaultDeadlineClientInterceptor(Duration.ofMinutes(1)));
 
-    return builder.intercept(allInterceptors.toArray(new ClientInterceptor[0])).build();
+    ManagedChannel channel =
+        builder.intercept(allInterceptors.toArray(new ClientInterceptor[0])).build();
+    channels.add(channel);
+    return channel;
+  }
+
+  @Override
+  public void shutdown() {
+    logger.debug("Shutting down {} channels created by DefaultChannelFactory", channels.size());
+    for (ManagedChannel channel : channels) {
+      try {
+        channel.shutdown();
+        if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
+          logger.warn("Channel did not terminate within 5 seconds, forcing shutdown");
+          channel.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        logger.warn("Interrupted while shutting down channel", e);
+        channel.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+    }
+    channels.clear();
   }
 }
