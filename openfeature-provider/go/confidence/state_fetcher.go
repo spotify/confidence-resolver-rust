@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	pb "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
+	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	"google.golang.org/protobuf/proto"
 )
 
