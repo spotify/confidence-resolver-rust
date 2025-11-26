@@ -97,7 +97,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
 	// State will be set during Provider.Init()
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger, stickyStrategy)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
@@ -132,7 +132,7 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
 	// State will be set during Provider.Init()
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, config.FlagLogger, logger, stickyStrategy)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, config.FlagLogger, logger)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)

@@ -204,7 +204,7 @@ func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 	initialState := createMinimalResolverState()
 	accountId := "test-account"
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger(), nil)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestSwapWasmResolverApi_NewSwapWasmResolverApi_InvalidWasm(t *testing.T) {
 	// Use invalid WASM bytes
 	invalidWasmBytes := []byte("not valid wasm")
 
-	_, err := NewSwapWasmResolverApi(ctx, runtime, invalidWasmBytes, flagLogger, testLogger(), nil)
+	_, err := NewSwapWasmResolverApi(ctx, runtime, invalidWasmBytes, flagLogger, testLogger())
 	if err == nil {
 		t.Fatal("Expected error when creating SwapWasmResolverApi with invalid WASM")
 	}
@@ -259,7 +259,7 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	testState := loadTestResolverState(t)
 	testAcctID := loadTestAccountID(t)
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger(), nil)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi with real state: %v", err)
 	}
@@ -277,15 +277,22 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 		false, // notProcessSticky
 	)
 
-	response, err := swap.ResolveWithSticky(ctx, request)
+	stickyResponse, err := swap.ResolveWithSticky(ctx, request)
 	if err != nil {
 		t.Fatalf("Unexpected error resolving tutorial-feature flag: %v", err)
 	}
 
-	if response == nil {
-		t.Fatal("Expected non-nil response")
+	if stickyResponse == nil {
+		t.Fatal("Expected non-nil sticky response")
 	}
 
+	// Extract the actual response from the Success case
+	success, ok := stickyResponse.ResolveResult.(*resolver.ResolveWithStickyResponse_Success_)
+	if !ok {
+		t.Fatalf("Expected Success response, got %T", stickyResponse.ResolveResult)
+	}
+
+	response := success.Success.Response
 	if len(response.ResolvedFlags) != 1 {
 		t.Fatalf("Expected 1 resolved flag, got %d", len(response.ResolvedFlags))
 	}
@@ -351,7 +358,7 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	initialState := loadTestResolverState(t)
 	accountId := loadTestAccountID(t)
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger(), nil)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -377,14 +384,22 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 		false, // notProcessSticky
 	)
 
-	response, err := swap.ResolveWithSticky(ctx, request)
+	stickyResponse, err := swap.ResolveWithSticky(ctx, request)
 	if err != nil {
 		t.Fatalf("Resolve failed after update: %v", err)
 	}
 
-	if response == nil {
+	if stickyResponse == nil {
 		t.Fatal("Expected successful resolve response")
 	}
+
+	// Extract the actual response from the Success case
+	success, ok := stickyResponse.ResolveResult.(*resolver.ResolveWithStickyResponse_Success_)
+	if !ok {
+		t.Fatalf("Expected Success response, got %T", stickyResponse.ResolveResult)
+	}
+
+	response := success.Success.Response
 
 	// Verify we got the expected resolution
 	if len(response.ResolvedFlags) != 1 {
@@ -409,7 +424,7 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 	initialState := loadTestResolverState(t)
 	accountId := loadTestAccountID(t)
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger(), nil)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -436,14 +451,22 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 			false, // notProcessSticky
 		)
 
-		response, resolveErr := swap.ResolveWithSticky(ctx, request)
+		stickyResponse, resolveErr := swap.ResolveWithSticky(ctx, request)
 		if resolveErr != nil {
 			t.Fatalf("Update %d: Resolve failed: %v", i, resolveErr)
 		}
 
-		if response == nil {
+		if stickyResponse == nil {
 			t.Fatalf("Update %d: Expected successful resolve response", i)
 		}
+
+		// Extract the actual response from the Success case
+		success, ok := stickyResponse.ResolveResult.(*resolver.ResolveWithStickyResponse_Success_)
+		if !ok {
+			t.Fatalf("Update %d: Expected Success response, got %T", i, stickyResponse.ResolveResult)
+		}
+
+		response := success.Success.Response
 
 		// Verify we got the expected variant after each swap
 		if len(response.ResolvedFlags) != 1 {
@@ -465,7 +488,7 @@ func TestSwapWasmResolverApi_Close(t *testing.T) {
 	initialState := createMinimalResolverState()
 	accountId := "test-account"
 
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger(), nil)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -504,7 +527,7 @@ func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 	testState := loadTestResolverState(t)
 	testAcctID := loadTestAccountID(t)
 
-	wasmResolver, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger(), nil)
+	wasmResolver, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi with sample state: %v", err)
 	}
@@ -522,15 +545,22 @@ func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 		false, // notProcessSticky
 	)
 
-	response, err := wasmResolver.ResolveWithSticky(ctx, stickyRequest)
+	stickyResponse, err := wasmResolver.ResolveWithSticky(ctx, stickyRequest)
 	if err != nil {
 		t.Fatalf("Unexpected error resolving tutorial-feature flag with sticky: %v", err)
 	}
 
-	if response == nil {
-		t.Fatal("Expected non-nil response")
+	if stickyResponse == nil {
+		t.Fatal("Expected non-nil sticky response")
 	}
 
+	// Extract the actual response from the Success case
+	success, ok := stickyResponse.ResolveResult.(*resolver.ResolveWithStickyResponse_Success_)
+	if !ok {
+		t.Fatalf("Expected Success response, got %T", stickyResponse.ResolveResult)
+	}
+
+	response := success.Success.Response
 	if len(response.ResolvedFlags) != 1 {
 		t.Fatalf("Expected 1 resolved flag, got %d", len(response.ResolvedFlags))
 	}
@@ -586,7 +616,7 @@ func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(
 	accountId := "test-account"
 
 	// No sticky strategy configured - should return error for missing materializations
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger(), nil)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, testLogger())
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -613,14 +643,17 @@ func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(
 		false, // notProcessSticky
 	)
 
-	// With no sticky strategy configured, should return an error when materializations are missing
-	_, err = swap.ResolveWithSticky(ctx, stickyRequest)
-	if err == nil {
-		t.Fatal("Expected error for missing materializations with no sticky strategy")
+	// With no sticky strategy, SwapWasmResolverApi should return a MissingMaterializations response
+	stickyResponse, err := swap.ResolveWithSticky(ctx, stickyRequest)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	// Verify the error message mentions missing materializations
-	if !strings.Contains(err.Error(), "missing materializations") {
-		t.Errorf("Expected error message to mention missing materializations, got: %v", err)
+	// Verify we got a MissingMaterializations response
+	_, ok := stickyResponse.ResolveResult.(*resolver.ResolveWithStickyResponse_MissingMaterializations_)
+	if !ok {
+		t.Fatalf("Expected MissingMaterializations response, got %T", stickyResponse.ResolveResult)
 	}
+
+	t.Log("✓ Correctly returned MissingMaterializations response when materializations are missing")
 }

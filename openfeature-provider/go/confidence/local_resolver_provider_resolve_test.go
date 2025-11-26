@@ -34,7 +34,7 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	stateBytes, _ := proto.Marshal(state)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	testAcctID := loadTestAccountID(t)
 
 	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
+	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		testAcctID := loadTestAccountID(t)
 
 		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 		if err != nil {
 			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 		}
@@ -217,7 +217,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		accountId := "test-account"
 
 		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 		if err != nil {
 			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 		}

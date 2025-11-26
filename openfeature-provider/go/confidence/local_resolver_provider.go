@@ -280,9 +280,22 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	}
 
 	// Resolve flags with sticky support
-	response, err := p.resolverAPI.ResolveWithSticky(ctx, stickyRequest)
+	stickyResponse, err := p.resolverAPI.ResolveWithSticky(ctx, stickyRequest)
 	if err != nil {
 		p.logger.Error("Failed to resolve flag", "flag", flagPath, "error", err)
+		return openfeature.InterfaceResolutionDetail{
+			Value: defaultValue,
+			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+				Reason:          openfeature.ErrorReason,
+				ResolutionError: openfeature.NewGeneralResolutionError(fmt.Sprintf("resolve failed: %v", err)),
+			},
+		}
+	}
+
+	// Handle the sticky response and extract the actual resolve response
+	response, err := p.handleStickyResponse(ctx, stickyRequest, stickyResponse)
+	if err != nil {
+		p.logger.Error("Failed to handle sticky response", "flag", flagPath, "error", err)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -446,6 +459,145 @@ func (p *LocalResolverProvider) Shutdown() {
 	if p.logger != nil {
 		p.logger.Info("Provider shut down")
 	}
+}
+
+// handleStickyResponse processes the sticky response and returns the actual resolve response
+func (p *LocalResolverProvider) handleStickyResponse(
+	ctx context.Context,
+	request *resolver.ResolveWithStickyRequest,
+	stickyResponse *resolver.ResolveWithStickyResponse,
+) (*resolver.ResolveFlagsResponse, error) {
+	// Handle the response based on result type
+	switch result := stickyResponse.ResolveResult.(type) {
+	case *resolver.ResolveWithStickyResponse_Success_:
+		success := result.Success
+		// Store updates if present and we have a MaterializationRepository
+		if len(success.GetUpdates()) > 0 {
+			p.storeUpdates(ctx, success.GetUpdates())
+		}
+		return success.Response, nil
+
+	case *resolver.ResolveWithStickyResponse_MissingMaterializations_:
+		missingMaterializations := result.MissingMaterializations
+
+		// Check for ResolverFallback first - return early if so
+		if fallback, ok := p.stickyResolveStrategy.(ResolverFallback); ok {
+			return fallback.Resolve(ctx, request.GetResolveRequest())
+		}
+
+		// Handle MaterializationRepository case
+		if repo, ok := p.stickyResolveStrategy.(MaterializationRepository); ok {
+			updatedRequest, err := p.handleMissingMaterializations(ctx, request, missingMaterializations.GetItems(), repo)
+			if err != nil {
+				return nil, fmt.Errorf("failed to handle missing materializations: %w", err)
+			}
+			// Retry with the updated request
+			retryResponse, err := p.resolverAPI.ResolveWithSticky(ctx, updatedRequest)
+			if err != nil {
+				return nil, err
+			}
+			// Recursively handle the response (in case there are more missing materializations)
+			return p.handleStickyResponse(ctx, updatedRequest, retryResponse)
+		}
+
+		// If no strategy is configured, return an error
+		if p.stickyResolveStrategy == nil {
+			return nil, fmt.Errorf("missing materializations and no sticky resolve strategy configured")
+		}
+
+		return nil, fmt.Errorf("unknown sticky resolve strategy type: %T", p.stickyResolveStrategy)
+
+	default:
+		return nil, fmt.Errorf("unexpected resolve result type: %T", stickyResponse.ResolveResult)
+	}
+}
+
+// storeUpdates stores materialization updates asynchronously if we have a MaterializationRepository
+func (p *LocalResolverProvider) storeUpdates(ctx context.Context, updates []*resolver.ResolveWithStickyResponse_MaterializationUpdate) {
+	repo, ok := p.stickyResolveStrategy.(MaterializationRepository)
+	if !ok {
+		return
+	}
+
+	// Store updates asynchronously
+	go func() {
+		// Group updates by unit
+		updatesByUnit := make(map[string][]*resolver.ResolveWithStickyResponse_MaterializationUpdate)
+		for _, update := range updates {
+			updatesByUnit[update.GetUnit()] = append(updatesByUnit[update.GetUnit()], update)
+		}
+
+		// Store assignments for each unit
+		for unit, unitUpdates := range updatesByUnit {
+			assignments := make(map[string]*MaterializationInfo)
+			for _, update := range unitUpdates {
+				ruleToVariant := map[string]string{update.GetRule(): update.GetVariant()}
+				assignments[update.GetWriteMaterialization()] = &MaterializationInfo{
+					UnitInMaterialization: true,
+					RuleToVariant:         ruleToVariant,
+				}
+			}
+
+			if err := repo.StoreAssignment(ctx, unit, assignments); err != nil {
+				p.logger.Error("Failed to store materialization updates",
+					"unit", unit,
+					"error", err)
+			}
+		}
+	}()
+}
+
+// handleMissingMaterializations loads missing materializations from the repository
+// and returns an updated request with the materializations added
+func (p *LocalResolverProvider) handleMissingMaterializations(
+	ctx context.Context,
+	request *resolver.ResolveWithStickyRequest,
+	missingItems []*resolver.ResolveWithStickyResponse_MissingMaterializationItem,
+	repo MaterializationRepository,
+) (*resolver.ResolveWithStickyRequest, error) {
+	// Group missing items by unit for efficient loading
+	missingByUnit := make(map[string][]*resolver.ResolveWithStickyResponse_MissingMaterializationItem)
+	for _, item := range missingItems {
+		missingByUnit[item.GetUnit()] = append(missingByUnit[item.GetUnit()], item)
+	}
+
+	// Create the materializations per unit map
+	materializationsPerUnit := make(map[string]*resolver.MaterializationMap)
+
+	// Copy existing materializations
+	for k, v := range request.GetMaterializationsPerUnit() {
+		materializationsPerUnit[k] = v
+	}
+
+	// Load materialized assignments for all missing units
+	for unit, items := range missingByUnit {
+		for _, item := range items {
+			loadedAssignments, err := repo.LoadMaterializedAssignmentsForUnit(ctx, unit, item.GetReadMaterialization())
+			if err != nil {
+				return nil, fmt.Errorf("failed to load materializations for unit %s: %w", unit, err)
+			}
+
+			// Ensure the map exists for this unit
+			if materializationsPerUnit[unit] == nil {
+				materializationsPerUnit[unit] = &resolver.MaterializationMap{
+					InfoMap: make(map[string]*resolver.MaterializationInfo),
+				}
+			}
+
+			// Add loaded assignments to the materialization map
+			for name, info := range loadedAssignments {
+				materializationsPerUnit[unit].InfoMap[name] = info.ToProto()
+			}
+		}
+	}
+
+	// Create a new request with the updated materializations
+	return &resolver.ResolveWithStickyRequest{
+		ResolveRequest:          request.GetResolveRequest(),
+		MaterializationsPerUnit: materializationsPerUnit,
+		FailFastOnSticky:        request.GetFailFastOnSticky(),
+		NotProcessSticky:        request.GetNotProcessSticky(),
+	}, nil
 }
 
 // startScheduledTasks starts the background tasks for state fetching and log polling

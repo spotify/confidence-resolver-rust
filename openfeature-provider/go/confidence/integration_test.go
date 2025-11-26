@@ -191,7 +191,7 @@ func createProviderWithTestState(
 	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, logger, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
+	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, logger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		return nil, err
 	}
