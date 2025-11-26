@@ -18,7 +18,7 @@ type WasmResolverApi interface {
 	// UpdateStateAndFlushLogs updates the resolver with new state and flushes any pending logs
 	UpdateStateAndFlushLogs(state []byte, accountId string) error
 	// ResolveWithSticky resolves flags with sticky assignment support
-	ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
+	ResolveWithSticky(ctx context.Context, request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
 	// Close closes the resolver and flushes any pending logs
 	Close(ctx context.Context)
 }
@@ -96,7 +96,7 @@ func (s *SwapWasmResolverApi) UpdateStateAndFlushLogs(state []byte, accountId st
 	return nil
 }
 
-func (s *SwapWasmResolverApi) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
+func (s *SwapWasmResolverApi) ResolveWithSticky(ctx context.Context, request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
 	// Load the current instance
 	instance := s.currentInstance.Load().(*ResolverApi)
 
@@ -114,10 +114,15 @@ func (s *SwapWasmResolverApi) ResolveWithSticky(request *resolver.ResolveWithSti
 		if instance == nil {
 			return nil, ErrNotInitialized
 		}
-		return instance.ResolveWithSticky(request)
+		response, err = instance.ResolveWithSticky(request)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
 	}
 
-	return response, err
+	return response, nil
 }
 
 // Close closes the current ResolverApi instance
