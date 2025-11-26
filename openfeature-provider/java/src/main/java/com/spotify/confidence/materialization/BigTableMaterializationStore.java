@@ -32,16 +32,16 @@ public class BigTableMaterializationStore implements MaterializationReader, Mate
   public CompletionStage<Void> write(Set<WriteOp> ops) {
     final Map<String, RowMutationEntry> rowMutations = new HashMap<>();
     for (WriteOp op : ops) {
-      switch (op) {
-        case WriteOp.SetVariant sv -> {
-          rowMutations
-              .computeIfAbsent(
-                  sv.unit(),
-                  key ->
+      if (op instanceof WriteOp.SetVariant sv) {
+        rowMutations
+            .computeIfAbsent(
+                sv.unit(),
+                key ->
                       RowMutationEntry.create(key)
                           .setCell(COLUMN_FAMILY_NAME, sv.materialization(), ""))
               .setCell(COLUMN_FAMILY_NAME, sv.materialization() + "_" + sv.rule(), sv.variant());
-        }
+      } else {
+        throw new IllegalArgumentException("Unknown WriteOp: " + op);
       }
     }
     final BulkMutation bulkMutation = BulkMutation.create(TABLE_ID);
@@ -63,10 +63,13 @@ public class BigTableMaterializationStore implements MaterializationReader, Mate
     }
 
     CompletableFuture<ReadResult> addOp(ReadOp op) {
-      return switch (op) {
-        case ReadOp.Inclusion inclusionOp -> addInclusionOp(inclusionOp);
-        case ReadOp.GetVariant variantOp -> addVariantOp(variantOp);
-      };
+      if (op instanceof ReadOp.Inclusion) {
+        return addInclusionOp((ReadOp.Inclusion) op);
+      } else if (op instanceof ReadOp.GetVariant) {
+        return addVariantOp((ReadOp.GetVariant) op);
+      } else {
+        throw new IllegalArgumentException("Unknown ReadOp: " + op);
+      }
     }
 
     private CompletableFuture<ReadResult> addVariantOp(ReadOp.GetVariant op) {
