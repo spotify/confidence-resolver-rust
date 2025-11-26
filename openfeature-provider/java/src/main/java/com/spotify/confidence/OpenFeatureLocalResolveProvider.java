@@ -72,8 +72,8 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   /**
    * Creates a new OpenFeature provider for local flag resolution with default configuration.
    *
-   * <p>This is the simplest way to create a provider. It uses the default gRPC channel factory
-   * and remote resolver fallback for sticky assignments.
+   * <p>This is the simplest way to create a provider. It uses the default gRPC channel factory and
+   * remote resolver fallback for sticky assignments.
    *
    * <p><strong>Example usage:</strong>
    *

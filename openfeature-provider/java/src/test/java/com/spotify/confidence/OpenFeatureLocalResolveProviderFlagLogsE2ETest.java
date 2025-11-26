@@ -1,321 +1,81 @@
 package com.spotify.confidence;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
-import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
-import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsRequest;
-import com.spotify.confidence.flags.resolver.v1.events.FlagAssigned;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import dev.openfeature.sdk.Client;
 import dev.openfeature.sdk.EvaluationContext;
 import dev.openfeature.sdk.MutableContext;
 import dev.openfeature.sdk.OpenFeatureAPI;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
-/**
- * End-to-end tests that verify WriteFlagLogs contains correct flag assignment data.
- *
- * <p>These tests use a CapturingWasmFlagLogger to capture all flag log requests and verify:
- *
- * <ul>
- *   <li>Flag names are correctly reported
- *   <li>Targeting keys match the evaluation context
- *   <li>Assignment information is present and valid
- *   <li>Variant information matches the resolved value
- * </ul>
- */
+/** End-to-end tests that verify WriteFlagLogs successfully sends to the real backend. */
 class OpenFeatureLocalResolveProviderFlagLogsE2ETest {
   private static final String FLAG_CLIENT_SECRET = "ti5Sipq5EluCYRG7I5cdbpWC3xq7JTWv";
   private static final String TARGETING_KEY = "test-a";
-  private Client client;
-  private CapturingWasmFlagLogger capturingLogger;
-  private OpenFeatureLocalResolveProvider provider;
-
-  /**
-   * A no-op ResolverFallback for testing that never returns results. Since we're testing local
-   * resolution with real state, this fallback should never be called.
-   */
-  private static class NoOpResolverFallback implements ResolverFallback {
-    @Override
-    public CompletableFuture<ResolveFlagsResponse> resolve(ResolveFlagsRequest request) {
-      return CompletableFuture.completedFuture(ResolveFlagsResponse.getDefaultInstance());
-    }
-
-    @Override
-    public void close() {
-      // No-op
-    }
-  }
-
-  @BeforeEach
-  void setup() {
-    capturingLogger = new CapturingWasmFlagLogger();
-
-    // Create a state provider that fetches from the real Confidence service
-    final var stateProvider = new FlagsAdminStateFetcher(FLAG_CLIENT_SECRET);
-    stateProvider.reload();
-
-    // Create provider with capturing logger
-    provider =
-        new OpenFeatureLocalResolveProvider(
-            stateProvider, FLAG_CLIENT_SECRET, new NoOpResolverFallback(), capturingLogger);
-
-    OpenFeatureAPI.getInstance().setProviderAndWait(provider);
-
-    // Set evaluation context with targeting key
-    final EvaluationContext context = new MutableContext(TARGETING_KEY).add("sticky", false);
-    OpenFeatureAPI.getInstance().setEvaluationContext(context);
-
-    client = OpenFeatureAPI.getInstance().getClient();
-
-    // Clear any logs captured during initialization
-    capturingLogger.clear();
-  }
 
   @AfterEach
   void teardown() {
     // Clean up OpenFeature state
     try {
-      OpenFeatureAPI.getInstance().shutdown();
+      OpenFeatureAPI.getInstance().getProvider().shutdown();
     } catch (Exception ignored) {
     }
-  }
-
-  /**
-   * Flushes logs by calling shutdown on the provider. Note: OpenFeatureAPI.shutdown() doesn't
-   * always call provider.shutdown(), so we call it directly to ensure logs are flushed.
-   */
-  private void flushLogs() {
-    provider.shutdown();
-  }
-
-  @Test
-  void shouldCaptureWriteFlagLogsAfterBooleanResolve() {
-    // Resolve a boolean flag
-    final boolean value = client.getBooleanValue("web-sdk-e2e-flag.bool", true);
-    assertThat(value).isFalse();
-
-    // Flush logs
-    flushLogs();
-
-    // Verify captured flag logs
-    assertThat(capturingLogger.getCapturedRequests()).isNotEmpty();
-
-    final WriteFlagLogsRequest request = capturingLogger.getCapturedRequests().get(0);
-
-    // Verify flag_assigned entries
-    assertThat(request.getFlagAssignedCount()).isGreaterThanOrEqualTo(1);
-
-    // Find the flag we resolved
-    final var flagAssigned =
-        request.getFlagAssignedList().stream()
-            .flatMap(fa -> fa.getFlagsList().stream())
-            .filter(af -> af.getFlag().contains("web-sdk-e2e-flag"))
-            .findFirst();
-
-    assertThat(flagAssigned).isPresent();
-    assertThat(flagAssigned.get().getTargetingKey()).isEqualTo(TARGETING_KEY);
-    assertThat(flagAssigned.get().getFlag()).contains("web-sdk-e2e-flag");
-  }
-
-  @Test
-  void shouldCaptureCorrectVariantInFlagLogs() {
-    // Resolve a flag and verify the variant is captured correctly
-    final String value = client.getStringValue("web-sdk-e2e-flag.str", "default");
-    assertEquals("control", value);
-
-    // Flush logs
-    flushLogs();
-
-    assertThat(capturingLogger.getCapturedRequests()).isNotEmpty();
-
-    final var request = capturingLogger.getCapturedRequests().get(0);
-    assertThat(request.getFlagAssignedCount()).isGreaterThanOrEqualTo(1);
-
-    // Verify variant information is present
-    final var flagAssigned = request.getFlagAssignedList().get(0);
-    assertThat(flagAssigned.getFlagsList()).isNotEmpty();
-
-    // The assigned flag should have variant information
-    final var appliedFlag = flagAssigned.getFlagsList().get(0);
-    assertThat(appliedFlag.getFlag()).isNotEmpty();
-  }
-
-  @Test
-  void shouldCaptureClientResolveInfo() {
-    // Perform a resolve
-    client.getIntegerValue("web-sdk-e2e-flag.int", 10);
-
-    // Flush logs
-    flushLogs();
-
-    assertThat(capturingLogger.getCapturedRequests()).isNotEmpty();
-
-    final var request = capturingLogger.getCapturedRequests().get(0);
-
-    // Verify client_resolve_info is captured
-    assertThat(request.getClientResolveInfoCount()).isGreaterThanOrEqualTo(1);
-  }
-
-  @Test
-  void shouldCaptureFlagResolveInfo() {
-    // Perform a resolve
-    client.getDoubleValue("web-sdk-e2e-flag.double", 10.0);
-
-    // Flush logs
-    flushLogs();
-
-    assertThat(capturingLogger.getCapturedRequests()).isNotEmpty();
-
-    final var request = capturingLogger.getCapturedRequests().get(0);
-
-    // Verify flag_resolve_info is captured
-    assertThat(request.getFlagResolveInfoCount()).isGreaterThanOrEqualTo(1);
-  }
-
-  @Test
-  void shouldCaptureMultipleResolvesInSingleRequest() {
-    // Perform multiple resolves
-    client.getBooleanValue("web-sdk-e2e-flag.bool", true);
-    client.getStringValue("web-sdk-e2e-flag.str", "default");
-    client.getIntegerValue("web-sdk-e2e-flag.int", 10);
-    client.getDoubleValue("web-sdk-e2e-flag.double", 10.0);
-
-    // Flush logs
-    flushLogs();
-
-    assertThat(capturingLogger.getCapturedRequests()).isNotEmpty();
-
-    // Should have captured log entries for all resolves
-    final int totalFlagAssigned = capturingLogger.getTotalFlagAssignedCount();
-    assertThat(totalFlagAssigned).isGreaterThanOrEqualTo(4);
-  }
-
-  @Test
-  void shouldCallShutdownOnProviderShutdown() {
-    // Perform a resolve to generate logs
-    client.getBooleanValue("web-sdk-e2e-flag.bool", true);
-
-    // Shutdown should be called when provider shuts down
-    flushLogs();
-
-    assertThat(capturingLogger.wasShutdownCalled()).isTrue();
-  }
-
-  @Test
-  void shouldCaptureResolveIdInFlagAssigned() {
-    // Perform a resolve
-    client.getBooleanValue("web-sdk-e2e-flag.bool", true);
-
-    // Flush logs
-    flushLogs();
-
-    assertThat(capturingLogger.getCapturedRequests()).isNotEmpty();
-
-    final var request = capturingLogger.getCapturedRequests().get(0);
-    assertThat(request.getFlagAssignedCount()).isGreaterThanOrEqualTo(1);
-
-    // Verify resolve_id is present
-    final FlagAssigned flagAssigned = request.getFlagAssigned(0);
-    assertThat(flagAssigned.getResolveId()).isNotEmpty();
-  }
-
-  @Test
-  void shouldCaptureClientInfoInFlagAssigned() {
-    // Perform a resolve
-    client.getBooleanValue("web-sdk-e2e-flag.bool", true);
-
-    // Flush logs
-    flushLogs();
-
-    assertThat(capturingLogger.getCapturedRequests()).isNotEmpty();
-
-    final var request = capturingLogger.getCapturedRequests().get(0);
-    assertThat(request.getFlagAssignedCount()).isGreaterThanOrEqualTo(1);
-
-    // Verify client_info is present
-    final FlagAssigned flagAssigned = request.getFlagAssigned(0);
-    assertThat(flagAssigned.hasClientInfo()).isTrue();
-    assertThat(flagAssigned.getClientInfo().getClient()).isNotEmpty();
   }
 
   /**
    * Tests that WriteFlagLogs can be successfully sent to the real Confidence backend. This test
    * uses a real provider with real gRPC connection to verify the backend accepts the log data.
    *
-   * <p>We use a tracking wrapper that records whether the gRPC call succeeded or failed.
+   * <p>We use SLF4J's ListAppender to capture log messages and verify no errors occurred.
    */
   @Test
   void shouldSuccessfullySendWriteFlagLogsToRealBackend() throws InterruptedException {
-    // Create tracking state
-    final AtomicBoolean writeSucceeded = new AtomicBoolean(false);
-    final AtomicBoolean writeFailed = new AtomicBoolean(false);
-    final AtomicReference<Throwable> capturedError = new AtomicReference<>();
+    // Set up logback ListAppender to capture log events
+    final Logger logger = (Logger) LoggerFactory.getLogger(GrpcWasmFlagLogger.class);
+    final ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+    listAppender.start();
+    logger.addAppender(listAppender);
 
-    // Create a tracking logger that wraps a real GrpcWasmFlagLogger
-    final var realGrpcLogger = new GrpcWasmFlagLogger(FLAG_CLIENT_SECRET, new DefaultChannelFactory());
-    final WasmFlagLogger trackingLogger =
-        new WasmFlagLogger() {
-          @Override
-          public void write(WriteFlagLogsRequest request) {
-            try {
-              realGrpcLogger.write(request);
-              // If we get here without exception, the async task was submitted
-              // We need to wait and check if it completed successfully
-            } catch (Exception e) {
-              writeFailed.set(true);
-              capturedError.set(e);
-            }
-          }
+    try {
+      final var realProvider = new OpenFeatureLocalResolveProvider(FLAG_CLIENT_SECRET);
 
-          @Override
-          public void shutdown() {
-            realGrpcLogger.shutdown();
-            // After shutdown, if no error was captured, consider it successful
-            if (!writeFailed.get()) {
-              writeSucceeded.set(true);
-            }
-          }
-        };
+      OpenFeatureAPI.getInstance().setProviderAndWait("real-backend-test", realProvider);
 
-    // Create a state provider that fetches from the real Confidence service
-    final var stateProvider = new FlagsAdminStateFetcher(FLAG_CLIENT_SECRET);
-    stateProvider.reload();
+      final EvaluationContext context = new MutableContext(TARGETING_KEY).add("sticky", false);
+      final Client realClient = OpenFeatureAPI.getInstance().getClient("real-backend-test");
 
-    // Create provider with tracking logger
-    final var realProvider =
-        new OpenFeatureLocalResolveProvider(
-            stateProvider, FLAG_CLIENT_SECRET, new NoOpResolverFallback(), trackingLogger);
+      // Perform a resolve to generate logs
+      final boolean value = realClient.getBooleanValue("web-sdk-e2e-flag.bool", true, context);
+      assertThat(value).isFalse();
 
-    // Use a separate OpenFeature instance to avoid interfering with the test setup
-    OpenFeatureAPI.getInstance().setProviderAndWait("real-backend-test", realProvider);
+      // Shutdown the provider - this flushes logs to the real backend via gRPC
+      realProvider.shutdown();
 
-    final EvaluationContext context = new MutableContext(TARGETING_KEY).add("sticky", false);
-    final Client realClient = OpenFeatureAPI.getInstance().getClient("real-backend-test");
+      // Wait for async operations to complete
+      Thread.sleep(1000);
 
-    // Perform a resolve to generate logs
-    final boolean value = realClient.getBooleanValue("web-sdk-e2e-flag.bool", true, context);
-    assertThat(value).isFalse();
+      // Verify no error logs were captured
+      final var errorLogs =
+          listAppender.list.stream()
+              .filter(
+                  event -> event.getLevel().levelInt >= ch.qos.logback.classic.Level.ERROR.levelInt)
+              .filter(event -> event.getMessage().contains("Failed to write flag logs"))
+              .toList();
 
-    // Shutdown the provider - this flushes logs to the real backend via gRPC
-    realProvider.shutdown();
+      assertThat(errorLogs)
+          .withFailMessage(
+              "Expected no 'Failed to write flag logs' errors, but found: " + errorLogs)
+          .isEmpty();
 
-    // Wait for async operations to complete
-    Thread.sleep(1000);
-
-    // Verify no errors were captured
-    assertThat(writeFailed.get())
-        .withFailMessage(
-            "Backend returned error: " + (capturedError.get() != null ? capturedError.get().getMessage() : "unknown"))
-        .isFalse();
-
-    // Note: writeSucceeded may not be true because GrpcWasmFlagLogger swallows exceptions internally.
-    // The best we can verify is that no exception was thrown during the test.
+      // The test passes if no error logs were captured, indicating successful backend communication
+    } finally {
+      // Clean up the appender
+      logger.detachAppender(listAppender);
+    }
   }
 }

@@ -295,3 +295,23 @@ export async function advanceTimersUntil(...args: any[]): Promise<any> {
   }
   return ret;
 }
+
+export function createCapturingLoggingBackend() {
+  const logs: Array<{ namespace: string; message: string; args: any[] }> = [];
+
+  const backend: any = (namespace: string) => {
+    const logFn: any = (message: string, ...args: any[]) => {
+      logs.push({ namespace, message, args });
+    };
+    logFn.enabled = true;
+    return logFn;
+  };
+
+  backend.getCapturedLogs = () => [...logs];
+  backend.clear = () => {
+    logs.length = 0;
+  };
+  backend.hasErrorLogs = () => logs.some(log => log.namespace.includes(':error'));
+
+  return backend;
+}

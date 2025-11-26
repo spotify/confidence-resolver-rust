@@ -3,7 +3,7 @@ export type LogFn = (msg: string, ...rest: any[]) => void;
 
 type Debug = typeof import('debug')['default'];
 
-const debugBackend = loadDebug();
+let debugBackend = loadDebug();
 
 export interface Logger {
   debug(msg: string, ...args: any[]): void;
@@ -59,6 +59,11 @@ class LoggerImpl implements Logger {
 
 export const logger = new LoggerImpl('cnfd');
 export const getLogger = logger.getLogger.bind(logger);
+
+export function configureLogging(backend: any) {
+  debugBackend = Promise.resolve(backend);
+  logger.configure();
+}
 
 async function loadDebug(): Promise<Debug | null> {
   try {
