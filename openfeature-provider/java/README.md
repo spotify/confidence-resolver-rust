@@ -82,7 +82,7 @@ This is particularly useful for:
 
 ## Credentials
 
-You need a **Client Secret** for flag resolution and authentication with Confidence. This can be obtained from your Confidence dashboard.
+You need a **Client Secret** for flag resolution and authentication with Confidence. This can be obtained from your Confidence dashboard. The local resolve providers only work with credentials specifically scoped for `BACKEND` integrations.
 
 ## Sticky Resolve
 
