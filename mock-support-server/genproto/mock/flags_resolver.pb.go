@@ -130,9 +130,9 @@ const file_mock_flags_resolver_proto_rawDesc = "" +
 	"\rflag_assigned\x18\x01 \x03(\fR\fflagAssigned\x12.\n" +
 	"\x13client_resolve_info\x18\x03 \x03(\fR\x11clientResolveInfo\x12*\n" +
 	"\x11flag_resolve_info\x18\x04 \x03(\fR\x0fflagResolveInfo\"\x17\n" +
-	"\x15WriteFlagLogsResponse2\xb5\x01\n" +
-	"\x19InternalFlagLoggerService\x12\x97\x01\n" +
-	"\rWriteFlagLogs\x122.confidence.flags.resolver.v1.WriteFlagLogsRequest\x1a3.confidence.flags.resolver.v1.WriteFlagLogsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/flagLogs:writeBVZTgithub.com/spotify/confidence-resolver-rust/mock-support-server/genproto/mock;mockpbb\x06proto3"
+	"\x15WriteFlagLogsResponse2\xc1\x01\n" +
+	"\x19InternalFlagLoggerService\x12\xa3\x01\n" +
+	"\x13ClientWriteFlagLogs\x122.confidence.flags.resolver.v1.WriteFlagLogsRequest\x1a3.confidence.flags.resolver.v1.WriteFlagLogsResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/v1/clientFlagLogs:writeBVZTgithub.com/spotify/confidence-resolver-rust/mock-support-server/genproto/mock;mockpbb\x06proto3"
 
 var (
 	file_mock_flags_resolver_proto_rawDescOnce sync.Once
@@ -152,8 +152,8 @@ var file_mock_flags_resolver_proto_goTypes = []any{
 	(*WriteFlagLogsResponse)(nil), // 1: confidence.flags.resolver.v1.WriteFlagLogsResponse
 }
 var file_mock_flags_resolver_proto_depIdxs = []int32{
-	0, // 0: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:input_type -> confidence.flags.resolver.v1.WriteFlagLogsRequest
-	1, // 1: confidence.flags.resolver.v1.InternalFlagLoggerService.WriteFlagLogs:output_type -> confidence.flags.resolver.v1.WriteFlagLogsResponse
+	0, // 0: confidence.flags.resolver.v1.InternalFlagLoggerService.ClientWriteFlagLogs:input_type -> confidence.flags.resolver.v1.WriteFlagLogsRequest
+	1, // 1: confidence.flags.resolver.v1.InternalFlagLoggerService.ClientWriteFlagLogs:output_type -> confidence.flags.resolver.v1.WriteFlagLogsResponse
 	1, // [1:2] is the sub-list for method output_type
 	0, // [0:1] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name

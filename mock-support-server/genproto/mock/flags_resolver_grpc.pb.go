@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InternalFlagLoggerService_WriteFlagLogs_FullMethodName = "/confidence.flags.resolver.v1.InternalFlagLoggerService/WriteFlagLogs"
+	InternalFlagLoggerService_ClientWriteFlagLogs_FullMethodName = "/confidence.flags.resolver.v1.InternalFlagLoggerService/ClientWriteFlagLogs"
 )
 
 // InternalFlagLoggerServiceClient is the client API for InternalFlagLoggerService service.
@@ -27,7 +27,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type InternalFlagLoggerServiceClient interface {
 	// Writes flag assignment events and resolve logs together.
-	WriteFlagLogs(ctx context.Context, in *WriteFlagLogsRequest, opts ...grpc.CallOption) (*WriteFlagLogsResponse, error)
+	ClientWriteFlagLogs(ctx context.Context, in *WriteFlagLogsRequest, opts ...grpc.CallOption) (*WriteFlagLogsResponse, error)
 }
 
 type internalFlagLoggerServiceClient struct {
@@ -38,10 +38,10 @@ func NewInternalFlagLoggerServiceClient(cc grpc.ClientConnInterface) InternalFla
 	return &internalFlagLoggerServiceClient{cc}
 }
 
-func (c *internalFlagLoggerServiceClient) WriteFlagLogs(ctx context.Context, in *WriteFlagLogsRequest, opts ...grpc.CallOption) (*WriteFlagLogsResponse, error) {
+func (c *internalFlagLoggerServiceClient) ClientWriteFlagLogs(ctx context.Context, in *WriteFlagLogsRequest, opts ...grpc.CallOption) (*WriteFlagLogsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(WriteFlagLogsResponse)
-	err := c.cc.Invoke(ctx, InternalFlagLoggerService_WriteFlagLogs_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, InternalFlagLoggerService_ClientWriteFlagLogs_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (c *internalFlagLoggerServiceClient) WriteFlagLogs(ctx context.Context, in 
 // for forward compatibility.
 type InternalFlagLoggerServiceServer interface {
 	// Writes flag assignment events and resolve logs together.
-	WriteFlagLogs(context.Context, *WriteFlagLogsRequest) (*WriteFlagLogsResponse, error)
+	ClientWriteFlagLogs(context.Context, *WriteFlagLogsRequest) (*WriteFlagLogsResponse, error)
 	mustEmbedUnimplementedInternalFlagLoggerServiceServer()
 }
 
@@ -64,8 +64,8 @@ type InternalFlagLoggerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedInternalFlagLoggerServiceServer struct{}
 
-func (UnimplementedInternalFlagLoggerServiceServer) WriteFlagLogs(context.Context, *WriteFlagLogsRequest) (*WriteFlagLogsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WriteFlagLogs not implemented")
+func (UnimplementedInternalFlagLoggerServiceServer) ClientWriteFlagLogs(context.Context, *WriteFlagLogsRequest) (*WriteFlagLogsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClientWriteFlagLogs not implemented")
 }
 func (UnimplementedInternalFlagLoggerServiceServer) mustEmbedUnimplementedInternalFlagLoggerServiceServer() {
 }
@@ -89,20 +89,20 @@ func RegisterInternalFlagLoggerServiceServer(s grpc.ServiceRegistrar, srv Intern
 	s.RegisterService(&InternalFlagLoggerService_ServiceDesc, srv)
 }
 
-func _InternalFlagLoggerService_WriteFlagLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _InternalFlagLoggerService_ClientWriteFlagLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WriteFlagLogsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InternalFlagLoggerServiceServer).WriteFlagLogs(ctx, in)
+		return srv.(InternalFlagLoggerServiceServer).ClientWriteFlagLogs(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: InternalFlagLoggerService_WriteFlagLogs_FullMethodName,
+		FullMethod: InternalFlagLoggerService_ClientWriteFlagLogs_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InternalFlagLoggerServiceServer).WriteFlagLogs(ctx, req.(*WriteFlagLogsRequest))
+		return srv.(InternalFlagLoggerServiceServer).ClientWriteFlagLogs(ctx, req.(*WriteFlagLogsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -115,8 +115,8 @@ var InternalFlagLoggerService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*InternalFlagLoggerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "WriteFlagLogs",
-			Handler:    _InternalFlagLoggerService_WriteFlagLogs_Handler,
+			MethodName: "ClientWriteFlagLogs",
+			Handler:    _InternalFlagLoggerService_ClientWriteFlagLogs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -6,7 +6,7 @@ services:
     environment:
       - PORT=8081
       - RESOLVER_STATE_PB=/data/resolver_state_current.pb
-      - SIGNED_STATE_URI=http://mock-go:8081/state
+      - CLIENT_SECRET=mkjJruAATQWjeY7foFIWfVAcBWnci2YF
 
   go-bench:
     build:
@@ -23,7 +23,7 @@ services:
     environment:
       - PORT=8081
       - RESOLVER_STATE_PB=/data/resolver_state_current.pb
-      - SIGNED_STATE_URI=https://storage.googleapis.com/state
+      - CLIENT_SECRET=mkjJruAATQWjeY7foFIWfVAcBWnci2YF
 
   js-bench:
     build:

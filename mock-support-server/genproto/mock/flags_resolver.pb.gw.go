@@ -31,7 +31,7 @@ var _ = runtime.String
 var _ = utilities.NewDoubleArray
 var _ = metadata.Join
 
-func request_InternalFlagLoggerService_WriteFlagLogs_0(ctx context.Context, marshaler runtime.Marshaler, client InternalFlagLoggerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_InternalFlagLoggerService_ClientWriteFlagLogs_0(ctx context.Context, marshaler runtime.Marshaler, client InternalFlagLoggerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq WriteFlagLogsRequest
 	var metadata runtime.ServerMetadata
 
@@ -39,12 +39,12 @@ func request_InternalFlagLoggerService_WriteFlagLogs_0(ctx context.Context, mars
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.WriteFlagLogs(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.ClientWriteFlagLogs(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_InternalFlagLoggerService_WriteFlagLogs_0(ctx context.Context, marshaler runtime.Marshaler, server InternalFlagLoggerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_InternalFlagLoggerService_ClientWriteFlagLogs_0(ctx context.Context, marshaler runtime.Marshaler, server InternalFlagLoggerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq WriteFlagLogsRequest
 	var metadata runtime.ServerMetadata
 
@@ -52,7 +52,7 @@ func local_request_InternalFlagLoggerService_WriteFlagLogs_0(ctx context.Context
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.WriteFlagLogs(ctx, &protoReq)
+	msg, err := server.ClientWriteFlagLogs(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -64,7 +64,7 @@ func local_request_InternalFlagLoggerService_WriteFlagLogs_0(ctx context.Context
 // GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
 func RegisterInternalFlagLoggerServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server InternalFlagLoggerServiceServer) error {
 
-	mux.Handle("POST", pattern_InternalFlagLoggerService_WriteFlagLogs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_InternalFlagLoggerService_ClientWriteFlagLogs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
@@ -72,12 +72,12 @@ func RegisterInternalFlagLoggerServiceHandlerServer(ctx context.Context, mux *ru
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/confidence.flags.resolver.v1.InternalFlagLoggerService/WriteFlagLogs", runtime.WithHTTPPathPattern("/v1/flagLogs:write"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/confidence.flags.resolver.v1.InternalFlagLoggerService/ClientWriteFlagLogs", runtime.WithHTTPPathPattern("/v1/clientFlagLogs:write"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_InternalFlagLoggerService_WriteFlagLogs_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_InternalFlagLoggerService_ClientWriteFlagLogs_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
@@ -85,7 +85,7 @@ func RegisterInternalFlagLoggerServiceHandlerServer(ctx context.Context, mux *ru
 			return
 		}
 
-		forward_InternalFlagLoggerService_WriteFlagLogs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_InternalFlagLoggerService_ClientWriteFlagLogs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -130,25 +130,25 @@ func RegisterInternalFlagLoggerServiceHandler(ctx context.Context, mux *runtime.
 // "InternalFlagLoggerServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
 func RegisterInternalFlagLoggerServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client InternalFlagLoggerServiceClient) error {
 
-	mux.Handle("POST", pattern_InternalFlagLoggerService_WriteFlagLogs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_InternalFlagLoggerService_ClientWriteFlagLogs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/confidence.flags.resolver.v1.InternalFlagLoggerService/WriteFlagLogs", runtime.WithHTTPPathPattern("/v1/flagLogs:write"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/confidence.flags.resolver.v1.InternalFlagLoggerService/ClientWriteFlagLogs", runtime.WithHTTPPathPattern("/v1/clientFlagLogs:write"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_InternalFlagLoggerService_WriteFlagLogs_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_InternalFlagLoggerService_ClientWriteFlagLogs_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_InternalFlagLoggerService_WriteFlagLogs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_InternalFlagLoggerService_ClientWriteFlagLogs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -156,9 +156,9 @@ func RegisterInternalFlagLoggerServiceHandlerClient(ctx context.Context, mux *ru
 }
 
 var (
-	pattern_InternalFlagLoggerService_WriteFlagLogs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "flagLogs"}, "write"))
+	pattern_InternalFlagLoggerService_ClientWriteFlagLogs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "clientFlagLogs"}, "write"))
 )
 
 var (
-	forward_InternalFlagLoggerService_WriteFlagLogs_0 = runtime.ForwardResponseMessage
+	forward_InternalFlagLoggerService_ClientWriteFlagLogs_0 = runtime.ForwardResponseMessage
 )

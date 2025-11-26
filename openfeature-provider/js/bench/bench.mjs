@@ -30,12 +30,13 @@ const FLAG_KEY = args['flag'] ?? process.env.FLAG_KEY ?? 'tutorial-feature';
 const CLIENT_SECRET = args['client-secret'] ?? process.env.CONFIDENCE_FLAG_CLIENT_SECRET ?? 'secret';
 
 // Rewrite all provider HTTP requests to the mock server (grpc-gateway and /state)
-const proxyFetch = async (input, init) => {
-  const url = new URL(input);
+const proxyFetch = (input, init) => {
+  const origUrl = new URL(input);
   const target = new URL(MOCK_HTTP);
-  const rewrite = `${target.origin}${url.pathname}`;
-  const res = await fetch(rewrite, init);
-  return res;
+  const newUrl = `${target.origin}${origUrl.pathname}`;
+  const headers = new Headers(init?.headers);
+  headers.set('X-Forwarded-Host', origUrl.host);
+  return fetch(newUrl, { ...init, headers });
 };
 
 const provider = createConfidenceServerProvider({
@@ -60,11 +61,12 @@ function runLoop(abort, client, flagKey, onErrorAbort) {
         completed++;
         if (details.reason === 'ERROR') {
           errors++;
-          if (onErrorAbort) abort.abort();
+          console.log(details);
+          throw new Error(details.error);
         }
       } catch (e) {
         errors++;
-        if (onErrorAbort) abort.abort();
+        if (onErrorAbort) throw e;
       }
       // Occasionally yield to the event loop so timers/signals can fire even if resolves are synchronous
       if ((++i & 1023) === 0) {

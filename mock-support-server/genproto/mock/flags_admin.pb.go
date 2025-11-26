@@ -7,10 +7,8 @@
 package mockpb
 
 import (
-	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -23,27 +21,30 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Request to fetch resolver state uri
-type ResolverStateUriRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+type ClientResolverState struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// using bytes here to simplify setting a state file.
+	State []byte `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	// The account the referenced state belongs to
+	Account       string `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ResolverStateUriRequest) Reset() {
-	*x = ResolverStateUriRequest{}
+func (x *ClientResolverState) Reset() {
+	*x = ClientResolverState{}
 	mi := &file_mock_flags_admin_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ResolverStateUriRequest) String() string {
+func (x *ClientResolverState) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ResolverStateUriRequest) ProtoMessage() {}
+func (*ClientResolverState) ProtoMessage() {}
 
-func (x *ResolverStateUriRequest) ProtoReflect() protoreflect.Message {
+func (x *ClientResolverState) ProtoReflect() protoreflect.Message {
 	mi := &file_mock_flags_admin_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -55,69 +56,19 @@ func (x *ResolverStateUriRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ResolverStateUriRequest.ProtoReflect.Descriptor instead.
-func (*ResolverStateUriRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ClientResolverState.ProtoReflect.Descriptor instead.
+func (*ClientResolverState) Descriptor() ([]byte, []int) {
 	return file_mock_flags_admin_proto_rawDescGZIP(), []int{0}
 }
 
-// Response of fetching resolver state uri
-type ResolverStateUriResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// The signed uri that can be used to fetch state
-	SignedUri string `protobuf:"bytes,1,opt,name=signed_uri,json=signedUri,proto3" json:"signed_uri,omitempty"`
-	// At what time the state uri expires
-	ExpireTime *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expire_time,json=expireTime,proto3" json:"expire_time,omitempty"`
-	// The account the referenced state belongs to
-	Account       string `protobuf:"bytes,3,opt,name=account,proto3" json:"account,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ResolverStateUriResponse) Reset() {
-	*x = ResolverStateUriResponse{}
-	mi := &file_mock_flags_admin_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResolverStateUriResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResolverStateUriResponse) ProtoMessage() {}
-
-func (x *ResolverStateUriResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_mock_flags_admin_proto_msgTypes[1]
+func (x *ClientResolverState) GetState() []byte {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResolverStateUriResponse.ProtoReflect.Descriptor instead.
-func (*ResolverStateUriResponse) Descriptor() ([]byte, []int) {
-	return file_mock_flags_admin_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *ResolverStateUriResponse) GetSignedUri() string {
-	if x != nil {
-		return x.SignedUri
-	}
-	return ""
-}
-
-func (x *ResolverStateUriResponse) GetExpireTime() *timestamppb.Timestamp {
-	if x != nil {
-		return x.ExpireTime
+		return x.State
 	}
 	return nil
 }
 
-func (x *ResolverStateUriResponse) GetAccount() string {
+func (x *ClientResolverState) GetAccount() string {
 	if x != nil {
 		return x.Account
 	}
@@ -128,16 +79,10 @@ var File_mock_flags_admin_proto protoreflect.FileDescriptor
 
 const file_mock_flags_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x16mock/flags_admin.proto\x12\x19confidence.flags.admin.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/api/annotations.proto\"\x19\n" +
-	"\x17ResolverStateUriRequest\"\x90\x01\n" +
-	"\x18ResolverStateUriResponse\x12\x1d\n" +
-	"\n" +
-	"signed_uri\x18\x01 \x01(\tR\tsignedUri\x12;\n" +
-	"\vexpire_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"expireTime\x12\x18\n" +
-	"\aaccount\x18\x03 \x01(\tR\aaccount2\xc0\x01\n" +
-	"\x14ResolverStateService\x12\xa7\x01\n" +
-	"\x10ResolverStateUri\x122.confidence.flags.admin.v1.ResolverStateUriRequest\x1a3.confidence.flags.admin.v1.ResolverStateUriResponse\"*\x82\xd3\xe4\x93\x02$\x12\"/v1/resolverState:resolverStateUriBVZTgithub.com/spotify/confidence-resolver-rust/mock-support-server/genproto/mock;mockpbb\x06proto3"
+	"\x16mock/flags_admin.proto\x12\x19confidence.flags.admin.v1\"E\n" +
+	"\x13ClientResolverState\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\fR\x05state\x12\x18\n" +
+	"\aaccount\x18\x02 \x01(\tR\aaccountBVZTgithub.com/spotify/confidence-resolver-rust/mock-support-server/genproto/mock;mockpbb\x06proto3"
 
 var (
 	file_mock_flags_admin_proto_rawDescOnce sync.Once
@@ -151,21 +96,16 @@ func file_mock_flags_admin_proto_rawDescGZIP() []byte {
 	return file_mock_flags_admin_proto_rawDescData
 }
 
-var file_mock_flags_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_mock_flags_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_mock_flags_admin_proto_goTypes = []any{
-	(*ResolverStateUriRequest)(nil),  // 0: confidence.flags.admin.v1.ResolverStateUriRequest
-	(*ResolverStateUriResponse)(nil), // 1: confidence.flags.admin.v1.ResolverStateUriResponse
-	(*timestamppb.Timestamp)(nil),    // 2: google.protobuf.Timestamp
+	(*ClientResolverState)(nil), // 0: confidence.flags.admin.v1.ClientResolverState
 }
 var file_mock_flags_admin_proto_depIdxs = []int32{
-	2, // 0: confidence.flags.admin.v1.ResolverStateUriResponse.expire_time:type_name -> google.protobuf.Timestamp
-	0, // 1: confidence.flags.admin.v1.ResolverStateService.ResolverStateUri:input_type -> confidence.flags.admin.v1.ResolverStateUriRequest
-	1, // 2: confidence.flags.admin.v1.ResolverStateService.ResolverStateUri:output_type -> confidence.flags.admin.v1.ResolverStateUriResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0, // [0:0] is the sub-list for method output_type
+	0, // [0:0] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_mock_flags_admin_proto_init() }
@@ -179,9 +119,9 @@ func file_mock_flags_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mock_flags_admin_proto_rawDesc), len(file_mock_flags_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   1,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   0,
 		},
 		GoTypes:           file_mock_flags_admin_proto_goTypes,
 		DependencyIndexes: file_mock_flags_admin_proto_depIdxs,
