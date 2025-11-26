@@ -3,7 +3,7 @@ import { OpenFeature } from '@openfeature/server-sdk';
 import { ConfidenceServerProviderLocal } from './ConfidenceServerProviderLocal';
 import { readFileSync } from 'node:fs';
 import { WasmResolver } from './WasmResolver';
-import { configureLogging } from './logger';
+import { LoggerBackend, logger } from './logger';
 import { createCapturingLoggingBackend } from './test-helpers';
 
 /**
@@ -17,12 +17,12 @@ const TARGETING_KEY = 'test-a';
 describe('WriteFlagLogs Backend E2E tests', () => {
   let resolver: WasmResolver;
   let provider: ConfidenceServerProviderLocal;
-  let capturingBackend: ReturnType<typeof createCapturingLoggingBackend>;
+  let capturingBackend: LoggerBackend & { hasErrorLogs(): boolean };
 
   beforeAll(async () => {
     // Set up log capturing
     capturingBackend = createCapturingLoggingBackend();
-    configureLogging(capturingBackend);
+    logger.configure(capturingBackend);
 
     const module = new WebAssembly.Module(moduleBytes);
     resolver = new WasmResolver(module);

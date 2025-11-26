@@ -4,6 +4,7 @@ import { abortableSleep, isObject, TimeUnit } from './util';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
 import { HashProvider } from './HashProvider';
+import { LoggerBackend } from './logger';
 
 type PayloadFactory = (req: Request) => BodyInit | null;
 type ByteStream = ReadableStream<Uint8Array<ArrayBuffer>>;
@@ -299,7 +300,7 @@ export async function advanceTimersUntil(...args: any[]): Promise<any> {
 export function createCapturingLoggingBackend() {
   const logs: Array<{ namespace: string; message: string; args: any[] }> = [];
 
-  const backend: any = (namespace: string) => {
+  const backend = (namespace: string) => {
     const logFn: any = (message: string, ...args: any[]) => {
       logs.push({ namespace, message, args });
     };
@@ -307,11 +308,6 @@ export function createCapturingLoggingBackend() {
     return logFn;
   };
 
-  backend.getCapturedLogs = () => [...logs];
-  backend.clear = () => {
-    logs.length = 0;
-  };
   backend.hasErrorLogs = () => logs.some(log => log.namespace.includes(':error'));
-
   return backend;
 }
