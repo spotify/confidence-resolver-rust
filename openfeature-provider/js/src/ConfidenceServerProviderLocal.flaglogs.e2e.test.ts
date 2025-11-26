@@ -180,3 +180,50 @@ describe('WriteFlagLogs E2E tests', () => {
     expect(decoded.telemetryData.length).toBeGreaterThan(0);
   });
 });
+
+describe('WriteFlagLogs Backend E2E tests', () => {
+  let resolver: WasmResolver;
+  let provider: ConfidenceServerProviderLocal;
+
+  beforeAll(async () => {
+    const module = new WebAssembly.Module(moduleBytes);
+    resolver = new WasmResolver(module);
+    provider = new ConfidenceServerProviderLocal(resolver, {
+      flagClientSecret: FLAG_CLIENT_SECRET,
+    });
+
+    await OpenFeature.setProviderAndWait(provider);
+    OpenFeature.setContext({
+      targetingKey: TARGETING_KEY,
+      sticky: false,
+    });
+  });
+
+  afterAll(() => OpenFeature.close());
+
+  it('should successfully send WriteFlagLogs to real backend and receive 200', async () => {
+    const client = OpenFeature.getClient();
+
+    // Perform a resolve to generate logs
+    const value = await client.getBooleanValue('web-sdk-e2e-flag.bool', true);
+    expect(value).toBeFalsy();
+
+    // Get the captured logs
+    const logsBytes = resolver.flushLogs();
+    expect(logsBytes.length).toBeGreaterThan(0);
+
+    // Send logs directly to the real backend and verify response status
+    const response = await fetch('https://resolver.confidence.dev/v1/clientFlagLogs:write', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-protobuf',
+        Authorization: `ClientSecret ${FLAG_CLIENT_SECRET}`,
+      },
+      body: logsBytes,
+    });
+
+    // Verify we got a successful response
+    expect(response.ok).toBe(true);
+    expect(response.status).toBe(200);
+  });
+});
