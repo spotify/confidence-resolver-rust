@@ -47,6 +47,17 @@ Client client = OpenFeatureAPI.getInstance().getClient();
 String value = client.getStringValue("my-flag", "default-value");
 ```
 
+## Shutdown
+
+**Important**: To ensure proper cleanup and flushing of exposure logs, you must call `shutdown()` on the provider instance rather than using `OpenFeatureAPI.getInstance().shutdown()`.
+
+```java
+// Shutdown the provider to flush logs and clean up resources
+OpenFeatureAPI.getInstance().getProvider().shutdown();
+```
+
+> **Why?** Due to an [upstream issue in the OpenFeature Java SDK](https://github.com/open-feature/java-sdk/issues/1745), calling `OpenFeatureAPI.getInstance().shutdown()` submits provider shutdown tasks to an executor but doesn't wait for them to complete. This can result in loss of exposure logs and other telemetry data. Calling `shutdown()` directly on the provider ensures proper cleanup.
+
 ## Configuration
 
 ### Environment Variables
