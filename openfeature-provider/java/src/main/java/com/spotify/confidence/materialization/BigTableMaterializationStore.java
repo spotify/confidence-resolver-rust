@@ -1,4 +1,4 @@
-package com.spotify.confidence;
+package com.spotify.confidence.materialization;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,65 +17,8 @@ import static com.google.cloud.bigtable.data.v2.models.Filters.FILTERS;
 import com.google.cloud.bigtable.data.v2.models.Row;
 import com.google.cloud.bigtable.data.v2.models.RowMutationEntry;
 import com.google.cloud.bigtable.data.v2.models.TableId;
-import com.spotify.confidence.MaterializationStore.ReadResult.InclusionResult;
-import com.spotify.confidence.MaterializationStore.ReadResult.VariantResult;
 
-public sealed interface MaterializationStore permits MaterializationStore.Readable, MaterializationStore.Writable {
-
-  // ----- Read side -----
-
-  sealed interface ReadOp permits ReadOp.Inclusion, ReadOp.GetVariant {
-    String materialization();
-    String unit();
-
-    // Query: does the materialization include the key?
-    record Inclusion(String materialization, String unit) implements ReadOp {
-      InclusionResult toResult(boolean included) {
-        return new InclusionResult(materialization, unit, included);
-      }
-    }
-
-    // Query: get variants for specific rules for this key
-    record GetVariant(String materialization, String unit, String rule) implements ReadOp {
-      VariantResult toResult(Optional<String> variant) {
-        return new VariantResult(materialization, unit, rule, variant);
-      }
-    }
-  }
-
-  sealed interface ReadResult permits ReadResult.InclusionResult, ReadResult.VariantResult {
-    String materialization();
-    String unit();
-
-    // Result for Inclusion
-    record InclusionResult(String materialization, String unit, boolean included) implements ReadResult {}
-
-    // Result for GetRules
-    record VariantResult(String materialization, String unit, String rule, Optional<String> variant) implements ReadResult {}
-  }
-
-  public non-sealed interface Readable extends MaterializationStore {
-    // Returns results in the same order as the input ops
-    CompletionStage<List<ReadResult>> read(List<ReadOp> ops);
-  }
-
-  // ----- Write side -----
-
-  sealed interface WriteOp permits WriteOp.SetVariant {
-    String materialization();
-    String unit();
-
-    // Upsert a variant
-    record SetVariant(String materialization, String unit, String rule, String variant) implements WriteOp {}
-
-  }
-
-  public non-sealed interface Writable extends MaterializationStore {
-    CompletionStage<Void> write(Set<WriteOp> ops);
-  }
-}
-
-class BigTableMaterializationStore implements MaterializationStore.Readable, MaterializationStore.Writable {
+public class BigTableMaterializationStore implements MaterializationReader, MaterializationWriter {
   public static final TableId TABLE_ID = TableId.of("materializations");
   public static final String COLUMN_FAMILY_NAME = "mats";
 
@@ -180,5 +123,5 @@ class BigTableMaterializationStore implements MaterializationStore.Readable, Mat
   private static <T> CompletableFuture<T> toCompletableFuture(Future<T> future) {
     throw new UnsupportedOperationException();
   }
-
+  
 }
