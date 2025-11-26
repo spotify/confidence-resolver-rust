@@ -70,10 +70,28 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   }
 
   /**
-   * Creates a new OpenFeature provider for local flag resolution with full configuration control.
+   * Creates a new OpenFeature provider for local flag resolution with default configuration.
    *
-   * <p>/** Creates a new OpenFeature provider for local flag resolution with custom channel
-   * factory.
+   * <p>This is the simplest way to create a provider. It uses the default gRPC channel factory
+   * and remote resolver fallback for sticky assignments.
+   *
+   * <p><strong>Example usage:</strong>
+   *
+   * <pre>{@code
+   * OpenFeatureLocalResolveProvider provider =
+   *     new OpenFeatureLocalResolveProvider("your-client-secret");
+   * OpenFeatureAPI.getInstance().setProviderAndWait(provider);
+   * }</pre>
+   *
+   * @param clientSecret the client secret for your application, used for flag resolution
+   *     authentication
+   */
+  public OpenFeatureLocalResolveProvider(String clientSecret) {
+    this(new LocalProviderConfig(), clientSecret);
+  }
+
+  /**
+   * Creates a new OpenFeature provider for local flag resolution with custom channel factory.
    *
    * <p>This constructor accepts a {@link LocalProviderConfig} which allows you to customize how
    * gRPC channels are created, particularly useful for testing with mock servers or advanced
@@ -102,10 +120,35 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   }
 
   /**
+   * Creates a new OpenFeature provider for local flag resolution with a custom sticky resolve
+   * strategy.
+   *
+   * <p>This constructor uses the default gRPC channel factory but allows you to provide a custom
+   * {@link StickyResolveStrategy} such as a {@link MaterializationRepository} for local storage of
+   * sticky assignments.
+   *
+   * <p><strong>Example with custom materialization repository:</strong>
+   *
+   * <pre>{@code
+   * MaterializationRepository repository = new InMemoryMaterializationRepoExample();
+   * OpenFeatureLocalResolveProvider provider =
+   *     new OpenFeatureLocalResolveProvider("client-secret", repository);
+   * }</pre>
+   *
+   * @param clientSecret the client secret for your application, used for flag resolution
+   *     authentication
+   * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
+   */
+  public OpenFeatureLocalResolveProvider(
+      String clientSecret, StickyResolveStrategy stickyResolveStrategy) {
+    this(new LocalProviderConfig(), clientSecret, stickyResolveStrategy);
+  }
+
+  /**
    * Creates a new OpenFeature provider for local flag resolution with custom channel factory and
    * sticky resolve strategy.
    *
-   * @param config the provider configuration including API credentials and optional channel factory
+   * @param config the provider configuration including optional channel factory
    * @param clientSecret the client secret for your application, used for flag resolution
    *     authentication
    * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
