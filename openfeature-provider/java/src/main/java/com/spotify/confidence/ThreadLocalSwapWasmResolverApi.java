@@ -6,6 +6,7 @@ import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import com.spotify.futures.CompletableFutures;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,8 +42,16 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
     this.flagLogger = flagLogger;
     this.stickyResolveStrategy = stickyResolveStrategy;
 
+    this.numInstances = getNumInstances();
+  }
+
+  private static int getNumInstances() {
     // Pre-create instances based on CPU core count for optimal performance
-    this.numInstances = Runtime.getRuntime().availableProcessors();
+    final var defaultNumberOfInstances = Runtime.getRuntime().availableProcessors();
+
+    return Optional.ofNullable(System.getenv("CONFIDENCE_NUMBER_OF_WASM_INSTANCES"))
+                    .map(Integer::parseInt)
+                    .orElse(defaultNumberOfInstances);
   }
 
   @Override
