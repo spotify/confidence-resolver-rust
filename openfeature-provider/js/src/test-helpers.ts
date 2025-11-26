@@ -3,7 +3,6 @@ import { AccessToken } from './LocalResolver';
 import { abortableSleep, isObject, TimeUnit } from './util';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
-import { HashProvider } from './HashProvider';
 import { LoggerBackend } from './logger';
 
 type PayloadFactory = (req: Request) => BodyInit | null;
@@ -189,25 +188,6 @@ export class NetworkMock extends RequestDispatcher<RequestHandler> {
   readonly fetch: typeof fetch = (input, init) => this.handle(new Request(input, init));
 }
 
-/**
- * Mock HashProvider for testing that avoids async crypto.subtle calls.
- * Returns a simple deterministic hash without using real crypto.
- */
-export class MockHashProvider implements HashProvider {
-  async sha256Hex(input: string): Promise<string> {
-    // Simple deterministic hash for testing - just convert string to hex
-    // This avoids the async crypto.subtle.digest that doesn't play well with fake timers
-    let hash = 0;
-    for (let i = 0; i < input.length; i++) {
-      const char = input.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    // Pad to 64 hex chars (SHA-256 size)
-    return Math.abs(hash).toString(16).padStart(64, '0');
-  }
-}
-
 function throttleStream(stream: ByteStream, bandwidth: number, signal?: AbortSignal): ByteStream {
   const iter = (async function* () {
     for await (const chunk of stream) {
@@ -310,4 +290,17 @@ export function createCapturingLoggingBackend() {
 
   backend.hasErrorLogs = () => logs.some(log => log.namespace.includes(':error'));
   return backend;
+}
+
+export async function sha256Hex(input: string): Promise<string> {
+  // Simple deterministic hash for testing - just convert string to hex
+  // This avoids the async crypto.subtle.digest that doesn't play well with fake timers
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  // Pad to 64 hex chars (SHA-256 size)
+  return Math.abs(hash).toString(16).padStart(64, '0');
 }
