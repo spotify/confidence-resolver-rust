@@ -487,8 +487,6 @@ func (p *LocalResolverProvider) startScheduledTasks(parentCtx context.Context) {
 				// Update state and flush logs
 				if err := p.resolverAPI.UpdateStateAndFlushLogs(state, accountId); err != nil {
 					p.logger.Error("Failed to update state and flush logs", "error", err)
-				} else {
-					p.logger.Info("Updated resolver state and flushed logs", "account", accountId)
 				}
 			case <-ctx.Done():
 				return
