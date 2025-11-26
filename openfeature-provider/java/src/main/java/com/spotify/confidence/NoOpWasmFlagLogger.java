@@ -17,4 +17,3 @@ class NoOpWasmFlagLogger implements WasmFlagLogger {
     // No-op: nothing to shut down
   }
 }
-

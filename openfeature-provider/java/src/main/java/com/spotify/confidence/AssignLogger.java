@@ -9,7 +9,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.spotify.confidence.flags.resolver.v1.InternalFlagLoggerServiceGrpc;
 import com.spotify.confidence.flags.resolver.v1.Sdk;
-import com.spotify.confidence.flags.resolver.v1.TelemetryData;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagAssignedRequest;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagAssignedResponse;
 import com.spotify.confidence.flags.resolver.v1.events.FlagAssigned;
@@ -21,7 +20,6 @@ import java.util.List;
 import java.util.Timer;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.LongAdder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

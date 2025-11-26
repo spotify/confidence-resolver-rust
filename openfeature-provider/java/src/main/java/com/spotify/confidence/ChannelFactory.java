@@ -5,20 +5,21 @@ import io.grpc.ManagedChannel;
 import java.util.List;
 
 /**
- * ChannelFactory is an advanced/testing hook allowing callers to customize how
- * gRPC channels are created. The provider will pass the computed target and
- * its default interceptors where applicable.
+ * ChannelFactory is an advanced/testing hook allowing callers to customize how gRPC channels are
+ * created. The provider will pass the computed target and its default interceptors where
+ * applicable.
  *
- * <p>Implementations may modify interceptors, change targets, or replace the channel
- * creation mechanism entirely. Returning a channel with incompatible security/auth
- * can break functionality; use with care.
+ * <p>Implementations may modify interceptors, change targets, or replace the channel creation
+ * mechanism entirely. Returning a channel with incompatible security/auth can break functionality;
+ * use with care.
  *
  * <p>This is particularly useful for:
+ *
  * <ul>
- *   <li>Unit testing: inject in-process channels with mock servers</li>
- *   <li>Integration testing: point to local mock gRPC servers</li>
- *   <li>Production customization: custom TLS settings, proxies, connection pooling</li>
- *   <li>Debugging: add custom logging or tracing interceptors</li>
+ *   <li>Unit testing: inject in-process channels with mock servers
+ *   <li>Integration testing: point to local mock gRPC servers
+ *   <li>Production customization: custom TLS settings, proxies, connection pooling
+ *   <li>Debugging: add custom logging or tracing interceptors
  * </ul>
  */
 @FunctionalInterface

@@ -51,23 +51,29 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
                 () -> {
                   try {
                     // Create a stub with authorization header interceptor
-                    InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub stubWithAuth =
-                        stub.withInterceptors(new ClientInterceptor() {
-                          @Override
-                          public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-                              MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
-                            return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-                                next.newCall(method, callOptions)) {
-                              @Override
-                              public void start(Listener<RespT> responseListener, Metadata headers) {
-                                Metadata.Key<String> authKey =
-                                    Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
-                                headers.put(authKey, "ClientSecret " + clientSecret);
-                                super.start(responseListener, headers);
-                              }
-                            };
-                          }
-                        });
+                    InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub
+                        stubWithAuth =
+                            stub.withInterceptors(
+                                new ClientInterceptor() {
+                                  @Override
+                                  public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+                                      MethodDescriptor<ReqT, RespT> method,
+                                      CallOptions callOptions,
+                                      Channel next) {
+                                    return new ForwardingClientCall.SimpleForwardingClientCall<
+                                        ReqT, RespT>(next.newCall(method, callOptions)) {
+                                      @Override
+                                      public void start(
+                                          Listener<RespT> responseListener, Metadata headers) {
+                                        Metadata.Key<String> authKey =
+                                            Metadata.Key.of(
+                                                "authorization", Metadata.ASCII_STRING_MARSHALLER);
+                                        headers.put(authKey, "ClientSecret " + clientSecret);
+                                        super.start(responseListener, headers);
+                                      }
+                                    };
+                                  }
+                                });
 
                     stubWithAuth.clientWriteFlagLogs(request);
                     logger.debug(

@@ -1,8 +1,8 @@
 package com.spotify.confidence;
 
 /**
- * Version information for the Confidence OpenFeature local provider.
- * This version is updated automatically by release-please.
+ * Version information for the Confidence OpenFeature local provider. This version is updated
+ * automatically by release-please.
  */
 public final class Version {
   /** Current version of the Confidence OpenFeature local provider. */
