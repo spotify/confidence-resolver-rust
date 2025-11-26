@@ -1,8 +1,8 @@
 package com.spotify.confidence;
 
-import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
+import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import java.util.concurrent.CompletableFuture;
 
 /** Common interface for WASM-based flag resolver implementations. */

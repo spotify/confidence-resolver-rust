@@ -5,9 +5,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -51,6 +49,7 @@ final class GrpcUtil {
   static ManagedChannel createConfidenceChannel(ChannelFactory channelFactory) {
     final String confidenceDomain =
         Optional.ofNullable(System.getenv("CONFIDENCE_DOMAIN")).orElse(CONFIDENCE_DOMAIN);
-    return channelFactory.create(confidenceDomain, List.of(new DefaultDeadlineClientInterceptor(Duration.ofMinutes(1))));
+    return channelFactory.create(
+        confidenceDomain, List.of(new DefaultDeadlineClientInterceptor(Duration.ofMinutes(1))));
   }
 }

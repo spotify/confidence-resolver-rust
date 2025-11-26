@@ -283,8 +283,7 @@ abstract class ResolveTest extends TestBase {
         .forEach(
             name ->
                 builder.addBitsets(
-                    com.spotify.confidence.flags.admin.v1.ResolverState.PackedBitset
-                        .newBuilder()
+                    com.spotify.confidence.flags.admin.v1.ResolverState.PackedBitset.newBuilder()
                         .setSegment(name)
                         .setFullBitset(true)
                         .build()));

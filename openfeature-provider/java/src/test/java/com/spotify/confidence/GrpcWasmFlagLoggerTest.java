@@ -45,7 +45,8 @@ class GrpcWasmFlagLoggerTest {
     // Given
     final var mockStub =
         mock(InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub.class);
-    when(mockStub.clientWriteFlagLogs(any())).thenReturn(WriteFlagLogsResponse.getDefaultInstance());
+    when(mockStub.clientWriteFlagLogs(any()))
+        .thenReturn(WriteFlagLogsResponse.getDefaultInstance());
     final var logger = createLoggerWithMockStub(mockStub);
 
     final var request =
@@ -78,7 +79,8 @@ class GrpcWasmFlagLoggerTest {
     // Given
     final var mockStub =
         mock(InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub.class);
-    when(mockStub.clientWriteFlagLogs(any())).thenReturn(WriteFlagLogsResponse.getDefaultInstance());
+    when(mockStub.clientWriteFlagLogs(any()))
+        .thenReturn(WriteFlagLogsResponse.getDefaultInstance());
     final var logger = createLoggerWithMockStub(mockStub);
 
     final int totalFlags = 2500; // Will create 3 chunks: 1000, 1000, 500
@@ -134,7 +136,8 @@ class GrpcWasmFlagLoggerTest {
     // Given
     final var mockStub =
         mock(InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub.class);
-    when(mockStub.clientWriteFlagLogs(any())).thenReturn(WriteFlagLogsResponse.getDefaultInstance());
+    when(mockStub.clientWriteFlagLogs(any()))
+        .thenReturn(WriteFlagLogsResponse.getDefaultInstance());
     final var logger = createLoggerWithMockStub(mockStub);
 
     final int totalFlags = 2000; // Exactly 2 chunks of 1000
@@ -172,7 +175,8 @@ class GrpcWasmFlagLoggerTest {
     // Given
     final var mockStub =
         mock(InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub.class);
-    when(mockStub.clientWriteFlagLogs(any())).thenReturn(WriteFlagLogsResponse.getDefaultInstance());
+    when(mockStub.clientWriteFlagLogs(any()))
+        .thenReturn(WriteFlagLogsResponse.getDefaultInstance());
     final var logger = createLoggerWithMockStub(mockStub);
 
     final var request =
@@ -226,7 +230,6 @@ class GrpcWasmFlagLoggerTest {
   private GrpcWasmFlagLogger createLoggerWithMockStub(
       InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub mockStub) {
     // Create logger with synchronous test writer
-    return new GrpcWasmFlagLogger(
-        "test-client-secret", mockStub::clientWriteFlagLogs);
+    return new GrpcWasmFlagLogger("test-client-secret", mockStub::clientWriteFlagLogs);
   }
 }
