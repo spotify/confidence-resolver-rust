@@ -27,6 +27,7 @@ type ProviderConfig struct {
 type ProviderTestConfig struct {
 	StateProvider StateProvider
 	FlagLogger    FlagLogger
+	ClientSecret  string
 	Logger        *slog.Logger
 }
 
@@ -105,7 +106,7 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
-	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, "", logger)
+	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, config.ClientSecret, logger)
 
 	return provider, nil
 }
