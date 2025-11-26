@@ -8,6 +8,7 @@ public interface MaterializationReader {
 
   sealed interface ReadOp permits ReadOp.Inclusion, ReadOp.GetVariant {
     String materialization();
+
     String unit();
 
     // Query: does the materialization include the key?
@@ -27,15 +28,17 @@ public interface MaterializationReader {
 
   sealed interface ReadResult permits ReadResult.InclusionResult, ReadResult.VariantResult {
     String materialization();
+
     String unit();
 
     // Result for Inclusion
-    record InclusionResult(String materialization, String unit, boolean included) implements ReadResult {}
+    record InclusionResult(String materialization, String unit, boolean included)
+        implements ReadResult {}
 
     // Result for GetRules
-    record VariantResult(String materialization, String unit, String rule, Optional<String> variant) implements ReadResult {}
+    record VariantResult(String materialization, String unit, String rule, Optional<String> variant)
+        implements ReadResult {}
   }
 
   CompletionStage<List<ReadResult>> read(List<ReadOp> ops);
-
 }
