@@ -126,11 +126,30 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
       AccountStateProvider accountStateProvider,
       String clientSecret,
       StickyResolveStrategy stickyResolveStrategy) {
+    this(accountStateProvider, clientSecret, stickyResolveStrategy, new NoOpWasmFlagLogger());
+  }
+
+  /**
+   * Creates a new OpenFeature provider for testing with a custom WasmFlagLogger.
+   *
+   * <p>This constructor allows injecting a custom WasmFlagLogger for testing purposes, enabling
+   * verification of flag log data without making network calls.
+   *
+   * @param accountStateProvider the state provider for resolver state
+   * @param clientSecret the client secret for authentication
+   * @param stickyResolveStrategy the strategy for sticky flag resolution
+   * @param wasmFlagLogger the flag logger to use (e.g., CapturingWasmFlagLogger for testing)
+   */
+  @VisibleForTesting
+  public OpenFeatureLocalResolveProvider(
+      AccountStateProvider accountStateProvider,
+      String clientSecret,
+      StickyResolveStrategy stickyResolveStrategy,
+      WasmFlagLogger wasmFlagLogger) {
     this.stickyResolveStrategy = stickyResolveStrategy;
     this.clientSecret = clientSecret;
     this.stateProvider = accountStateProvider;
-    this.wasmResolveApi =
-        new ThreadLocalSwapWasmResolverApi(new NoOpWasmFlagLogger(), stickyResolveStrategy);
+    this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, stickyResolveStrategy);
   }
 
   @Override
