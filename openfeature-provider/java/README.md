@@ -28,15 +28,13 @@ Add this dependency to your `pom.xml`:
 ## Quick Start
 
 ```java
-import com.spotify.confidence.LocalProviderConfig;
 import com.spotify.confidence.OpenFeatureLocalResolveProvider;
 import dev.openfeature.sdk.OpenFeatureAPI;
 import dev.openfeature.sdk.Client;
 
 // Create and register the provider
-String clientSecret = "your-client-secret";
 OpenFeatureLocalResolveProvider provider = 
-    new OpenFeatureLocalResolveProvider(new LocalProviderConfig(), clientSecret);
+    new OpenFeatureLocalResolveProvider("your-client-secret");
 OpenFeatureAPI.getInstance().setProviderAndWait(provider); // important to use setProviderAndWait()
 
 // Use OpenFeature client
