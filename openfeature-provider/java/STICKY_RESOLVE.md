@@ -62,7 +62,7 @@ record MaterializationInfo(
 MaterializationRepository repository = new InMemoryMaterializationRepoExample();
 
 OpenFeatureLocalResolveProvider provider = new OpenFeatureLocalResolveProvider(
-    apiSecret,
+    new LocalProviderConfig(),
     clientSecret,
     repository
 );

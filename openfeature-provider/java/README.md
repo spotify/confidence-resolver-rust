@@ -28,18 +28,15 @@ Add this dependency to your `pom.xml`:
 ## Quick Start
 
 ```java
-import com.spotify.confidence.ApiSecret;
+import com.spotify.confidence.LocalProviderConfig;
 import com.spotify.confidence.OpenFeatureLocalResolveProvider;
 import dev.openfeature.sdk.OpenFeatureAPI;
 import dev.openfeature.sdk.Client;
 
-// Create API credentials
-ApiSecret apiSecret = new ApiSecret("your-client-id", "your-client-secret");
-String clientSecret = "your-application-client-secret";
-
 // Create and register the provider
+String clientSecret = "your-client-secret";
 OpenFeatureLocalResolveProvider provider = 
-    new OpenFeatureLocalResolveProvider(apiSecret, clientSecret);
+    new OpenFeatureLocalResolveProvider(new LocalProviderConfig(), clientSecret);
 OpenFeatureAPI.getInstance().setProviderAndWait(provider); // important to use setProviderAndWait()
 
 // Use OpenFeature client
@@ -74,8 +71,7 @@ ChannelFactory mockFactory = (target, interceptors) ->
         .intercept(interceptors.toArray(new ClientInterceptor[0]))
         .build();
 
-ApiSecret apiSecret = new ApiSecret("client-id", "client-secret");
-LocalProviderConfig config = new LocalProviderConfig(apiSecret, mockFactory);
+LocalProviderConfig config = new LocalProviderConfig(mockFactory);
 OpenFeatureLocalResolveProvider provider =
     new OpenFeatureLocalResolveProvider(config, "client-secret");
 ```
@@ -88,15 +84,7 @@ This is particularly useful for:
 
 ## Credentials
 
-You need two types of credentials:
-
-1. **API Secret** (`ApiSecret`): For authenticating with the Confidence API
-   - Contains `clientId` and `clientSecret` for your Confidence application
-   
-2. **Client Secret** (`String`): For flag resolution authentication
-   - Application-specific secret for flag evaluation
-
-Both can be obtained from your Confidence dashboard.
+You need a **Client Secret** for flag resolution and authentication with Confidence. This can be obtained from your Confidence dashboard.
 
 ## Sticky Resolve
 
