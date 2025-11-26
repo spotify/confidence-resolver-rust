@@ -2,29 +2,15 @@ package com.spotify.confidence;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
-import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannelBuilder;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /** Tests to verify that the ChannelFactory pattern works correctly. */
 public class ChannelFactoryTest {
-
-  private final ResolverFallback noOpResolverFallback =
-      new ResolverFallback() {
-        @Override
-        public CompletableFuture<ResolveFlagsResponse> resolve(ResolveFlagsRequest request) {
-          return CompletableFuture.completedFuture(null);
-        }
-
-        @Override
-        public void close() {}
-      };
 
   @Test
   public void verifyCustomChannelFactoryIsCalledByProvider() {
@@ -47,13 +33,12 @@ public class ChannelFactoryTest {
           return builder.build();
         };
 
-    new OpenFeatureLocalResolveProvider(
-        new LocalProviderConfig(customFactory), "clientsecret", noOpResolverFallback);
+    new OpenFeatureLocalResolveProvider(new LocalProviderConfig(customFactory), "clientsecret");
 
     assertEquals(
-        1,
+        2,
         factoryCallCount.get(),
-        "ChannelFactory should have been called once for flag logger, but was called "
+        "ChannelFactory should have been called once for flag logger and once for remote resolver, but was called "
             + factoryCallCount.get()
             + " times");
 
@@ -62,7 +47,7 @@ public class ChannelFactoryTest {
     assertTrue(
         targetsReceived.get(0).contains("grpc") || targetsReceived.get(0).contains("edge"),
         "Target should be a gRPC endpoint, got: " + targetsReceived.get(0));
-    assertEquals(1, interceptorCounts.size(), "Interceptors should have been called");
+    assertEquals(2, interceptorCounts.size(), "Interceptors should have been called");
   }
 
   @Test

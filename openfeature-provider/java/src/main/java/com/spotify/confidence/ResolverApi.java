@@ -1,9 +1,8 @@
 package com.spotify.confidence;
 
-import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /** Common interface for WASM-based flag resolver implementations. */
 interface ResolverApi {
@@ -14,15 +13,7 @@ interface ResolverApi {
    * @param request The resolve request with sticky context
    * @return A future containing the resolve response
    */
-  CompletableFuture<ResolveFlagsResponse> resolveWithSticky(ResolveWithStickyRequest request);
-
-  /**
-   * Resolves flags without sticky assignment support.
-   *
-   * @param request The resolve request
-   * @return The resolve response
-   */
-  ResolveFlagsResponse resolve(ResolveFlagsRequest request);
+  CompletionStage<ResolveFlagsResponse> resolveWithSticky(ResolveWithStickyRequest request);
 
   void init(byte[] state, String accountId);
 
