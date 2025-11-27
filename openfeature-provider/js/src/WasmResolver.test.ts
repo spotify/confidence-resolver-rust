@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnsafeWasmResolver, WasmResolver } from './WasmResolver';
 import { readFileSync } from 'node:fs';
-import { ResolveWithStickyRequest, ResolveReason } from './proto/api';
+import { ResolveWithStickyRequest } from './proto/resolver/api';
+import { ResolveReason } from './proto/types';
 import { WriteFlagLogsRequest } from './proto/test-only';
 
 const moduleBytes = readFileSync(__dirname + '/../../../wasm/confidence_resolver.wasm');

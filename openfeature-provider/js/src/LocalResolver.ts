@@ -1,4 +1,5 @@
-import type { ResolveWithStickyRequest, ResolveWithStickyResponse, SetResolverStateRequest } from './proto/api';
+import type { ResolveWithStickyRequest, ResolveWithStickyResponse } from './proto/resolver/api';
+import type { SetResolverStateRequest } from './proto/messages';
 
 export interface LocalResolver {
   resolveWithSticky(request: ResolveWithStickyRequest): ResolveWithStickyResponse;

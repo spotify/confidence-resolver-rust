@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from google.protobuf.struct_pb2 import Struct
 import proto.resolver.api_pb2 as api_pb2
+import proto.types_pb2 as types_pb2
 from resolver_api import ResolverApi
 
  
@@ -49,7 +50,7 @@ def main():
         print("No flags resolved for tutorial-feature")
         sys.exit(1)
     rf = verify_resp.resolved_flags[0]
-    if rf.reason != api_pb2.RESOLVE_REASON_MATCH:
+    if rf.reason != types_pb2.RESOLVE_REASON_MATCH:
         print(f"Expected reason RESOLVE_REASON_MATCH, got {rf.reason}")
         sys.exit(1)
     if not rf.variant:

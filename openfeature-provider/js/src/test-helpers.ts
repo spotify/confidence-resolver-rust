@@ -2,7 +2,8 @@ import { vi } from 'vitest';
 import { AccessToken } from './LocalResolver';
 import { abortableSleep, isObject, TimeUnit } from './util';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
-import { ResolveFlagsResponse, SetResolverStateRequest } from './proto/api';
+import { ResolveFlagsResponse } from './proto/resolver/api';
+import { SetResolverStateRequest } from './proto/messages';
 import { HashProvider } from './HashProvider';
 import { LoggerBackend } from './logger';
 
