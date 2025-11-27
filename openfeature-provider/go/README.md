@@ -71,6 +71,12 @@ func main() {
 
 ## Configuration
 
+### Environment Variables
+
+Configure the provider behavior using environment variables:
+
+- `CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS`: How often to poll Confidence to get updates (default: `30` seconds)
+
 ### ProviderConfig
 
 The `ProviderConfig` struct contains all configuration options for the provider:
