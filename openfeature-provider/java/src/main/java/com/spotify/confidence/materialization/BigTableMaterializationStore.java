@@ -28,16 +28,18 @@ public class BigTableMaterializationStore implements MaterializationReader, Mate
   }
 
   @Override
-  public CompletionStage<Void> setVariants(Map<MaterializationKey, String> variants) {
+  public CompletionStage<Void> setVariants(Map<VariantKey, String> variants) {
     final Map<String, RowMutationEntry> rowMutations = new HashMap<>();
     for (var entry : variants.entrySet()) {
-      MaterializationKey key = entry.getKey();
+      VariantKey key = entry.getKey();
       String variant = entry.getValue();
       rowMutations
           .computeIfAbsent(
               key.unit(),
-              unit -> RowMutationEntry.create(unit).setCell(COLUMN_FAMILY_NAME, key.materialization(), ""))
-          .setCell(COLUMN_FAMILY_NAME, key.materialization() + "_" + key.rule(), variant);
+              unit ->
+                  RowMutationEntry.create(unit)
+                      .setCell(COLUMN_FAMILY_NAME, key.materialization(), ""))
+          .setCell(COLUMN_FAMILY_NAME, toQualifier(key), variant);
     }
     final BulkMutation bulkMutation = BulkMutation.create(TABLE_ID);
     for (RowMutationEntry mutation : rowMutations.values()) {
@@ -47,32 +49,30 @@ public class BigTableMaterializationStore implements MaterializationReader, Mate
   }
 
   @Override
-  public CompletionStage<Map<MaterializationKey, Optional<String>>> getVariants(
-      Set<MaterializationKey> keys) {
+  public CompletionStage<Map<VariantKey, Optional<String>>> getVariants(Set<VariantKey> keys) {
     // Group keys by unit (row key)
-    Map<String, Set<MaterializationKey>> keysByUnit = new HashMap<>();
-    for (MaterializationKey key : keys) {
+    Map<String, Set<VariantKey>> keysByUnit = new HashMap<>();
+    for (VariantKey key : keys) {
       keysByUnit.computeIfAbsent(key.unit(), u -> new HashSet<>()).add(key);
     }
 
     // Execute one read per unit row
-    Map<MaterializationKey, CompletableFuture<Optional<String>>> futures = new HashMap<>();
+    Map<VariantKey, CompletableFuture<Optional<String>>> futures = new HashMap<>();
     for (var entry : keysByUnit.entrySet()) {
       String unit = entry.getKey();
-      Set<MaterializationKey> unitKeys = entry.getValue();
+      Set<VariantKey> unitKeys = entry.getValue();
 
       // Build cell qualifiers to read
       Set<String> qualifiers = new HashSet<>();
-      for (MaterializationKey key : unitKeys) {
-        qualifiers.add(key.materialization() + "_" + key.rule());
+      for (VariantKey key : unitKeys) {
+        qualifiers.add(toQualifier(key));
       }
 
       CompletableFuture<Optional<Row>> rowFuture = readRow(unit, qualifiers);
 
       // Map each key to its result
-      for (MaterializationKey key : unitKeys) {
-        String qualifier = key.materialization() + "_" + key.rule();
-        futures.put(key, rowFuture.thenApply(maybeRow -> extractCell(maybeRow, qualifier)));
+      for (VariantKey key : unitKeys) {
+        futures.put(key, rowFuture.thenApply(maybeRow -> extractCell(maybeRow, toQualifier(key))));
       }
     }
 
@@ -80,44 +80,51 @@ public class BigTableMaterializationStore implements MaterializationReader, Mate
   }
 
   @Override
-  public CompletionStage<Set<MaterializationKey>> checkInclusions(Set<MaterializationKey> keys) {
+  public CompletionStage<Set<InclusionKey>> checkInclusions(Set<InclusionKey> keys) {
     // Group keys by unit (row key)
-    Map<String, Set<MaterializationKey>> keysByUnit = new HashMap<>();
-    for (MaterializationKey key : keys) {
+    Map<String, Set<InclusionKey>> keysByUnit = new HashMap<>();
+    for (InclusionKey key : keys) {
       keysByUnit.computeIfAbsent(key.unit(), u -> new HashSet<>()).add(key);
     }
 
     // Execute one read per unit row
-    Map<MaterializationKey, CompletableFuture<Boolean>> futures = new HashMap<>();
+    Map<InclusionKey, CompletableFuture<Boolean>> futures = new HashMap<>();
     for (var entry : keysByUnit.entrySet()) {
       String unit = entry.getKey();
-      Set<MaterializationKey> unitKeys = entry.getValue();
+      Set<InclusionKey> unitKeys = entry.getValue();
 
       // Build cell qualifiers to read (just the materialization name for inclusion check)
       Set<String> qualifiers = new HashSet<>();
-      for (MaterializationKey key : unitKeys) {
+      for (InclusionKey key : unitKeys) {
         qualifiers.add(key.materialization());
       }
 
       CompletableFuture<Optional<Row>> rowFuture = readRow(unit, qualifiers);
 
       // Map each key to its result
-      for (MaterializationKey key : unitKeys) {
+      for (InclusionKey key : unitKeys) {
         futures.put(
-            key, rowFuture.thenApply(maybeRow -> extractCell(maybeRow, key.materialization()).isPresent()));
+            key,
+            rowFuture.thenApply(maybeRow -> extractCell(maybeRow, key.materialization()).isPresent()));
       }
     }
 
     // Collect keys where inclusion is true
-    return allCompleted(futures).thenApply(results -> {
-      Set<MaterializationKey> included = new HashSet<>();
-      for (var entry : results.entrySet()) {
-        if (entry.getValue()) {
-          included.add(entry.getKey());
-        }
-      }
-      return included;
-    });
+    return allCompleted(futures)
+        .thenApply(
+            results -> {
+              Set<InclusionKey> included = new HashSet<>();
+              for (var entry : results.entrySet()) {
+                if (entry.getValue()) {
+                  included.add(entry.getKey());
+                }
+              }
+              return included;
+            });
+  }
+
+  private static String toQualifier(VariantKey key) {
+    return key.materialization() + "_" + key.rule();
   }
 
   private CompletableFuture<Optional<Row>> readRow(String rowKey, Set<String> qualifiers) {
