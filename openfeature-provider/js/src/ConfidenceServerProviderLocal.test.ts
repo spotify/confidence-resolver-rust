@@ -75,19 +75,15 @@ describe('state update scheduling', () => {
   it('fetches resolverStateUri on initialize', async () => {
     await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
     expect(net.cdn.state.calls).toBe(1);
-    expect(net.cdn.state.calls).toBe(1);
   });
   it('polls state at fixed interval', async () => {
     await advanceTimersUntil(expect(provider.initialize()).resolves.toBeUndefined());
     expect(net.cdn.state.calls).toBe(1);
-    expect(net.cdn.state.calls).toBe(1);
 
     await vi.advanceTimersByTimeAsync(DEFAULT_STATE_INTERVAL);
     expect(net.cdn.state.calls).toBe(2);
-    expect(net.cdn.state.calls).toBe(2);
 
     await vi.advanceTimersByTimeAsync(DEFAULT_STATE_INTERVAL);
-    expect(net.cdn.state.calls).toBe(3);
     expect(net.cdn.state.calls).toBe(3);
   });
   it('honors If-None-Match and handles 304 Not Modified', async () => {
@@ -122,7 +118,7 @@ describe('state update scheduling', () => {
     expect(net.cdn.state.calls).toBeGreaterThan(1);
     expect(mockedWasmResolver.setResolverState).toHaveBeenCalledTimes(1);
   });
-  it('retries GCS state download with backoff and stall-timeout', async () => {
+  it('retries state download with backoff and stall-timeout', async () => {
     let chunkDelay = 600;
     net.cdn.state.handler = req => {
       const body = new ReadableStream<Uint8Array>({
@@ -194,13 +190,6 @@ describe('flush behavior', () => {
   });
 });
 
-describe('router and middleware composition', () => {
-  it('throws for unknown routes', async () => {
-    // Simulate unknown host via NetworkMock
-    await expect(net.fetch('https://unknown.confidence.dev/foo')).resolves.toHaveProperty('status', 404);
-  });
-});
-
 describe('timeouts and aborts', () => {
   it('initialize times out if state not fetched before initializeTimeout', async () => {
     // Make resolverStateUri unreachable so initialize must rely on initializeTimeout
@@ -233,7 +222,6 @@ describe('timeouts and aborts', () => {
 
   it('handles post-dispatch latency aborts (endpoint invoked)', async () => {
     // Ensure no server latency; abort during endpoint processing
-    net.cdn.state.latency = 0;
     net.cdn.state.latency = 200;
     const signal = timeoutSignal(100);
     await advanceTimersUntil(expect(provider.updateState(signal)).rejects.toThrow());

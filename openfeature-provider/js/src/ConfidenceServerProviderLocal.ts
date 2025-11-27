@@ -8,13 +8,13 @@ import type {
   ResolutionDetails,
   ResolutionReason,
 } from '@openfeature/server-sdk';
-import { ResolveReason, SdkId } from './proto/api';
+import { ResolveReason, SdkId, SetResolverStateRequest } from './proto/api';
 import { ResolveFlagsRequest, ResolveFlagsResponse, ResolveWithStickyRequest } from './proto/api';
 import { VERSION } from './version';
 import { Fetch, withLogging, withResponse, withRetry, withRouter, withStallTimeout, withTimeout } from './fetch';
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
-import { AccessToken, LocalResolver } from './LocalResolver';
 import { logger } from './logger';
+import { LocalResolver } from './LocalResolver';
 import { sha256Hex } from './hash';
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
@@ -246,7 +246,6 @@ export class ConfidenceServerProviderLocal implements Provider {
 
     // Parse SetResolverStateRequest from response
     const bytes = new Uint8Array(await resp.arrayBuffer());
-    const { SetResolverStateRequest } = await import('./proto/api');
 
     this.resolver.setResolverState(SetResolverStateRequest.decode(bytes));
   }
