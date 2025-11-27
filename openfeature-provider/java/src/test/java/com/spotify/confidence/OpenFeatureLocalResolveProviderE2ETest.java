@@ -39,7 +39,7 @@ class OpenFeatureLocalResolveProviderE2ETest {
 
   @AfterAll
   static void teardown() {
-    OpenFeatureAPI.getInstance().shutdown();
+    OpenFeatureAPI.getInstance().getProvider().shutdown();
   }
 
   @Test
@@ -110,14 +110,5 @@ class OpenFeatureLocalResolveProviderE2ETest {
     assertEquals(99.99, details.getValue(), 0.001);
     assertEquals("flags/web-sdk-e2e-flag/variants/sticky", details.getVariant());
     assertEquals("RESOLVE_REASON_MATCH", details.getReason());
-  }
-
-  private static String requireEnv(String name) {
-    final String value = System.getenv(name);
-    if (value == null || value.isEmpty()) {
-      throw new IllegalStateException(
-          String.format("Missing required environment variable: %s", name));
-    }
-    return value;
   }
 }

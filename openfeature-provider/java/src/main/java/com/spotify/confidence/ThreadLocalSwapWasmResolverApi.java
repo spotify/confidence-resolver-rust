@@ -50,8 +50,8 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
     final var defaultNumberOfInstances = Runtime.getRuntime().availableProcessors();
 
     return Optional.ofNullable(System.getenv("CONFIDENCE_NUMBER_OF_WASM_INSTANCES"))
-                    .map(Integer::parseInt)
-                    .orElse(defaultNumberOfInstances);
+        .map(Integer::parseInt)
+        .orElse(defaultNumberOfInstances);
   }
 
   @Override

@@ -1,5 +1,10 @@
-const NOOP_LOG_FN = () => {};
-export type LogFn = (msg: string, ...rest: any[]) => void;
+const NOOP_LOG_FN: LogFn = Object.assign(() => {}, { enabled: false });
+export interface LogFn {
+  (msg: string, ...rest: any[]): void;
+  enabled: boolean;
+}
+
+export type LoggerBackend = (namespace: string) => LogFn;
 
 type Debug = typeof import('debug')['default'];
 
@@ -28,9 +33,9 @@ class LoggerImpl implements Logger {
     this.configure();
   }
 
-  async configure() {
+  async configure(backend: Promise<LoggerBackend | null> | LoggerBackend = debugBackend) {
     // TODO we should queue messages logged before configure is done
-    const debug = await debugBackend;
+    const debug = await backend;
     if (!debug) return;
     const debugFn = (this.debug = debug(this.name + ':debug'));
     const infoFn = (this.info = debug(this.name + ':info'));

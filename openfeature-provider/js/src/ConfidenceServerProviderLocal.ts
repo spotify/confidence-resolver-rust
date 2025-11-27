@@ -15,6 +15,7 @@ import { Fetch, withLogging, withResponse, withRetry, withRouter, withStallTimeo
 import { scheduleWithFixedInterval, timeoutSignal, TimeUnit } from './util';
 import { AccessToken, LocalResolver } from './LocalResolver';
 import { HashProvider, WebCryptoHashProvider } from './HashProvider';
+import { logger } from './logger';
 
 export const DEFAULT_STATE_INTERVAL = 30_000;
 export const DEFAULT_FLUSH_INTERVAL = 10_000;
@@ -269,7 +270,7 @@ export class ConfidenceServerProviderLocal implements Provider {
       // nothing to send
       return;
     }
-    await this.fetch('https://resolver.confidence.dev/v1/clientFlagLogs:write', {
+    const response = await this.fetch('https://resolver.confidence.dev/v1/clientFlagLogs:write', {
       method: 'post',
       signal,
       headers: {
@@ -278,6 +279,9 @@ export class ConfidenceServerProviderLocal implements Provider {
       },
       body: writeFlagLogRequest as Uint8Array<ArrayBuffer>,
     });
+    if (!response.ok) {
+      logger.error(`Failed to write flag logs: ${response.status} ${response.statusText} - ${await response.text()}`);
+    }
   }
 
   private static convertReason(reason: ResolveReason): ResolutionReason {
