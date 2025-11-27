@@ -54,7 +54,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   private final StickyResolveStrategy stickyResolveStrategy;
   private final ResolverApi wasmResolveApi;
   private static final Duration POLL_LOG_INTERVAL = Duration.ofSeconds(10);
-  private static final Duration DEFAULT_POLL_INTERVAL = Duration.ofMinutes(5);
+  private static final Duration DEFAULT_POLL_INTERVAL = Duration.ofSeconds(30);
   private static final ScheduledExecutorService flagsFetcherExecutor =
       Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder().setDaemon(true).build());
   private static final ScheduledExecutorService logPollExecutor =
@@ -72,8 +72,8 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   /**
    * Creates a new OpenFeature provider for local flag resolution with default configuration.
    *
-   * <p>This is the simplest way to create a provider. It uses the default gRPC channel factory
-   * and remote resolver fallback for sticky assignments.
+   * <p>This is the simplest way to create a provider. It uses the default gRPC channel factory and
+   * remote resolver fallback for sticky assignments.
    *
    * <p><strong>Example usage:</strong>
    *
@@ -328,11 +328,6 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
       final ResolvedFlag resolvedFlag = resolveFlagResponse.getResolvedFlags(0);
 
       if (resolvedFlag.getVariant().isEmpty()) {
-        log.debug(
-            String.format(
-                "The server returned no assignment for the flag '%s'. Typically, this happens "
-                    + "if no configured rules matches the given evaluation context.",
-                flagPath.getFlag()));
         return ProviderEvaluation.<Value>builder()
             .value(defaultValue)
             .reason(
