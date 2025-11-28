@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"log"
@@ -12,22 +14,23 @@ import (
 	"sync/atomic"
 	"time"
 
-	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spotify/confidence-resolver-rust/mock-support-server/genproto/mock"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type config struct {
 	Port              int
 	AccountID         string
 	ResolverStatePath string
-	SignedStateUri    string
+	// used to mock the correct state url
+	ClientSecret    string
 	RequestLogging    bool
 	// Artificial per-request latency in milliseconds for both HTTP and gRPC
 	LatencyMs int
@@ -40,7 +43,7 @@ func readEnv() config {
 		Port:              getenvInt("PORT", 8081),
 		AccountID:         getenv("ACCOUNT_ID", "confidence-test"),
 		ResolverStatePath: getenv("RESOLVER_STATE_PB", ""),
-		SignedStateUri:    getenv("SIGNED_STATE_URI", fmt.Sprintf("http://localhost:%d/state", getenvInt("PORT_HTTP", 8081))),
+		ClientSecret:    	 getenv("CLIENT_SECRET", "secret"),
 		RequestLogging:    getenvBool("REQUEST_LOGGING", false),
 		LatencyMs:         getenvInt("LATENCY_MS", 0),
 		BandwidthKbps:     getenvInt("BANDWIDTH_KBPS", 0),
@@ -48,56 +51,24 @@ func readEnv() config {
 	return cfg
 }
 
-type authService struct {
-	pb.UnimplementedAuthServiceServer
-	accountID string
-}
-
-func (s *authService) RequestAccessToken(ctx context.Context, req *pb.RequestAccessTokenRequest) (*pb.AccessToken, error) {
-	type tokenClaims struct {
-		jwt.RegisteredClaims
-		AccountName string `json:"https://confidence.dev/account_name"`
-	}
-
-	expiresIn := time.Hour
-
-	claims := tokenClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "mock-support-server",
-			Subject:   "mock-client",
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiresIn)),
-		},
-		AccountName: s.accountID,
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte("jwt-secret"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign jwt: %w", err)
-	}
-	return &pb.AccessToken{AccessToken: signed, ExpiresIn: int64(expiresIn.Seconds())}, nil
-}
-
-type resolverStateService struct {
-	pb.UnimplementedResolverStateServiceServer
-	signedUri string
-	accountId string
-}
-
-func (s *resolverStateService) ResolverStateUri(ctx context.Context, req *pb.ResolverStateUriRequest) (*pb.ResolverStateUriResponse, error) {
-	expireTime := timestamppb.New(time.Now().Add(24 * time.Hour))
-	return &pb.ResolverStateUriResponse{SignedUri: s.signedUri, ExpireTime: expireTime, Account: s.accountId}, nil
-}
-
 type internalFlagLoggerService struct {
 	pb.UnimplementedInternalFlagLoggerServiceServer
+	clientSecret string
 	bytesIn      atomic.Int64
 	appliedCount atomic.Int64
 	requestCount atomic.Int64
 }
 
-func (s *internalFlagLoggerService) WriteFlagLogs(ctx context.Context, req *pb.WriteFlagLogsRequest) (*pb.WriteFlagLogsResponse, error) {
+func (s *internalFlagLoggerService) ClientWriteFlagLogs(ctx context.Context, req *pb.WriteFlagLogsRequest) (*pb.WriteFlagLogsResponse, error) {
+	// Require Authorization: "ClientSecret <secret>"
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		authVals := md.Get("authorization")
+		if len(authVals) == 0 || authVals[0] != "ClientSecret "+s.clientSecret {
+			return nil, status.Error(codes.Unauthenticated, "missing or invalid authorization")
+		}
+	} else {
+		return nil, status.Error(codes.Unauthenticated, "missing authorization")
+	}
 	s.bytesIn.Add(int64(proto.Size(req)))
 	s.appliedCount.Add(int64(len(req.FlagAssigned)))
 	s.requestCount.Add(1)
@@ -122,13 +93,10 @@ func main() {
 	}
 
 	// Shared implementation for both gRPC and HTTP (grpc-gateway)
-	iamImpl := &authService{accountID: cfg.AccountID}
-	pb.RegisterAuthServiceServer(grpcServer, iamImpl)
 
-	resolverStateImpl := &resolverStateService{signedUri: cfg.SignedStateUri, accountId: cfg.AccountID}
-	pb.RegisterResolverStateServiceServer(grpcServer, resolverStateImpl)
-
-	internalFlagLoggerServiceImpl := &internalFlagLoggerService{}
+	internalFlagLoggerServiceImpl := &internalFlagLoggerService{
+		clientSecret: cfg.ClientSecret,
+	}
 	pb.RegisterInternalFlagLoggerServiceServer(grpcServer, internalFlagLoggerServiceImpl)
 
 	// Periodic metrics log (once per second) for the lifetime of the server
@@ -148,62 +116,79 @@ func main() {
 		// Accept protobuf payloads for endpoints like /v1/flagLogs:write
 		runtime.WithMarshalerOption("application/x-protobuf", &runtime.ProtoMarshaller{}),
 	)
-	if err := pb.RegisterAuthServiceHandlerServer(ctx, gw, iamImpl); err != nil {
-		log.Fatalf("failed to register grpc-gateway handlers: %v", err)
-	}
-	if err := pb.RegisterResolverStateServiceHandlerServer(ctx, gw, resolverStateImpl); err != nil {
-		log.Fatalf("failed to register grpc-gateway handlers: %v", err)
-	}
 	if err := pb.RegisterInternalFlagLoggerServiceHandlerServer(ctx, gw, internalFlagLoggerServiceImpl); err != nil {
 		log.Fatalf("failed to register grpc-gateway handlers: %v", err)
 	}
 
-	// REST-only mux
-	rest := http.NewServeMux()
-	rest.HandleFunc("/state", func(w http.ResponseWriter, r *http.Request) {
-		if cfg.ResolverStatePath == "" {
+	// Cdn server mock
+	cdn := http.NewServeMux()
+	// Serve state at path /<sha256hex of cfg.ClientSecret>
+	stateHash := fmt.Sprintf("%x", sha256.Sum256([]byte(cfg.ClientSecret)))
+
+	var stateBytes []byte
+	if cfg.ResolverStatePath == "" {
+		stateBytes = readStateFromUrl(stateHash)
+	} else {
+		stateBytes = readStateFromDisk(cfg.ResolverStatePath, cfg.AccountID)
+	}
+	var stateETag string // random ETag set on first successful response
+	cdn.HandleFunc("/"+stateHash, func(w http.ResponseWriter, r *http.Request) {
+		if len(stateBytes) == 0 {
 			http.Error(w, "resolver state not configured", http.StatusNotFound)
 			return
 		}
-		f, err := os.Open(cfg.ResolverStatePath)
-		if err != nil {
-			log.Printf("/state open error: %v", err)
-			http.Error(w, "failed to read state", http.StatusInternalServerError)
-			return
-		}
-		defer f.Close()
-		info, err := f.Stat()
-		if err != nil {
-			log.Printf("/state stat error: %v", err)
-			http.Error(w, "failed to read state", http.StatusInternalServerError)
-			return
-		}
-		etag := fmt.Sprintf("\"%x-%x\"", info.ModTime().Unix(), info.Size())
-		if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
+		// Return 304 if client's ETag matches our current one
+		if stateETag != "" && r.Header.Get("If-None-Match") == stateETag {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		w.Header().Set("ETag", etag)
+		// Initialize random ETag on first response
+		if stateETag == "" {
+			buf := make([]byte, 16)
+			if _, err := rand.Read(buf); err == nil {
+				stateETag = fmt.Sprintf("\"%x\"", buf)
+			} else {
+				stateETag = fmt.Sprintf("\"%x-%x\"", time.Now().UnixNano(), len(stateBytes))
+			}
+		}
+		w.Header().Set("ETag", stateETag)
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
-		if _, err := io.Copy(w, f); err != nil {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(stateBytes)))
+		if _, err := w.Write(stateBytes); err != nil {
 			log.Printf("/state write error: %v", err)
 		}
 	})
 
-	// Root mux: gateway at /, REST endpoints mounted explicitly
-	root := http.NewServeMux()
-	root.Handle("/", gw)
-	root.Handle("/state", rest)
+	// Gateway mux serves resolver HTTP JSON/gRPC-gateway endpoints (mounted directly)
 
 	// Unified handler that routes gRPC (h2c) vs REST
 	base := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded := r.Header.Get("x-forwarded-host")
+		if forwarded == "" {
+			// using authority which is the common way to set forwarding for gRPC
+			forwarded = r.Host
+		}
 		isGRPC := r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc")
 		if isGRPC {
-			grpcServer.ServeHTTP(w, r)
+			if strings.EqualFold(forwarded, "edge-grpc.spotify.com") {
+				grpcServer.ServeHTTP(w, r)
+				return
+			}
+			http.NotFound(w, r)
 			return
 		}
-		root.ServeHTTP(w, r)
+
+		switch {
+		case strings.EqualFold(forwarded, "confidence-resolver-state-cdn.spotifycdn.com"):
+			// Route CDN traffic to REST mux (e.g., /state)
+			cdn.ServeHTTP(w, r)
+			return
+		case strings.EqualFold(forwarded, "resolver.confidence.dev"):
+			// Route resolver host(s) to gRPC or grpc-gateway
+			gw.ServeHTTP(w, r)
+			return
+		}
+		http.NotFound(w, r)
 	})
 
 	// Apply global HTTP middleware (bandwidth, latency, logging) to all traffic
@@ -370,4 +355,38 @@ func getenvBool(key string, def bool) bool {
 		}
 	}
 	return def
+}
+
+func readStateFromUrl(path string) []byte {
+	// Blocking HTTP GET read of the provided URL path.
+	resp, err := http.Get("https://confidence-resolver-state-cdn.spotifycdn.com/" + path)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		panic(fmt.Errorf("unexpected status code: %d", resp.StatusCode))
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func readStateFromDisk(path string, accountId string) []byte {
+	// Blocking read from local filesystem.
+	b, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	msg := &pb.ClientResolverState{
+		State:   b,
+		Account: accountId,
+	}
+	out, err := proto.Marshal(msg)
+	if err != nil {
+		panic(err)
+	}
+	return out
 }

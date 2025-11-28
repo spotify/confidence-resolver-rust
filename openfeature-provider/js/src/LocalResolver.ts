@@ -5,9 +5,3 @@ export interface LocalResolver {
   setResolverState(request: SetResolverStateRequest): void;
   flushLogs(): Uint8Array;
 }
-
-export interface AccessToken {
-  accessToken: string;
-  /// lifetime seconds
-  expiresIn: number;
-}
