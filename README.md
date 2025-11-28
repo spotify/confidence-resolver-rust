@@ -85,7 +85,7 @@ Notes:
 This repository implements **binary provenance** for the WASM binary embedded in provider packages. All releases include:
 - Cryptographically attested WASM binaries (via GitHub attestations)
 - SHA-256 checksums published to GitHub releases
-- Reproducible builds using pinned toolchains and Docker
+- Deterministic builds using pinned toolchains and Docker
 
 See [SECURITY.md](SECURITY.md) for verification instructions and detailed security policies.
 

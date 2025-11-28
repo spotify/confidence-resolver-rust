@@ -63,8 +63,6 @@ jobs:
           target: wasm-rust-guest.artifact
           outputs: type=local,dest=./wasm-artifacts
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-        env:
-          SOURCE_DATE_EPOCH: ${{ github.event.repository.updated_at }}
 
       - name: Generate SHA-256 checksum
         run: |

@@ -127,14 +127,13 @@ JavaScript packages are published to npm with built-in provenance:
 npm view @spotify-confidence/openfeature-provider-local --json | jq .dist.attestations
 ```
 
-## Reproducible Builds
+## Deterministic Builds
 
 Our builds are designed to be deterministic in CI:
 
 1. **Pinned Rust toolchain**: `rust-toolchain.toml` locks Rust to version 1.90.0
 2. **Docker-based builds**: Isolated, consistent build environment
 3. **Deterministic compiler flags**: LTO, single codegen unit, stripped symbols
-4. **Normalized timestamps**: `SOURCE_DATE_EPOCH` set to repository update time
 
 ### Building Locally
 
@@ -149,7 +148,7 @@ cd wasm/rust-guest
 cargo build --target wasm32-unknown-unknown --profile wasm
 ```
 
-**Note**: Local builds may produce slightly different binaries due to timestamp variations. The CI builds with `SOURCE_DATE_EPOCH` are the canonical reproducible builds.
+**Note**: Local builds should produce identical binaries when using the same Rust toolchain version and Docker environment. The attestation provides cryptographic proof of the build's provenance.
 
 ## Supply Chain Security Features
 
