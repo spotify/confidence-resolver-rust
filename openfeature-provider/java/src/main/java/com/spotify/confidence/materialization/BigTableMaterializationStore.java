@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
 
-public class BigTableMaterializationStore implements MaterializationReader, MaterializationWriter {
+public class BigTableMaterializationStore implements MaterializationStore {
   public static final TableId TABLE_ID = TableId.of("materializations");
   public static final String COLUMN_FAMILY_NAME = "mats";
 
@@ -29,17 +29,17 @@ public class BigTableMaterializationStore implements MaterializationReader, Mate
   }
 
   @Override
-  public CompletionStage<Void> write(Set<WriteOp> ops) {
+  public CompletionStage<Void> write(Set<? extends WriteOp> ops) {
     final Map<String, RowMutationEntry> rowMutations = new HashMap<>();
     for (WriteOp op : ops) {
-      if (op instanceof WriteOp.SetVariant sv) {
+      if (op instanceof WriteOp.Variant sv) {
         rowMutations
             .computeIfAbsent(
                 sv.unit(),
                 key ->
-                      RowMutationEntry.create(key)
-                          .setCell(COLUMN_FAMILY_NAME, sv.materialization(), ""))
-              .setCell(COLUMN_FAMILY_NAME, sv.materialization() + "_" + sv.rule(), sv.variant());
+                    RowMutationEntry.create(key)
+                        .setCell(COLUMN_FAMILY_NAME, sv.materialization(), ""))
+            .setCell(COLUMN_FAMILY_NAME, sv.materialization() + "_" + sv.rule(), sv.variant());
       } else {
         throw new IllegalArgumentException("Unknown WriteOp: " + op);
       }
@@ -65,14 +65,14 @@ public class BigTableMaterializationStore implements MaterializationReader, Mate
     CompletableFuture<ReadResult> addOp(ReadOp op) {
       if (op instanceof ReadOp.Inclusion) {
         return addInclusionOp((ReadOp.Inclusion) op);
-      } else if (op instanceof ReadOp.GetVariant) {
-        return addVariantOp((ReadOp.GetVariant) op);
+      } else if (op instanceof ReadOp.Variant) {
+        return addVariantOp((ReadOp.Variant) op);
       } else {
         throw new IllegalArgumentException("Unknown ReadOp: " + op);
       }
     }
 
-    private CompletableFuture<ReadResult> addVariantOp(ReadOp.GetVariant op) {
+    private CompletableFuture<ReadResult> addVariantOp(ReadOp.Variant op) {
       return readCell(op.materialization() + "_" + op.rule())
           .thenApply(maybeValue -> op.toResult(maybeValue));
     }
@@ -117,7 +117,7 @@ public class BigTableMaterializationStore implements MaterializationReader, Mate
   }
 
   @Override
-  public CompletionStage<List<ReadResult>> read(List<ReadOp> ops) {
+  public CompletionStage<List<ReadResult>> read(List<? extends ReadOp> ops) {
     final Map<String, RowQueryBuilder> rowsToRead = new HashMap<>();
     List<CompletableFuture<ReadResult>> results =
         ops.stream()
