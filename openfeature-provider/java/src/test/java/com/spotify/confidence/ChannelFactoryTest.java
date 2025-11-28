@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import io.grpc.ClientInterceptor;
+import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,18 +34,25 @@ public class ChannelFactoryTest {
     final List<Integer> interceptorCounts = new ArrayList<>();
 
     final ChannelFactory customFactory =
-        (target, interceptors) -> {
-          factoryCallCount.incrementAndGet();
-          targetsReceived.add(target);
-          interceptorCounts.add(interceptors.size());
-          ManagedChannelBuilder<?> builder =
-              ManagedChannelBuilder.forTarget("localhost").usePlaintext();
+        new ChannelFactory() {
+          @Override
+          public ManagedChannel create(String target, List<ClientInterceptor> interceptors) {
+            factoryCallCount.incrementAndGet();
+            targetsReceived.add(target);
+            interceptorCounts.add(interceptors.size());
+            ManagedChannelBuilder<?> builder =
+                ManagedChannelBuilder.forTarget("localhost").usePlaintext();
 
-          if (!interceptors.isEmpty()) {
-            builder.intercept(interceptors.toArray(new ClientInterceptor[0]));
+            if (!interceptors.isEmpty()) {
+              builder.intercept(interceptors.toArray(new ClientInterceptor[0]));
+            }
+            return builder.build();
           }
 
-          return builder.build();
+          @Override
+          public void shutdown() {
+            // Test implementation - no-op
+          }
         };
 
     new OpenFeatureLocalResolveProvider(

@@ -3,7 +3,6 @@ package com.spotify.confidence;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -26,6 +25,7 @@ class FlagsAdminStateFetcher implements AccountStateProvider {
       "https://confidence-resolver-state-cdn.spotifycdn.com/";
 
   private final String clientSecret;
+  private final HttpClientFactory httpClientFactory;
   // ETag for conditional GETs of resolver state
   private final AtomicReference<String> etagHolder = new AtomicReference<>();
   private final AtomicReference<byte[]> rawResolverStateHolder =
@@ -33,8 +33,9 @@ class FlagsAdminStateFetcher implements AccountStateProvider {
           com.spotify.confidence.flags.admin.v1.ResolverState.newBuilder().build().toByteArray());
   private String accountId = "";
 
-  public FlagsAdminStateFetcher(String clientSecret) {
+  public FlagsAdminStateFetcher(String clientSecret, HttpClientFactory httpClientFactory) {
     this.clientSecret = clientSecret;
+    this.httpClientFactory = httpClientFactory;
   }
 
   public AtomicReference<byte[]> rawStateHolder() {
@@ -64,7 +65,7 @@ class FlagsAdminStateFetcher implements AccountStateProvider {
     // Build CDN URL using SHA256 hash of client secret
     final var cdnUrl = CDN_BASE_URL + sha256Hex(clientSecret);
     try {
-      final HttpURLConnection conn = (HttpURLConnection) new URL(cdnUrl).openConnection();
+      final HttpURLConnection conn = httpClientFactory.create(cdnUrl);
       final String previousEtag = etagHolder.get();
       if (previousEtag != null) {
         conn.setRequestProperty("if-none-match", previousEtag);

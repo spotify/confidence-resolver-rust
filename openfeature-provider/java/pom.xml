@@ -178,6 +178,12 @@
       <version>${grpc.version}</version>
     </dependency>
     <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-testing</artifactId>
+      <version>${grpc.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>net.bytebuddy</groupId>
       <artifactId>byte-buddy</artifactId>
       <version>1.17.6</version>
@@ -219,7 +225,7 @@
     <dependency>
       <groupId>dev.openfeature</groupId>
       <artifactId>sdk</artifactId>
-      <version>1.6.1</version>
+      <version>1.18.2</version>
     </dependency>
     <dependency>
       <groupId>com.spotify</groupId>

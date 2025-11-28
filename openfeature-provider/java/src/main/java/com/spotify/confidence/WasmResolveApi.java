@@ -120,7 +120,7 @@ class WasmResolveApi {
       final var reqPtr = transferRequest(voidRequest);
       final var respPtr = (int) wasmMsgFlushLogs.apply(reqPtr)[0];
       final var request = consumeResponse(respPtr, WriteFlagLogsRequest::parseFrom);
-      writeFlagLogs.write(request);
+      writeFlagLogs.writeSync(request);
       isConsumed = true;
     } finally {
       wasmLock.readLock().unlock();
