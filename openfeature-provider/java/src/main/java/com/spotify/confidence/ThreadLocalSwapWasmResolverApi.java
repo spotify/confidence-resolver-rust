@@ -22,8 +22,7 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
   private static final Logger logger =
       LoggerFactory.getLogger(ThreadLocalSwapWasmResolverApi.class);
   private final WasmFlagLogger flagLogger;
-  private final StickyResolveStrategy stickyResolveStrategy;
-  private volatile byte[] currentState;
+  private final MaterializationStore materializationStore;
 
   // Pre-initialized resolver instances mapped by core index
   private final Map<Integer, SwapWasmResolverApi> resolverInstances = new ConcurrentHashMap<>();
@@ -38,9 +37,9 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
       };
 
   public ThreadLocalSwapWasmResolverApi(
-      WasmFlagLogger flagLogger, StickyResolveStrategy stickyResolveStrategy) {
+      WasmFlagLogger flagLogger, MaterializationStore materializationStore) {
     this.flagLogger = flagLogger;
-    this.stickyResolveStrategy = stickyResolveStrategy;
+    this.materializationStore = materializationStore;
 
     this.numInstances = getNumInstances();
   }
@@ -68,7 +67,7 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
                         () -> {
                           final var instance =
                               new SwapWasmResolverApi(
-                                  this.flagLogger, state, accountId, this.stickyResolveStrategy);
+                                  this.flagLogger, state, accountId, this.materializationStore);
                           instance.init(state, accountId);
                           resolverInstances.put(i, instance);
                         })));
@@ -81,8 +80,6 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
    */
   @Override
   public void updateStateAndFlushLogs(byte[] state, String accountId) {
-    this.currentState = state;
-
     final var futures =
         resolverInstances.values().stream()
             .map(v -> CompletableFuture.runAsync(() -> v.updateStateAndFlushLogs(state, accountId)))
@@ -104,7 +101,7 @@ class ThreadLocalSwapWasmResolverApi implements ResolverApi {
   @Override
   public CompletableFuture<ResolveFlagsResponse> resolveWithSticky(
       ResolveWithStickyRequest request) {
-    return getResolverForCurrentThread().resolveWithSticky(request);
+    return getResolverForCurrentThread().resolveWithSticky(request).toCompletableFuture();
   }
 
   /** Delegates resolve to the assigned SwapWasmResolverApi instance. */

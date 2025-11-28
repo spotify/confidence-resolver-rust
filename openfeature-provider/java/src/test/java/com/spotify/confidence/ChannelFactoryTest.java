@@ -15,17 +15,6 @@ import org.junit.jupiter.api.Test;
 /** Tests to verify that the ChannelFactory pattern works correctly. */
 public class ChannelFactoryTest {
 
-  private final ResolverFallback noOpResolverFallback =
-      new ResolverFallback() {
-        @Override
-        public CompletableFuture<ResolveFlagsResponse> resolve(ResolveFlagsRequest request) {
-          return CompletableFuture.completedFuture(null);
-        }
-
-        @Override
-        public void close() {}
-      };
-
   @Test
   public void verifyCustomChannelFactoryIsCalledByProvider() {
     final AtomicInteger factoryCallCount = new AtomicInteger(0);
@@ -48,7 +37,7 @@ public class ChannelFactoryTest {
         };
 
     new OpenFeatureLocalResolveProvider(
-        new LocalProviderConfig(customFactory), "clientsecret", noOpResolverFallback);
+        new LocalProviderConfig(customFactory), "clientsecret");
 
     assertEquals(
         1,

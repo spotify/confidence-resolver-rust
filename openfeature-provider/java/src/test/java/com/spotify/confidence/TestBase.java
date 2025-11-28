@@ -15,7 +15,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 
 public class TestBase {
-  protected final ResolverFallback mockFallback = mock(ResolverFallback.class);
+  protected final UnsupportedMaterializationStore mockFallback = new UnsupportedMaterializationStore();
   protected static final ClientCredential.ClientSecret secret =
       ClientCredential.ClientSecret.newBuilder().setSecret("very-secret").build();
   protected final byte[] desiredStateBytes;
