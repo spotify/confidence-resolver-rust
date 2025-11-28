@@ -569,13 +569,6 @@ FROM openfeature-provider-java-base AS openfeature-provider-java.build
 RUN make build
 
 # ==============================================================================
-# Extract Java Provider Artifact (JAR)
-# ==============================================================================
-FROM scratch AS openfeature-provider-java.artifact
-
-COPY --from=openfeature-provider-java.build /app/target/*.jar /
-
-# ==============================================================================
 # Publish OpenFeature Provider (Java) to Maven Central
 # ==============================================================================
 FROM openfeature-provider-java.build AS openfeature-provider-java.publish

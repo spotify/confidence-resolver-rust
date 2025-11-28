@@ -23,7 +23,7 @@ This repository implements binary provenance to ensure transparency and trust in
 
 ### The Challenge
 
-Our Java, JavaScript, Go, and Ruby provider packages include a pre-compiled WASM binary (`confidence_resolver.wasm`). While this provides convenience and performance, it creates a "black box" problem: how can users verify that the binary corresponds to the source code in this repository?
+Our Java, JavaScript, and Go provider packages include a pre-compiled WASM binary (`confidence_resolver.wasm`). While this provides convenience and performance, it creates a "black box" problem: how can users verify that the binary corresponds to the source code in this repository?
 
 ### Our Solution: Provenance Attestation
 
@@ -98,25 +98,19 @@ sha256sum openfeature-provider/go/confidence/wasm/confidence_resolver.wasm \
   confidence_resolver.wasm
 ```
 
-## Verifying Provider Package Attestations
-
-We also attest the provider packages themselves:
+## Verifying Provider Packages
 
 ### Java Provider (JAR)
 
-```bash
-# Verify the JAR attestation
-gh attestation verify openfeature-provider-local-0.8.0.jar \
-  --repo spotify/confidence-resolver
-```
-
-### Ruby Provider (Gem)
+Java packages are GPG signed and published to Maven Central:
 
 ```bash
-# Verify the gem attestation
-gh attestation verify spotify_confidence_openfeature_provider-0.8.0.gem \
-  --repo spotify/confidence-resolver
+# Maven Central automatically verifies GPG signatures
+# You can also verify manually:
+gpg --verify openfeature-provider-local-0.8.0.jar.asc openfeature-provider-local-0.8.0.jar
 ```
+
+The critical WASM binary inside the JAR is attested separately (see above).
 
 ### JavaScript Provider
 
@@ -150,16 +144,6 @@ cargo build --target wasm32-unknown-unknown --profile wasm
 
 **Note**: Local builds should produce identical binaries when using the same Rust toolchain version and Docker environment. The attestation provides cryptographic proof of the build's provenance.
 
-## Supply Chain Security Features
-
-| Feature | WASM Binary | Java Provider | JS Provider | Ruby Provider | Go Provider |
-|---------|-------------|---------------|-------------|---------------|-------------|
-| **GitHub Attestation** | ✅ | ✅ | ✅ (npm provenance) | ✅ | N/A (source) |
-| **Published to GitHub Releases** | ✅ | ❌ (Maven Central) | ❌ (npm) | ❌ (RubyGems) | N/A |
-| **SHA-256 Checksum** | ✅ | ❌ | ❌ | ❌ | N/A |
-| **Package Signing** | N/A | ✅ (GPG) | ✅ (Sigstore) | ❌ | N/A |
-| **Embedded WASM Hash** | N/A | Manual verify | Manual verify | Manual verify | CI validated |
-
 ## WASM Synchronization
 
 Different providers handle WASM embedding differently:
@@ -169,7 +153,7 @@ Different providers handle WASM embedding differently:
   - **Manual Sync**: Maintainers run `make sync-wasm-go` after WASM changes
   - If validation fails: `❌ ERROR: WASM files are out of sync!` - follow the error message instructions
 
-- **Java, JavaScript, Ruby Providers**: WASM is NOT committed
+- **Java and JavaScript Providers**: WASM is NOT committed
   - WASM is copied from the build artifact during Docker builds
   - Always uses the current WASM automatically - no manual sync needed
 

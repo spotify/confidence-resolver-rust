@@ -160,10 +160,6 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     environment: deployment
-    permissions:
-      contents: read
-      id-token: write  # Required for GitHub attestations
-      attestations: write
     if: ${{ needs.release.outputs.java_provider_release_created == 'true' }}
     steps:
       - name: Checkout release tag
@@ -171,19 +167,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Build and extract JAR with Docker
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: openfeature-provider-java.artifact
-          outputs: type=local,dest=./java-artifacts
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-
-      - name: Attest Java JAR
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: 'java-artifacts/*.jar'
 
       - name: Construct Maven settings file
         run: |
