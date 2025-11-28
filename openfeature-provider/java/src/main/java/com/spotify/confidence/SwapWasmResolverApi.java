@@ -1,29 +1,32 @@
 package com.spotify.confidence;
 
-import com.spotify.confidence.flags.resolver.v1.MaterializationMap;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyResponse;
-import java.util.HashMap;
+import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyResponse.MissingMaterializations;
+import com.spotify.confidence.materialization.MaterializationStore;
+import com.spotify.confidence.materialization.ReadOp;
+import com.spotify.confidence.materialization.ReadResult;
+import com.spotify.confidence.materialization.WriteOp;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 class SwapWasmResolverApi implements ResolverApi {
   private final AtomicReference<WasmResolveApi> wasmResolverApiRef = new AtomicReference<>();
-  private final StickyResolveStrategy stickyResolveStrategy;
+  private final MaterializationStore materializationStore;
   private final WasmFlagLogger flagLogger;
 
   public SwapWasmResolverApi(
       WasmFlagLogger flagLogger,
       byte[] initialState,
       String accountId,
-      StickyResolveStrategy stickyResolveStrategy) {
-    this.stickyResolveStrategy = stickyResolveStrategy;
+      MaterializationStore stickyResolveStrategy) {
+    this.materializationStore = stickyResolveStrategy;
     this.flagLogger = flagLogger;
 
     // Create initial instance
@@ -63,8 +66,7 @@ class SwapWasmResolverApi implements ResolverApi {
   }
 
   @Override
-  public CompletableFuture<ResolveFlagsResponse> resolveWithSticky(
-      ResolveWithStickyRequest request) {
+  public CompletionStage<ResolveFlagsResponse> resolveWithSticky(ResolveWithStickyRequest request) {
     final var instance = wasmResolverApiRef.get();
     final ResolveWithStickyResponse response;
     try {
@@ -86,20 +88,14 @@ class SwapWasmResolverApi implements ResolverApi {
         final var missingMaterializations = response.getMissingMaterializations();
 
         // Check for ResolverFallback first - return early if so
-        if (stickyResolveStrategy instanceof ResolverFallback fallback) {
+        // TODO this needs to be handled differently...
+        if (materializationStore instanceof ResolverFallback fallback) {
           return fallback.resolve(request.getResolveRequest());
         }
 
         // Handle MaterializationRepository case
-        if (stickyResolveStrategy instanceof MaterializationRepository repository) {
-          final var currentRequest =
-              handleMissingMaterializations(
-                  request, missingMaterializations.getItemsList(), repository);
-          return resolveWithSticky(currentRequest);
-        }
-
-        throw new RuntimeException(
-            "Unknown sticky resolve strategy: " + stickyResolveStrategy.getClass());
+        return handleMissingMaterializations(request, missingMaterializations)
+            .thenCompose(this::resolveWithSticky);
       }
       case RESOLVERESULT_NOT_SET ->
           throw new RuntimeException("Invalid response: resolve result not set");
@@ -108,94 +104,45 @@ class SwapWasmResolverApi implements ResolverApi {
     }
   }
 
-  private void storeUpdates(List<ResolveWithStickyResponse.MaterializationUpdate> updates) {
-    if (stickyResolveStrategy instanceof MaterializationRepository repository) {
-      CompletableFuture.runAsync(
-          () -> {
-            // Group updates by unit
-            final var updatesByUnit =
-                updates.stream()
-                    .collect(
-                        Collectors.groupingBy(
-                            ResolveWithStickyResponse.MaterializationUpdate::getUnit));
+  private CompletionStage<Void> storeUpdates(
+      List<ResolveWithStickyResponse.MaterializationUpdate> updates) {
+    final Set<WriteOp> writeOps =
+        updates.stream()
+            .map(
+                u ->
+                    new WriteOp.Variant(
+                        u.getWriteMaterialization(), u.getUnit(), u.getRule(), u.getVariant()))
+            .collect(Collectors.toSet());
 
-            // Store assignments for each unit
-            updatesByUnit.forEach(
-                (unit, unitUpdates) -> {
-                  final Map<String, MaterializationInfo> assignments = new HashMap<>();
-                  unitUpdates.forEach(
-                      update -> {
-                        final var ruleToVariant = Map.of(update.getRule(), update.getVariant());
-                        assignments.put(
-                            update.getWriteMaterialization(),
-                            new MaterializationInfo(true, ruleToVariant));
-                      });
-
-                  repository
-                      .storeAssignment(unit, assignments)
-                      .exceptionally(
-                          throwable -> {
-                            // Log error but don't propagate to avoid affecting main resolve path
-                            System.err.println(
-                                "Failed to store materialization updates for unit "
-                                    + unit
-                                    + ": "
-                                    + throwable.getMessage());
-                            return null;
-                          });
-                });
-          });
-    }
+    return materializationStore.write(writeOps);
   }
 
-  private ResolveWithStickyRequest handleMissingMaterializations(
-      ResolveWithStickyRequest request,
-      List<ResolveWithStickyResponse.MissingMaterializationItem> missingItems,
-      MaterializationRepository repository) {
+  private CompletionStage<ResolveWithStickyRequest> handleMissingMaterializations(
+      ResolveWithStickyRequest request, MissingMaterializations missingMaterializations) {
 
-    // Group missing items by unit for efficient loading
-    final var missingByUnit =
-        missingItems.stream()
-            .collect(
-                Collectors.groupingBy(
-                    ResolveWithStickyResponse.MissingMaterializationItem::getUnit));
+    final List<? extends ReadOp> readOps =
+        missingMaterializations.getItemsList().stream()
+            .map(mm -> new ReadOp.Variant(mm.getReadMaterialization(), mm.getUnit(), mm.getRule()))
+            .toList();
 
-    final HashMap<String, MaterializationMap> materializationPerUnitMap = new HashMap<>();
+    return materializationStore
+        .read(readOps)
+        .thenApply(
+            results -> {
+              final ResolveWithStickyRequest.Builder builder = request.toBuilder();
 
-    // Load materialized assignments for all missing units
-    missingByUnit.forEach(
-        (unit, materializationInfoItem) -> {
-          materializationInfoItem.forEach(
-              item -> {
-                final Map<String, MaterializationInfo> loadedAssignments;
-                try {
-                  loadedAssignments =
-                      repository
-                          .loadMaterializedAssignmentsForUnit(unit, item.getReadMaterialization())
-                          .get();
-                } catch (InterruptedException | ExecutionException e) {
-                  throw new RuntimeException(e);
-                }
-                materializationPerUnitMap.computeIfAbsent(
-                    unit,
-                    k -> MaterializationMap.newBuilder().putAllInfoMap(new HashMap<>()).build());
-                materializationPerUnitMap.computeIfPresent(
-                    unit,
-                    (k, v) -> {
-                      final Map<
-                              String, com.spotify.confidence.flags.resolver.v1.MaterializationInfo>
-                          map = new HashMap<>();
-                      loadedAssignments.forEach(
-                          (s, materializationInfo) -> {
-                            map.put(s, materializationInfo.toProto());
-                          });
-                      return v.toBuilder().putAllInfoMap(map).build();
-                    });
-              });
-        });
-
-    // Return new request with updated materialization context
-    return request.toBuilder().putAllMaterializationsPerUnit(materializationPerUnitMap).build();
+              results.stream()
+                  .map(ReadResult.Variant.class::cast)
+                  .filter(res -> res.variant().isPresent())
+                  .forEach(
+                      vr -> {
+                        builder
+                            .putMaterializationsPerUnitBuilderIfAbsent(vr.unit())
+                            .putInfoMapBuilderIfAbsent(vr.materialization())
+                            .putRuleToVariant(vr.rule(), vr.variant().get());
+                      });
+              return builder.build();
+            });
   }
 
   @Override
