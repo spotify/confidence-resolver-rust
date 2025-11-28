@@ -3,20 +3,11 @@ package com.spotify.confidence;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.google.protobuf.Timestamp;
-import com.spotify.confidence.flags.admin.v1.ResolverStateServiceGrpc;
-import com.spotify.confidence.flags.admin.v1.ResolverStateUriRequest;
-import com.spotify.confidence.flags.admin.v1.ResolverStateUriResponse;
 import com.spotify.confidence.flags.resolver.v1.InternalFlagLoggerServiceGrpc;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagAssignedRequest;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagAssignedResponse;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsRequest;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsResponse;
-import com.spotify.confidence.iam.v1.AccessToken;
-import com.spotify.confidence.iam.v1.AuthServiceGrpc;
-import com.spotify.confidence.iam.v1.RequestAccessTokenRequest;
 import com.sun.net.httpserver.HttpServer;
 import dev.openfeature.sdk.*;
 import dev.openfeature.sdk.exceptions.FlagNotFoundError;
@@ -27,13 +18,13 @@ import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.GrpcCleanupRule;
 import java.io.File;
+import java.io.IOException;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.URL;
 import java.nio.file.Files;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -54,18 +45,15 @@ import org.junit.jupiter.api.Test;
  * services.
  */
 class OpenFeatureLocalResolveProviderIntegrationTest {
-  private static final String TEST_CLIENT_ID = "test-client-id";
-  private static final String TEST_CLIENT_SECRET = "test-client-secret";
   private static final String FLAG_CLIENT_SECRET = "mkjJruAATQWjeY7foFIWfVAcBWnci2YF";
   private static final String ACCOUNT_NAME = "accounts/test-account";
 
   private final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
   private String serverName;
   private OpenFeatureLocalResolveProvider provider;
-  private MockAuthService mockAuthService;
-  private MockResolverStateService mockResolverStateService;
   private MockFlagLoggerService mockFlagLoggerService;
   private HttpServer httpServer;
+  private AtomicInteger stateCdnCalls = new AtomicInteger();
 
   @BeforeEach
   void setUp() throws Exception {
@@ -77,10 +65,19 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
         "/resolver_state.pb",
         exchange -> {
           try {
-            final byte[] stateBytes =
+            // Read the raw resolver state
+            final byte[] rawState =
                 Files.readAllBytes(
                     new File(getClass().getResource("/resolver_state_current.pb").getPath())
                         .toPath());
+
+            // Wrap it in a SetResolverStateRequest as the CDN does
+            final var stateRequest =
+                com.spotify.confidence.wasm.Messages.SetResolverStateRequest.newBuilder()
+                    .setState(com.google.protobuf.ByteString.copyFrom(rawState))
+                    .setAccountId(ACCOUNT_NAME)
+                    .build();
+            final byte[] responseBytes = stateRequest.toByteArray();
 
             exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
             exchange.getResponseHeaders().set("ETag", "\"test-etag\"");
@@ -90,27 +87,24 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
             if ("\"test-etag\"".equals(ifNoneMatch)) {
               exchange.sendResponseHeaders(304, -1);
             } else {
-              exchange.sendResponseHeaders(200, stateBytes.length);
+              exchange.sendResponseHeaders(200, responseBytes.length);
               try (OutputStream os = exchange.getResponseBody()) {
-                os.write(stateBytes);
+                os.write(responseBytes);
               }
             }
           } finally {
+            stateCdnCalls.incrementAndGet();
             exchange.close();
           }
         });
     httpServer.start();
 
-    mockAuthService = new MockAuthService();
-    mockResolverStateService = new MockResolverStateService(httpServer.getAddress().getPort());
     mockFlagLoggerService = new MockFlagLoggerService();
 
     // Start in-process server with mock services
     grpcCleanup.register(
         InProcessServerBuilder.forName(serverName)
             .directExecutor()
-            .addService(mockAuthService)
-            .addService(mockResolverStateService)
             .addService(mockFlagLoggerService)
             .build()
             .start());
@@ -137,9 +131,26 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
           }
         };
 
+    // Create custom HTTP client factory that redirects to local test server
+    final HttpClientFactory testHttpClientFactory =
+        new HttpClientFactory() {
+          @Override
+          public HttpURLConnection create(String url) throws IOException {
+            // Redirect CDN requests to our local test HTTP server
+            final String localUrl =
+                "http://localhost:" + httpServer.getAddress().getPort() + "/resolver_state.pb";
+            return (HttpURLConnection) new URL(localUrl).openConnection();
+          }
+
+          @Override
+          public void shutdown() {
+            // No cleanup needed for stateless HTTP connections
+          }
+        };
+
     // Create provider with test configuration
-    final ApiSecret apiSecret = new ApiSecret(TEST_CLIENT_ID, TEST_CLIENT_SECRET);
-    final LocalProviderConfig config = new LocalProviderConfig(apiSecret, testChannelFactory);
+    final LocalProviderConfig config =
+        new LocalProviderConfig(testChannelFactory, testHttpClientFactory);
     provider = new OpenFeatureLocalResolveProvider(config, FLAG_CLIENT_SECRET);
   }
 
@@ -158,7 +169,7 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
     assertEquals(ProviderState.NOT_READY, provider.getState());
 
     provider.initialize(new ImmutableContext());
-
+    assertThat(stateCdnCalls.get()).isGreaterThanOrEqualTo(1);
     assertEquals(ProviderState.READY, provider.getState());
   }
 
@@ -229,20 +240,6 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
   }
 
   @Test
-  void testAuthServiceCalledDuringInit() throws Exception {
-    provider.initialize(new ImmutableContext());
-
-    assertThat(mockAuthService.getRequestCount()).isGreaterThan(0);
-  }
-
-  @Test
-  void testResolverStateServiceCalled() throws Exception {
-    provider.initialize(new ImmutableContext());
-
-    assertThat(mockResolverStateService.getRequestCount()).isGreaterThan(0);
-  }
-
-  @Test
   void testShutdownSendsAllLogData() throws Exception {
     provider.initialize(new ImmutableContext());
 
@@ -290,150 +287,90 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
     final int logRequestsAfterShutdown = mockFlagLoggerService.getRequestCount();
     assertThat(logRequestsAfterShutdown).isGreaterThanOrEqualTo(logRequestsBeforeShutdown);
 
-        // Verify that all flag assignments were logged
-        // We expect at least numThreads * resolutionsPerThread flag assignments
-        final int totalFlagAssignments = mockFlagLoggerService.getTotalFlagAssignments();
-        assertThat(totalFlagAssignments)
-                .withFailMessage("Expected at least %d flag assignments but got %d",
-                        numThreads * resolutionsPerThread, totalFlagAssignments)
-                .isGreaterThanOrEqualTo(numThreads * resolutionsPerThread);
-    }
-
-    @Nested
-    class WithOpenFeatureApis {
-
-        @Test
-        void testProviderInitialization() throws Exception {
-            assertEquals(ProviderState.NOT_READY, OpenFeatureAPI.getInstance().getClient().getProviderState());
-            OpenFeatureAPI.getInstance().setProviderAndWait(provider);
-            assertEquals(ProviderState.READY, OpenFeatureAPI.getInstance().getClient().getProviderState());
-        }
-
-
-        @Test
-        void testShutdownSendsAllLogData() throws Exception {
-            OpenFeatureAPI.getInstance().setProviderAndWait(provider);
-
-            // Wait for initialization to complete
-            assertEquals(ProviderState.READY, provider.getState());
-
-            final ImmutableContext context =
-                    new ImmutableContext("tutorial_visitor", Map.of("visitor_id", new Value("tutorial_visitor")));
-
-            // Perform multiple flag resolutions across multiple threads to ensure all WASM instances
-            // have log data
-            final int numThreads = Runtime.getRuntime().availableProcessors();
-            final int resolutionsPerThread = 5;
-            final ExecutorService executor = Executors.newFixedThreadPool(numThreads);
-            final CountDownLatch latch = new CountDownLatch(numThreads * resolutionsPerThread);
-
-            for (int i = 0; i < numThreads; i++) {
-                for (int j = 0; j < resolutionsPerThread; j++) {
-                    executor.submit(() -> {
-                        try {
-                            OpenFeatureAPI.getInstance().getClient().getObjectDetails("tutorial-feature", new Value("default"), context);
-                        } catch (Exception e) {
-                            // Ignore resolution errors for this test
-                        } finally {
-                            latch.countDown();
-                        }
-                    });
-                }
-            }
-
-            // Wait for all resolutions to complete
-            assertTrue(latch.await(10, TimeUnit.SECONDS), "All resolutions should complete");
-            executor.shutdown();
-
-            // Record the number of log requests before shutdown
-            final int logRequestsBeforeShutdown = mockFlagLoggerService.getRequestCount();
-
-            // Shutdown the provider - this should flush all pending logs
-            OpenFeatureAPI.getInstance().getProvider().shutdown(); // Note the use of getProvider().shutdown()!!
-            OpenFeatureAPI.getInstance().shutdown();
-
-            // Verify that log requests were made during shutdown
-            // Note: The exact number depends on batching, but there should be at least some logs
-            final int logRequestsAfterShutdown = mockFlagLoggerService.getRequestCount();
-            assertThat(logRequestsAfterShutdown).isGreaterThanOrEqualTo(logRequestsBeforeShutdown);
-
-            // Verify that all flag assignments were logged
-            // We expect at least numThreads * resolutionsPerThread flag assignments
-            final int totalFlagAssignments = mockFlagLoggerService.getTotalFlagAssignments();
-            assertThat(totalFlagAssignments)
-                    .withFailMessage("Expected at least %d flag assignments but got %d",
-                            numThreads * resolutionsPerThread, totalFlagAssignments)
-                    .isGreaterThanOrEqualTo(numThreads * resolutionsPerThread);
-        }
-    }
-
-  /** Mock AuthService that returns a JWT token with required claims */
-  private static class MockAuthService extends AuthServiceGrpc.AuthServiceImplBase {
-    private int requestCount = 0;
-
-    @Override
-    public void requestAccessToken(
-        RequestAccessTokenRequest request, StreamObserver<AccessToken> responseObserver) {
-      requestCount++;
-
-      // Create a JWT token with account claim
-      final Instant now = Instant.now();
-      final String token =
-          JWT.create()
-              .withClaim(JwtUtils.ACCOUNT_NAME_CLAIM, ACCOUNT_NAME)
-              .withExpiresAt(Date.from(now.plus(1, ChronoUnit.HOURS)))
-              .sign(Algorithm.none());
-
-      final AccessToken response =
-          AccessToken.newBuilder().setAccessToken(token).setExpiresIn(3600).build();
-
-      responseObserver.onNext(response);
-      responseObserver.onCompleted();
-    }
-
-    public int getRequestCount() {
-      return requestCount;
-    }
+    // Verify that all flag assignments were logged
+    // We expect at least numThreads * resolutionsPerThread flag assignments
+    final int totalFlagAssignments = mockFlagLoggerService.getTotalFlagAssignments();
+    assertThat(totalFlagAssignments)
+        .withFailMessage(
+            "Expected at least %d flag assignments but got %d",
+            numThreads * resolutionsPerThread, totalFlagAssignments)
+        .isGreaterThanOrEqualTo(numThreads * resolutionsPerThread);
   }
 
-  /** Mock ResolverStateService that returns test flag configuration from resources */
-  private static class MockResolverStateService
-      extends ResolverStateServiceGrpc.ResolverStateServiceImplBase {
-    private final int httpPort;
-    private int requestCount = 0;
+  @Nested
+  class WithOpenFeatureApis {
 
-    public MockResolverStateService(int httpPort) {
-      this.httpPort = httpPort;
+    @Test
+    void testProviderInitialization() throws Exception {
+      OpenFeatureAPI.getInstance().setProviderAndWait(provider);
+      assertEquals(
+          ProviderState.READY, OpenFeatureAPI.getInstance().getClient().getProviderState());
     }
 
-    @Override
-    public void resolverStateUri(
-        ResolverStateUriRequest request,
-        StreamObserver<ResolverStateUriResponse> responseObserver) {
-      requestCount++;
+    @Test
+    void testShutdownSendsAllLogData() throws Exception {
+      OpenFeatureAPI.getInstance().setProviderAndWait(provider);
 
-      try {
-        final Instant expireTime = Instant.now().plus(1, ChronoUnit.HOURS);
-        final ResolverStateUriResponse response =
-            ResolverStateUriResponse.newBuilder()
-                .setAccount(ACCOUNT_NAME)
-                .setSignedUri("http://localhost:" + httpPort + "/resolver_state.pb")
-                .setExpireTime(
-                    Timestamp.newBuilder()
-                        .setSeconds(expireTime.getEpochSecond())
-                        .setNanos(expireTime.getNano())
-                        .build())
-                .build();
+      // Wait for initialization to complete
+      assertEquals(ProviderState.READY, provider.getState());
 
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
-      } catch (Exception e) {
-        responseObserver.onError(e);
+      final ImmutableContext context =
+          new ImmutableContext(
+              "tutorial_visitor", Map.of("visitor_id", new Value("tutorial_visitor")));
+
+      // Perform multiple flag resolutions across multiple threads to ensure all WASM instances
+      // have log data
+      final int numThreads = Runtime.getRuntime().availableProcessors();
+      final int resolutionsPerThread = 5;
+      final ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+      final CountDownLatch latch = new CountDownLatch(numThreads * resolutionsPerThread);
+
+      for (int i = 0; i < numThreads; i++) {
+        for (int j = 0; j < resolutionsPerThread; j++) {
+          executor.submit(
+              () -> {
+                try {
+                  OpenFeatureAPI.getInstance()
+                      .getClient()
+                      .getObjectDetails("tutorial-feature", new Value("default"), context);
+                } catch (Exception e) {
+                  // Ignore resolution errors for this test
+                } finally {
+                  latch.countDown();
+                }
+              });
+        }
       }
-    }
 
-    public int getRequestCount() {
-      return requestCount;
+      // Wait for all resolutions to complete
+      assertTrue(latch.await(10, TimeUnit.SECONDS), "All resolutions should complete");
+      executor.shutdown();
+
+      // Record the number of log requests before shutdown
+      final int logRequestsBeforeShutdown = mockFlagLoggerService.getRequestCount();
+
+      // Shutdown the provider - this should flush all pending logs
+      OpenFeatureAPI.getInstance()
+          .getProvider()
+          .shutdown(); // Note the use of getProvider().shutdown()!!
+      OpenFeatureAPI.getInstance().shutdown();
+
+      assertEquals(
+          ProviderState.NOT_READY, OpenFeatureAPI.getInstance().getClient().getProviderState());
+
+      // Verify that log requests were made during shutdown
+      // Note: The exact number depends on batching, but there should be at least some logs
+      final int logRequestsAfterShutdown = mockFlagLoggerService.getRequestCount();
+      assertThat(logRequestsAfterShutdown).isGreaterThanOrEqualTo(logRequestsBeforeShutdown);
+
+      // Verify that all flag assignments were logged
+      // We expect at least numThreads * resolutionsPerThread flag assignments
+      final int totalFlagAssignments = mockFlagLoggerService.getTotalFlagAssignments();
+      assertThat(totalFlagAssignments)
+          .withFailMessage(
+              "Expected at least %d flag assignments but got %d",
+              numThreads * resolutionsPerThread, totalFlagAssignments)
+          .isGreaterThanOrEqualTo(numThreads * resolutionsPerThread);
     }
   }
 
@@ -452,7 +389,7 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
     }
 
     @Override
-    public void writeFlagLogs(
+    public void clientWriteFlagLogs(
         WriteFlagLogsRequest request, StreamObserver<WriteFlagLogsResponse> responseObserver) {
       requestCount.incrementAndGet();
       receivedRequests.add(request);

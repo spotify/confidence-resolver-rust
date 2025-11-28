@@ -215,7 +215,7 @@ class GrpcWasmFlagLoggerTest {
     final CountDownLatch writeLatch = new CountDownLatch(1);
     final AtomicInteger writeCount = new AtomicInteger(0);
 
-    when(mockStub.writeFlagLogs(any()))
+    when(mockStub.clientWriteFlagLogs(any()))
         .thenAnswer(
             invocation -> {
               try {
@@ -227,11 +227,10 @@ class GrpcWasmFlagLoggerTest {
               }
             });
 
-    final ApiSecret apiSecret = new ApiSecret("test-client-id", "test-client-secret");
     // Use a real GrpcWasmFlagLogger that creates async tasks
     final GrpcWasmFlagLogger logger =
         new GrpcWasmFlagLogger(
-            apiSecret, mockStub::writeFlagLogs, Duration.ofSeconds(2)); // 2s timeout
+            "clientSecret", mockStub::clientWriteFlagLogs, Duration.ofSeconds(2)); // 2s timeout
 
     final var request =
         WriteFlagLogsRequest.newBuilder().addAllFlagAssigned(createFlagAssignedList(10)).build();
@@ -243,7 +242,7 @@ class GrpcWasmFlagLoggerTest {
     // Then
     assertTrue(writeLatch.await(100, TimeUnit.MILLISECONDS), "Write should have completed");
     assertEquals(1, writeCount.get(), "Write should have been called exactly once");
-    verify(mockStub, times(1)).writeFlagLogs(any());
+    verify(mockStub, times(1)).clientWriteFlagLogs(any());
   }
 
   @Test
@@ -253,7 +252,7 @@ class GrpcWasmFlagLoggerTest {
         mock(InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub.class);
     final AtomicInteger writeCount = new AtomicInteger(0);
 
-    when(mockStub.writeFlagLogs(any()))
+    when(mockStub.clientWriteFlagLogs(any()))
         .thenAnswer(
             invocation -> {
               Thread.sleep(5000); // 5 seconds, longer than timeout
@@ -261,21 +260,24 @@ class GrpcWasmFlagLoggerTest {
               return WriteFlagLogsResponse.getDefaultInstance();
             });
 
-    final ApiSecret apiSecret = new ApiSecret("test-client-id", "test-client-secret");
     final GrpcWasmFlagLogger logger =
         new GrpcWasmFlagLogger(
-            apiSecret, mockStub::writeFlagLogs, Duration.ofMillis(500)); // 500ms timeout
+            "client-secret",
+            mockStub::clientWriteFlagLogs,
+            Duration.ofMillis(500)); // 500ms timeout
 
     final var request =
         WriteFlagLogsRequest.newBuilder().addAllFlagAssigned(createFlagAssignedList(10)).build();
 
     // When
-    new Thread(new Runnable() {
-        @Override
-        public void run() {
-            logger.write(request);
-        }
-    }).start();
+    new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                logger.write(request);
+              }
+            })
+        .start();
 
     // Shutdown should complete within timeout + small buffer, not wait for full 5s write
     final long startTime = System.currentTimeMillis();
@@ -297,7 +299,7 @@ class GrpcWasmFlagLoggerTest {
     final CountDownLatch allWritesComplete = new CountDownLatch(5);
 
     // Each write takes 100ms
-    when(mockStub.writeFlagLogs(any()))
+    when(mockStub.clientWriteFlagLogs(any()))
         .thenAnswer(
             invocation -> {
               Thread.sleep(100);
@@ -306,10 +308,9 @@ class GrpcWasmFlagLoggerTest {
               return WriteFlagLogsResponse.getDefaultInstance();
             });
 
-    final ApiSecret apiSecret = new ApiSecret("test-client-id", "test-client-secret");
     final GrpcWasmFlagLogger logger =
         new GrpcWasmFlagLogger(
-            apiSecret, mockStub::writeFlagLogs, Duration.ofSeconds(3)); // 3s timeout
+            "clientSecret", mockStub::clientWriteFlagLogs, Duration.ofSeconds(3)); // 3s timeout
 
     final var request =
         WriteFlagLogsRequest.newBuilder().addAllFlagAssigned(createFlagAssignedList(10)).build();
@@ -327,7 +328,7 @@ class GrpcWasmFlagLoggerTest {
         allWritesComplete.await(100, TimeUnit.MILLISECONDS),
         "All writes should have completed before shutdown returned");
     assertEquals(5, completedWrites.get(), "All 5 writes should have completed");
-    verify(mockStub, times(5)).writeFlagLogs(any());
+    verify(mockStub, times(5)).clientWriteFlagLogs(any());
   }
 
   // Helper methods

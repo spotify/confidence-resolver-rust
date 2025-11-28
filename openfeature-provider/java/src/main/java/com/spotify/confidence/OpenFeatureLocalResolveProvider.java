@@ -156,10 +156,10 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
       LocalProviderConfig config, String clientSecret, MaterializationStore materializationStore) {
     this.clientSecret = clientSecret;
     this.materializationStore = materializationStore;
-    this.stateProvider = new FlagsAdminStateFetcher(clientSecret);
-    this.channelFactory = config.getChannelFactory();
-    final var wasmFlagLogger = new GrpcWasmFlagLogger(clientSecret, this.channelFactory);
+    this.stateProvider = new FlagsAdminStateFetcher(clientSecret, config.getHttpClientFactory());
+    final var wasmFlagLogger = new GrpcWasmFlagLogger(clientSecret, config.getChannelFactory());
     this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, materializationStore);
+    this.channelFactory = config.getChannelFactory();
     this.grpcFlagResolver = new ConfidenceGrpcFlagResolver(this.channelFactory);
   }
 
@@ -287,29 +287,29 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     return result;
   }
 
-    @Override
-    public void shutdown() {
-        state.set(ProviderState.NOT_READY);
-        log.debug("Shutting down scheduled executors");
-        flagsFetcherExecutor.shutdown();
-        logPollExecutor.shutdown();
-        this.grpcFlagResolver.close();
+  @Override
+  public void shutdown() {
+    state.set(ProviderState.NOT_READY);
+    log.debug("Shutting down scheduled executors");
+    flagsFetcherExecutor.shutdown();
+    logPollExecutor.shutdown();
+    this.grpcFlagResolver.close();
 
-        try {
-          if (!flagsFetcherExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
-            log.warn("Flags fetcher executor did not terminate gracefully");
-            flagsFetcherExecutor.shutdownNow();
-          }
-          if (!logPollExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
-            log.warn("Log poll executor did not terminate gracefully");
-            logPollExecutor.shutdownNow();
-          }
-        } catch (InterruptedException e) {
-          log.warn("Interrupted while waiting for scheduled executors to shut down", e);
-          flagsFetcherExecutor.shutdownNow();
-          logPollExecutor.shutdownNow();
-          Thread.currentThread().interrupt();
-        }
+    try {
+      if (!flagsFetcherExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
+        log.warn("Flags fetcher executor did not terminate gracefully");
+        flagsFetcherExecutor.shutdownNow();
+      }
+      if (!logPollExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
+        log.warn("Log poll executor did not terminate gracefully");
+        logPollExecutor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      log.warn("Interrupted while waiting for scheduled executors to shut down", e);
+      flagsFetcherExecutor.shutdownNow();
+      logPollExecutor.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
 
     // wasmResolveApi.close() flushes logs and calls flagLogger.shutdown() which waits for pending
     // writes
