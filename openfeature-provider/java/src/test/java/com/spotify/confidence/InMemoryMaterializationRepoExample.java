@@ -4,6 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+
+import com.spotify.confidence.flags.resolver.v1.MaterializationInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

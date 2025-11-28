@@ -5,10 +5,6 @@ import com.spotify.confidence.flags.resolver.v1.ResolveFlagsResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyRequest;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyResponse;
 import com.spotify.confidence.flags.resolver.v1.ResolveWithStickyResponse.MissingMaterializations;
-import com.spotify.confidence.materialization.MaterializationStore;
-import com.spotify.confidence.materialization.ReadOp;
-import com.spotify.confidence.materialization.ReadResult;
-import com.spotify.confidence.materialization.WriteOp;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -25,8 +21,8 @@ class SwapWasmResolverApi implements ResolverApi {
       WasmFlagLogger flagLogger,
       byte[] initialState,
       String accountId,
-      MaterializationStore stickyResolveStrategy) {
-    this.materializationStore = stickyResolveStrategy;
+      MaterializationStore materializationStore) {
+    this.materializationStore = materializationStore;
     this.flagLogger = flagLogger;
 
     // Create initial instance
@@ -78,7 +74,6 @@ class SwapWasmResolverApi implements ResolverApi {
     switch (response.getResolveResultCase()) {
       case SUCCESS -> {
         final var success = response.getSuccess();
-        // Store updates if present
         if (!success.getUpdatesList().isEmpty()) {
           storeUpdates(success.getUpdatesList());
         }
@@ -86,14 +81,6 @@ class SwapWasmResolverApi implements ResolverApi {
       }
       case MISSING_MATERIALIZATIONS -> {
         final var missingMaterializations = response.getMissingMaterializations();
-
-        // Check for ResolverFallback first - return early if so
-        // TODO this needs to be handled differently...
-        if (materializationStore instanceof ResolverFallback fallback) {
-          return fallback.resolve(request.getResolveRequest());
-        }
-
-        // Handle MaterializationRepository case
         return handleMissingMaterializations(request, missingMaterializations)
             .thenCompose(this::resolveWithSticky);
       }
@@ -106,11 +93,11 @@ class SwapWasmResolverApi implements ResolverApi {
 
   private CompletionStage<Void> storeUpdates(
       List<ResolveWithStickyResponse.MaterializationUpdate> updates) {
-    final Set<WriteOp> writeOps =
+    final Set<MaterializationStore.WriteOp> writeOps =
         updates.stream()
             .map(
                 u ->
-                    new WriteOp.Variant(
+                    new MaterializationStore.WriteOp.Variant(
                         u.getWriteMaterialization(), u.getUnit(), u.getRule(), u.getVariant()))
             .collect(Collectors.toSet());
 
@@ -118,11 +105,15 @@ class SwapWasmResolverApi implements ResolverApi {
   }
 
   private CompletionStage<ResolveWithStickyRequest> handleMissingMaterializations(
-      ResolveWithStickyRequest request, MissingMaterializations missingMaterializations) {
+      ResolveWithStickyRequest request,
+      MissingMaterializations missingMaterializations) {
 
-    final List<? extends ReadOp> readOps =
+    final List<? extends MaterializationStore.ReadOp> readOps =
         missingMaterializations.getItemsList().stream()
-            .map(mm -> new ReadOp.Variant(mm.getReadMaterialization(), mm.getUnit(), mm.getRule()))
+            .map(
+                mm ->
+                    new MaterializationStore.ReadOp.Variant(
+                        mm.getReadMaterialization(), mm.getUnit(), mm.getRule()))
             .toList();
 
     return materializationStore
@@ -132,7 +123,7 @@ class SwapWasmResolverApi implements ResolverApi {
               final ResolveWithStickyRequest.Builder builder = request.toBuilder();
 
               results.stream()
-                  .map(ReadResult.Variant.class::cast)
+                  .map(MaterializationStore.ReadResult.Variant.class::cast)
                   .filter(res -> res.variant().isPresent())
                   .forEach(
                       vr -> {
