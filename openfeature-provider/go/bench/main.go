@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -23,9 +24,47 @@ type stats struct {
 	errors    uint64
 }
 
+type transportHooks struct {
+	mockAddr string
+}
+
+func (t transportHooks) ModifyGRPCDial(target string, base []grpc.DialOption) (string, []grpc.DialOption) {
+	if t.mockAddr != "" {
+		opts := append([]grpc.DialOption{}, base...)
+		// Route to mock in plaintext and preserve logical authority for routing
+		opts = append(opts,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithAuthority(target),
+		)
+		return t.mockAddr, opts
+	}
+	return target, base
+}
+
+// rtFunc adapts a function to http.RoundTripper
+type rtFunc func(*http.Request) (*http.Response, error)
+
+func (f rtFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func (t transportHooks) WrapHTTP(base http.RoundTripper) http.RoundTripper {
+	// Send HTTP requests to mockAddr over http, preserving path and query.
+	if t.mockAddr != "" {
+		return rtFunc(func(req *http.Request) (*http.Response, error) {
+			r2 := req.Clone(req.Context())
+			// Preserve logical host using Host header (like :authority for HTTP/2)
+			origHost := req.URL.Host
+			r2.URL.Scheme = "http"
+			r2.URL.Host = t.mockAddr
+			r2.Host = origHost
+			return base.RoundTrip(r2)
+		})
+	}
+	return base
+}
+
 func main() {
 	var (
-		mockGRPCAddr    string
+		mockAddr        string
 		durationSeconds int
 		warmupSeconds   int
 		threads         int
@@ -35,7 +74,7 @@ func main() {
 		pollInterval    int
 	)
 
-	flag.StringVar(&mockGRPCAddr, "mock-grpc", "localhost:8081", "mock support server gRPC address host:port")
+	flag.StringVar(&mockAddr, "mock-addr", "localhost:8081", "mock support server address host:port")
 	flag.IntVar(&durationSeconds, "duration", 30, "benchmark duration in seconds (excludes warmup)")
 	flag.IntVar(&warmupSeconds, "warmup", 5, "warmup duration in seconds before measurement")
 	flag.IntVar(&threads, "threads", runtime.NumCPU(), "number of concurrent worker goroutines")
@@ -60,15 +99,9 @@ func main() {
 
 	ctx := context.Background()
 
-	connFactory := func(ctx context.Context, _ string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
-		opts := append([]grpc.DialOption{}, defaultOpts...)
-		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return grpc.NewClient(mockGRPCAddr, opts...)
-	}
-
 	provider, err := confidence.NewProvider(ctx, confidence.ProviderConfig{
-		ClientSecret: clientSecret,
-		ConnFactory:  connFactory,
+		ClientSecret:   clientSecret,
+		TransportHooks: transportHooks{mockAddr: mockAddr},
 	})
 	provider.Init(openfeature.NewTargetlessEvaluationContext(map[string]any{}))
 	if err != nil {

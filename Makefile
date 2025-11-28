@@ -87,8 +87,8 @@ go-bench:
 	docker compose up --build \
 		--abort-on-container-exit \
 		--exit-code-from go-bench \
-		--attach go-bench --attach mock-go \
-		go-bench mock-go || status=$$?; \
+		--attach go-bench --attach mock-support \
+		go-bench mock-support || status=$$?; \
 	docker compose down --remove-orphans --volumes; \
 	exit $$status
 
@@ -97,8 +97,8 @@ js-bench: js-build
 	docker compose up --build \
 		--abort-on-container-exit \
 		--exit-code-from js-bench \
-		--attach js-bench --attach mock-js \
-		js-bench mock-js || status=$$?; \
+		--attach js-bench --attach mock-support \
+		js-bench mock-support || status=$$?; \
 	docker compose down --remove-orphans --volumes; \
 	exit $$status
 

@@ -39,11 +39,21 @@ func NewFlagsAdminStateFetcher(
 	clientSecret string,
 	logger *slog.Logger,
 ) *FlagsAdminStateFetcher {
+	return NewFlagsAdminStateFetcherWithTransport(clientSecret, logger, http.DefaultTransport)
+}
+
+// NewFlagsAdminStateFetcherWithTransport creates a new FlagsAdminStateFetcher with a custom HTTP transport.
+func NewFlagsAdminStateFetcherWithTransport(
+	clientSecret string,
+	logger *slog.Logger,
+	transport http.RoundTripper,
+) *FlagsAdminStateFetcher {
 	f := &FlagsAdminStateFetcher{
 		clientSecret: clientSecret,
 		logger:       logger,
 		HTTPClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
 	}
 	// Initialize with empty state
@@ -51,6 +61,7 @@ func NewFlagsAdminStateFetcher(
 	if b, err := proto.Marshal(emptyState); err == nil {
 		f.rawResolverState.Store(b)
 	}
+
 	return f
 }
 
