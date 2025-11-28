@@ -13,21 +13,5 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.ts'],
     silent: false,
     watch: false,
-    env: {
-      ...readEnv('.env.test'),
-    },
   },
 });
-
-function readEnv(file): Record<string, string> {
-  try {
-    const buf = readFileSync(file);
-    return parse(buf);
-  } catch (e) {
-    if (e.code === 'ENOENT') {
-      console.log('could not find', file);
-      return {};
-    }
-    throw e;
-  }
-}

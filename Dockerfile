@@ -336,8 +336,7 @@ RUN make test
 FROM openfeature-provider-js.test AS openfeature-provider-js.test_e2e
 
 # Run e2e tests with secrets mounted as .env.test file
-RUN --mount=type=secret,id=js_e2e_test_env,target=.env.test \
-    make test-e2e
+RUN make test-e2e
 
 # ==============================================================================
 # Build OpenFeature Provider
@@ -558,8 +557,7 @@ RUN make test
 FROM openfeature-provider-java.test AS openfeature-provider-java.test_e2e
 
 # Run e2e tests with secrets mounted as .env.test file
-RUN --mount=type=secret,id=java_e2e_test_env,target=.env.test \
-    make test-e2e
+RUN make test-e2e
 
 # ==============================================================================
 # Build OpenFeature Provider (Java)

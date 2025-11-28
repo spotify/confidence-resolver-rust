@@ -37,9 +37,6 @@ jobs:
           platforms: linux/arm64
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
-          secrets: |
-            "js_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}"
-            "java_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}"
 
       - name: Build and test everything (Push - updates cache)
         if: github.event_name == 'push'
@@ -50,6 +47,3 @@ jobs:
           push: false
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/cache:main,mode=max
-          secrets: |
-            "js_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}"
-            "java_e2e_test_env=${{ secrets.JS_E2E_TEST_ENV }}"
