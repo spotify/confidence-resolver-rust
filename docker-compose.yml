@@ -1,5 +1,5 @@
 services:
-  mock-go:
+  mock-support:
     build:
       context: .
       dockerfile: mock-support-server/Dockerfile
@@ -13,24 +13,15 @@ services:
       context: .
       dockerfile: openfeature-provider/go/bench/Dockerfile
     depends_on:
-      - mock-go
-    command: ["-mock-grpc", "mock-go:8081", "-threads", "1", "-flag", "tutorial-feature", "-client-secret", "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"]
-
-  mock-js:
-    build:
-      context: .
-      dockerfile: mock-support-server/Dockerfile
-    environment:
-      - PORT=8081
-      - RESOLVER_STATE_PB=/data/resolver_state_current.pb
-      - CLIENT_SECRET=mkjJruAATQWjeY7foFIWfVAcBWnci2YF
+      - mock-support
+    command: ["-mock-addr", "mock-support:8081", "-threads", "1", "-flag", "tutorial-feature", "-client-secret", "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"]
 
   js-bench:
     build:
       context: .
       dockerfile: openfeature-provider/js/bench/Dockerfile
     depends_on:
-      - mock-js
-    command: ["-mock-http", "http://mock-js:8081", "-flag", "tutorial-feature", "-client-secret", "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"]
+      - mock-support
+    command: ["-mock-http", "http://mock-support:8081", "-flag", "tutorial-feature", "-client-secret", "mkjJruAATQWjeY7foFIWfVAcBWnci2YF"]
 
 

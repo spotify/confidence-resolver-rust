@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
@@ -14,14 +15,10 @@ import (
 
 const confidenceDomain = "edge-grpc.spotify.com"
 
-// ConnFactory is an optional testing/advanced hook for customizing gRPC connections.
-// If nil, a default connection to the Confidence service is created.
-type ConnFactory func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error)
-
 type ProviderConfig struct {
-	ClientSecret string
-	Logger       *slog.Logger
-	ConnFactory  ConnFactory // Optional: for testing/advanced use cases
+	ClientSecret   string
+	Logger         *slog.Logger
+	TransportHooks TransportHooks
 }
 
 type ProviderTestConfig struct {
@@ -47,11 +44,9 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
 
 	// Create gRPC connection for flag logger
-	connFactory := config.ConnFactory
-	if connFactory == nil {
-		connFactory = func(ctx context.Context, target string, defaultOpts []grpc.DialOption) (grpc.ClientConnInterface, error) {
-			return grpc.NewClient(target, defaultOpts...)
-		}
+	hooks := config.TransportHooks
+	if hooks == nil {
+		hooks = DefaultTransportHooks
 	}
 
 	tlsCreds := credentials.NewTLS(nil)
@@ -59,7 +54,8 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		grpc.WithTransportCredentials(tlsCreds),
 	}
 
-	conn, err := connFactory(ctx, confidenceDomain, baseOpts)
+	target, opts := hooks.ModifyGRPCDial(confidenceDomain, baseOpts)
+	conn, err := grpc.NewClient(target, opts...)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create connection: %w", err)
@@ -67,7 +63,9 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 
 	// Create state provider and flag logger
 	flagLoggerService := resolverv1.NewInternalFlagLoggerServiceClient(conn)
-	stateProvider := NewFlagsAdminStateFetcher(config.ClientSecret, logger)
+	// Build HTTP transport using hooks and pass into state fetcher
+	transport := hooks.WrapHTTP(http.DefaultTransport)
+	stateProvider := NewFlagsAdminStateFetcherWithTransport(config.ClientSecret, logger, transport)
 	flagLogger := NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
 
 	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger)
