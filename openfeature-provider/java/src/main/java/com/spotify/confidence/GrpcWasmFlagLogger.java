@@ -32,23 +32,28 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
   private static final int MAX_FLAG_ASSIGNED_PER_CHUNK = 1000;
   private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
   private final InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub stub;
-  private final String clientSecret;
   private final ExecutorService executorService;
   private final FlagLogWriter writer;
   private final Duration shutdownTimeout;
 
   @VisibleForTesting
   public GrpcWasmFlagLogger(String clientSecret, FlagLogWriter writer) {
-    this.stub = createStub(new DefaultChannelFactory());
-    this.clientSecret = clientSecret;
+    this.stub = createAuthStub(new DefaultChannelFactory(), clientSecret);
     this.executorService = Executors.newCachedThreadPool();
     this.writer = writer;
     this.shutdownTimeout = DEFAULT_SHUTDOWN_TIMEOUT;
   }
 
+  @VisibleForTesting
+  public GrpcWasmFlagLogger(String clientSecret, FlagLogWriter writer, Duration shutdownTimeout) {
+    this.stub = createAuthStub(new DefaultChannelFactory(), clientSecret);
+    this.executorService = Executors.newCachedThreadPool();
+    this.writer = writer;
+    this.shutdownTimeout = shutdownTimeout;
+  }
+
   public GrpcWasmFlagLogger(String clientSecret, ChannelFactory channelFactory) {
-    this.stub = createStub(channelFactory);
-    this.clientSecret = clientSecret;
+    this.stub = createAuthStub(channelFactory, clientSecret);
     this.executorService = Executors.newCachedThreadPool();
     this.shutdownTimeout = DEFAULT_SHUTDOWN_TIMEOUT;
     this.writer =
@@ -56,32 +61,7 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
             executorService.submit(
                 () -> {
                   try {
-                    // Create a stub with authorization header interceptor
-                    InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub
-                        stubWithAuth =
-                            stub.withInterceptors(
-                                new ClientInterceptor() {
-                                  @Override
-                                  public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-                                      MethodDescriptor<ReqT, RespT> method,
-                                      CallOptions callOptions,
-                                      Channel next) {
-                                    return new ForwardingClientCall.SimpleForwardingClientCall<
-                                        ReqT, RespT>(next.newCall(method, callOptions)) {
-                                      @Override
-                                      public void start(
-                                          Listener<RespT> responseListener, Metadata headers) {
-                                        Metadata.Key<String> authKey =
-                                            Metadata.Key.of(
-                                                "authorization", Metadata.ASCII_STRING_MARSHALLER);
-                                        headers.put(authKey, "ClientSecret " + clientSecret);
-                                        super.start(responseListener, headers);
-                                      }
-                                    };
-                                  }
-                                });
-
-                    stubWithAuth.clientWriteFlagLogs(request);
+                    stub.clientWriteFlagLogs(request);
                     logger.debug(
                         "Successfully sent flag log with {} entries",
                         request.getFlagAssignedCount());
@@ -91,10 +71,10 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
                 });
   }
 
-  private static InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub createStub(
-      ChannelFactory channelFactory) {
+  private static InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub createAuthStub(
+      ChannelFactory channelFactory, String clientSecret) {
     final var channel = createConfidenceChannel(channelFactory);
-    return InternalFlagLoggerServiceGrpc.newBlockingStub(channel);
+    return addAuthInterceptor(InternalFlagLoggerServiceGrpc.newBlockingStub(channel), clientSecret);
   }
 
   @Override
@@ -187,7 +167,7 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
 
   private void sendSync(WriteFlagLogsRequest request) {
     try {
-      stub.writeFlagLogs(request);
+      stub.clientWriteFlagLogs(request);
       logger.debug("Synchronously sent flag log with {} entries", request.getFlagAssignedCount());
     } catch (Exception e) {
       logger.error("Failed to write flag logs synchronously", e);
@@ -216,5 +196,29 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
       executorService.shutdownNow();
       Thread.currentThread().interrupt();
     }
+  }
+
+  private static InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub
+      addAuthInterceptor(
+          InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub stub,
+          String clientSecret) {
+    // Create a stub with authorization header interceptor
+    return stub.withInterceptors(
+        new ClientInterceptor() {
+          @Override
+          public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+              MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+            return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
+                next.newCall(method, callOptions)) {
+              @Override
+              public void start(Listener<RespT> responseListener, Metadata headers) {
+                Metadata.Key<String> authKey =
+                    Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
+                headers.put(authKey, "ClientSecret " + clientSecret);
+                super.start(responseListener, headers);
+              }
+            };
+          }
+        });
   }
 }

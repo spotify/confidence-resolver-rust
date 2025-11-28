@@ -160,7 +160,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
       StickyResolveStrategy stickyResolveStrategy) {
     this.clientSecret = clientSecret;
     this.stickyResolveStrategy = stickyResolveStrategy;
-    this.stateProvider = new FlagsAdminStateFetcher(clientSecret);
+    this.stateProvider = new FlagsAdminStateFetcher(clientSecret, config.getHttpClientFactory());
     final var wasmFlagLogger = new GrpcWasmFlagLogger(clientSecret, config.getChannelFactory());
     this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, stickyResolveStrategy);
     this.channelFactory = config.getChannelFactory();
@@ -285,12 +285,12 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
         .build();
   }
 
-    @Override
-    public void shutdown() {
-        state.set(ProviderState.NOT_READY);
-        log.debug("Shutting down scheduled executors");
-        flagsFetcherExecutor.shutdown();
-        logPollExecutor.shutdown();
+  @Override
+  public void shutdown() {
+    state.set(ProviderState.NOT_READY);
+    log.debug("Shutting down scheduled executors");
+    flagsFetcherExecutor.shutdown();
+    logPollExecutor.shutdown();
 
     try {
       if (!flagsFetcherExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
