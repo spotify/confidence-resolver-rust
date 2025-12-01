@@ -549,13 +549,6 @@ Standard logging frameworks are used. Configure your application's logging as us
 - [OpenFeature Specification](https://openfeature.dev/specification)
 - [Sticky Assignments Technical Guide](../STICKY_ASSIGNMENTS.md)
 
-### Provider READMEs
-
-- [Go Provider](../openfeature-provider/go/README.md)
-- [Java Provider](../openfeature-provider/java/README.md)
-- [JavaScript Provider](../openfeature-provider/js/README.md)
-- [Ruby Provider](../openfeature-provider/ruby/README.md)
-
 ---
 
 ## License
