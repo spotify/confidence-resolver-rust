@@ -55,7 +55,7 @@ func main() {
     client := openfeature.NewClient("my-app")
 
     // Evaluate a flag
-    evalCtx = openfeature.NewEvaluationContext("user-123", map[string]interface{}{
+    evalCtx := openfeature.NewEvaluationContext("user-123", map[string]interface{}{
         "country": "US",
         "plan":    "premium",
     })
@@ -88,25 +88,25 @@ The `ProviderConfig` struct contains all configuration options for the provider:
 #### Optional Fields
 
 - `Logger` (*slog.Logger): Custom logger for provider operations. If not provided, a default text logger is created. See [Logging](#logging) for details.
-- `ConnFactory` (func): Custom gRPC connection factory for advanced use cases (e.g., custom interceptors, TLS configuration)
+- `TransportHooks` (TransportHooks): Custom transport hooks for advanced use cases (e.g., custom gRPC interceptors, HTTP transport wrapping, TLS configuration)
 
 #### Advanced: Testing with Custom State Provider
 
-For testing purposes only, you can provide a custom `StateProvider` to supply resolver state from local sources (e.g., a file cache):
+For testing purposes only, you can provide a custom `StateProvider` and `FlagLogger` to supply resolver state and control logging behavior:
 
 ```go
 // WARNING: This is for testing only. Do not use in production.
-provider, err := confidence.NewProviderWithStateProvider(ctx,
-    confidence.ProviderConfigWithStateProvider{
-        ClientSecret:  "your-client-secret",
+provider, err := confidence.NewProviderForTest(ctx,
+    confidence.ProviderTestConfig{
         StateProvider: myCustomStateProvider,
-        AccountId:     "your-account-id",
-        // WasmBytes: customWasmBytes, // Optional: custom WASM module
+        FlagLogger:    myCustomFlagLogger,
+        ClientSecret:  "your-client-secret",
+        Logger:        myCustomLogger, // Optional: custom logger
     },
 )
 ```
 
-**Important**: This configuration disables automatic state fetching and exposure logging. For production deployments, always use `NewProvider()` with `ProviderConfig`.
+**Important**: This configuration requires you to provide both a `StateProvider` and `FlagLogger`. For production deployments, always use `NewProvider()` with `ProviderConfig`.
 
 ## Credentials
 

@@ -75,7 +75,7 @@ The provider periodically:
 ---
 
 ## Migration from online resolver
-If you're currently using the ["online resolver"](https://github.com/spotify/confidence-sdk-js/tree/main/packages/openfeature-server-provider) and wants to improve the resolve latency, [migration](MIGRATION.md) is easy!
+If you're currently using the ["online resolver"](https://github.com/spotify/confidence-sdk-js/tree/main/packages/openfeature-server-provider) and want to improve the resolve latency, [migration](MIGRATION.md) is easy!
 
 ---
 
@@ -125,13 +125,19 @@ Namespaces:
 - Core: `cnfd:*`
 - Fetch/middleware: `cnfd:fetch:*` (e.g. retries, auth renewals, request summaries)
 
+Log levels are hierarchical:
+- `cnfd:debug` enables debug, info, warn, and error
+- `cnfd:info` enables info, warn, and error
+- `cnfd:warn` enables warn and error
+- `cnfd:error` enables error only
+
 Enable logs:
 
 - Node:
 ```bash
 DEBUG=cnfd:* node app.js
 # or narrower
-DEBUG=cnfd:info,cnfd:error,cnfd:fetch:* node app.js
+DEBUG=cnfd:info,cnfd:fetch:* node app.js
 ```
 
 - Browser (in DevTools console):

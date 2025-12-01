@@ -109,7 +109,6 @@ Optionally, you can implement a custom `MaterializationRepository` to manage sti
 // Optional: Custom storage for sticky assignments
 MaterializationRepository repository = new RedisMaterializationRepository(jedisPool, "myapp");
 OpenFeatureLocalResolveProvider provider = new OpenFeatureLocalResolveProvider(
-    apiSecret,
     clientSecret,
     repository
 );
