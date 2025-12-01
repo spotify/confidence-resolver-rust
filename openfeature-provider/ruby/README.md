@@ -29,9 +29,19 @@ If bundler is not being used to manage dependencies, install the gem by executin
 gem install confidence-openfeature-provider
 ```
 
-### Creating and using the flag provider
+## Getting Your Credentials
 
-Below is an example for how to create a OpenFeature client using the Confidence flag provider, and then resolve a flag with a boolean attribute. The provider is configured with an api key and a region, which will determine where it will send the resolving requests. 
+You'll need a **client secret** from Confidence to use this provider.
+
+**📖 See the [Integration Guide: Getting Your Credentials](../INTEGRATION_GUIDE.md#getting-your-credentials)** for step-by-step instructions on:
+- How to navigate the Confidence dashboard
+- Creating a Backend integration
+- Creating a test flag for verification
+- Best practices for credential storage
+
+## Creating and Using the Flag Provider
+
+Below is an example for how to create a OpenFeature client using the Confidence flag provider, and then resolve a flag with a boolean attribute. The provider is configured with a **client secret** and a region, which will determine where it will send the resolving requests.
 
 The flag will be applied immediately, meaning that Confidence will count the targeted user as having received the treatment. 
 
@@ -48,7 +58,7 @@ require "confidence/openfeature"
 # Configure OpenFeature with Confidence provider
 OpenFeature::SDK.configure do |config|
   api_client = Confidence::OpenFeature::APIClient.new(
-    client_secret: "client_secret",
+    client_secret: ENV['CONFIDENCE_CLIENT_SECRET'], # Get from Confidence dashboard
     region: Confidence::OpenFeature::Region::EU
   )
   config.provider = Confidence::OpenFeature::Provider.new(api_client: api_client)
@@ -103,6 +113,92 @@ class ApplicationController < ActionController::Base
       default_value: default,
       evaluation_context: ctx
     )
+  end
+end
+```
+
+## Evaluation Context
+
+The evaluation context contains information about the user/session being evaluated for targeting and A/B testing.
+
+### Ruby-Specific Examples
+
+```ruby
+# Simple attributes
+context = OpenFeature::SDK::EvaluationContext.new(
+  targeting_key: "user-123",
+  attributes: {
+    country: "US",
+    plan: "premium",
+    age: 25
+  }
+)
+```
+
+## Error Handling
+
+⚠️ **Important**: This provider uses the **online resolver** approach - each flag evaluation makes a network call to Confidence. Proper error handling is critical!
+
+**📖 See the [Integration Guide: Error Handling](../INTEGRATION_GUIDE.md#error-handling)** for:
+- Common failure scenarios
+- Error codes and meanings
+- Production best practices
+- Monitoring recommendations
+
+### Ruby-Specific Examples (Online Resolver)
+
+```ruby
+# The provider returns the default value on errors (including network failures)
+details = client.fetch_boolean_details(
+  flag_key: "test-flag.enabled",
+  default_value: false,
+  evaluation_context: context
+)
+
+if details.error_code
+  Rails.logger.error("Flag error: #{details.error_message} (#{details.reason})")
+end
+```
+
+## Shutdown
+
+**Important**: The provider makes network calls for each flag evaluation. Always ensure proper shutdown to close connections gracefully.
+
+```ruby
+# In your application shutdown handler (e.g., config/puma.rb)
+on_worker_shutdown do
+  OpenFeature::SDK.shutdown
+  Rails.logger.info("Confidence provider shutdown completed")
+end
+
+# For non-Rails applications
+at_exit do
+  OpenFeature::SDK.shutdown
+end
+```
+
+### Why Shutdown Matters
+
+For the online resolver provider:
+- **Closes HTTP connections** to Confidence API
+- **Prevents connection leaks** in long-running processes
+- **Ensures graceful termination** of pending requests
+
+### Ruby on Rails Considerations
+In multi-process servers (Puma, Unicorn), each worker process should shut down its own provider instance.
+
+```ruby
+# config/puma.rb
+on_worker_shutdown do
+  ActiveSupport::Notifications.instrument("shutdown.confidence") do
+    OpenFeature::SDK.shutdown
+  end
+end
+
+# config/environments/production.rb
+config.after_initialize do
+  at_exit do
+    OpenFeature::SDK.shutdown
   end
 end
 ```

@@ -1,4 +1,4 @@
-# @spotify-confidence/openfeature-server-provider-local
+# Confidence OpenFeature Local Provider for JavaScript
 
 OpenFeature provider for the Spotify Confidence resolver (local mode, powered by WebAssembly). It periodically fetches resolver state, evaluates flags locally, and flushes evaluation logs to the Confidence backend.
 
@@ -29,6 +29,18 @@ Notes:
 
 ---
 
+## Getting Your Credentials
+
+You'll need a **client secret** from Confidence to use this provider.
+
+**📖 See the [Integration Guide: Getting Your Credentials](../INTEGRATION_GUIDE.md#getting-your-credentials)** for step-by-step instructions on:
+- How to navigate the Confidence dashboard
+- Creating a Backend integration
+- Creating a test flag for verification
+- Best practices for credential storage
+
+---
+
 ## Quick start (Node)
 
 ```ts
@@ -47,16 +59,68 @@ await OpenFeature.setProviderAndWait(provider);
 
 const client = OpenFeature.getClient();
 
+// Create evaluation context with user attributes for targeting
+const context = {
+  targetingKey: 'user-123',
+  country: 'US',
+  plan: 'premium',
+};
+
 // Evaluate a boolean flag
-const details = await client.getBooleanDetails('my-flag', false, { targetingKey: 'user-123' });
-console.log(details.value, details.reason);
+const enabled = await client.getBooleanValue('test-flag.enabled', false, context);
+console.log('Flag value:', enabled);
 
 // Evaluate a nested value from an object flag using dot-path
 // e.g. flag key "experiments" with payload { groupA: { ratio: 0.5 } }
-const ratio = await client.getNumberValue('experiments.groupA.ratio', 0, { targetingKey: 'user-123' });
+const ratio = await client.getNumberValue('experiments.groupA.ratio', 0, context);
 
 // On shutdown, flush any pending logs
 await provider.onClose();
+```
+
+---
+
+## Evaluation Context
+
+The evaluation context contains information about the user/session being evaluated for targeting and A/B testing.
+
+### TypeScript/JavaScript Examples
+
+```typescript
+// Simple attributes
+const context = {
+  targetingKey: 'user-123',
+  country: 'US',
+  plan: 'premium',
+  age: 25,
+};
+```
+
+---
+
+## Error Handling
+
+The provider uses a **default value fallback** pattern - when evaluation fails, it returns your specified default value instead of throwing an error.
+
+**📖 See the [Integration Guide: Error Handling](../INTEGRATION_GUIDE.md#error-handling)** for:
+- Common failure scenarios
+- Error codes and meanings
+- Production best practices
+- Monitoring recommendations
+
+### TypeScript/JavaScript Examples
+
+```typescript
+// The provider returns the default value on errors
+const enabled = await client.getBooleanValue('my-flag.enabled', false, context);
+// enabled will be 'false' if evaluation failed
+
+// For detailed error information, use getBooleanDetails()
+const details = await client.getBooleanDetails('my-flag.enabled', false, context);
+if (details.errorCode) {
+    console.error('Flag evaluation error:', details.errorMessage);
+    console.log('Reason:', details.reason);
+}
 ```
 
 ---
@@ -81,39 +145,13 @@ If you're currently using the ["online resolver"](https://github.com/spotify/con
 
 ## Sticky Assignments
 
-Confidence supports "sticky" flag assignments to ensure users receive consistent variant assignments even when their context changes or flag configurations are updated. This SDK falls back to a cloud resolve in these cases.
+The provider supports **Sticky Assignments** for consistent variant assignments across flag evaluations.
 
-> **ℹ️ Latency Considerations**
->
-> When a sticky assignment is needed, the provider makes a **network call to Confidence's cloud resolvers**. This introduces additional latency (typically 50-200ms depending on your location) compared to local WASM evaluation.
->
-> **Coming soon**: We're developing support for custom materialization storage (Redis, database, etc.) that will eliminate this network call and keep evaluation latency consistently low.
-
-### How it works
-
-When a flag is evaluated for a user, Confidence creates a "materialization" - a snapshot of which variant that user was assigned. On subsequent evaluations, the same variant is returned even if:
-- The user's context attributes change (e.g., different country, device type)
-- The flag's targeting rules are modified
-- New assignments are paused
-
-### Implementation
-
-The provider uses a **remote resolver fallback** for sticky assignments:
-- First, the local WASM resolver attempts to resolve the flag
-- If sticky assignment data is needed, the provider makes a network call to Confidence's cloud resolvers
-- Materializations are stored on Confidence servers with a **90-day TTL** (automatically renewed on access)
-- No local storage or database setup required
-
-### Benefits
-
-- **Zero configuration**: Works out of the box with no additional setup
-- **Managed storage**: Confidence handles all storage, TTL, and consistency
-- **Automatic renewal**: TTL is refreshed on each access
-- **Global availability**: Materializations are available across all your services
-
-### Coming Soon: Custom Materialization Storage
-
-We're working on support for connecting your own materialization storage repository (Redis, database, file system, etc.) to eliminate network calls for sticky assignments and have full control over storage. This feature is currently in development.
+**📖 See the [Integration Guide: Sticky Assignments](../INTEGRATION_GUIDE.md#sticky-assignments)** for:
+- How sticky assignments work
+- Server-managed storage (zero configuration)
+- Latency considerations
+- Custom storage options (currently Java-only, coming soon to JavaScript)
 
 ---
 
@@ -170,19 +208,6 @@ The package exports a browser ESM build that compiles the WASM via streaming and
 
 - You can inject a custom `fetch` via the `fetch` option to stub network behavior in tests.
 - The provider batches logs; call `await provider.onClose()` in tests to flush them deterministically.
-
----
-
-## Troubleshooting
-
-- Provider stuck in NOT_READY/ERROR:
-  - Verify `flagClientSecret` is correct.
-  - Ensure outbound access to Confidence endpoints and CDN.
-  - Enable `DEBUG=cnfd:*` for more detail.
-
-- No logs appear:
-  - Install `debug` and enable the appropriate namespaces.
-  - Check that your environment variable/`localStorage.debug` is set before your app initializes the provider.
 
 ---
 
