@@ -523,6 +523,24 @@ Standard logging frameworks are used. Configure your application's logging as us
 - Context cancellation is respected for timeouts
 - Provider implements OpenFeature's `FeatureProvider` interface
 
+#### Testing with Custom State Provider
+
+For testing purposes only, you can provide a custom `StateProvider` and `FlagLogger`:
+
+```go
+// WARNING: This is for testing only. Do not use in production.
+provider, err := confidence.NewProviderForTest(ctx,
+    confidence.ProviderTestConfig{
+        StateProvider: myCustomStateProvider,
+        FlagLogger:    myCustomFlagLogger,
+        ClientSecret:  "your-client-secret",
+        Logger:        myCustomLogger, // Optional
+    },
+)
+```
+
+> **Important**: This configuration requires you to provide both a `StateProvider` and `FlagLogger`. For production deployments, always use `NewProvider()` with `ProviderConfig`.
+
 ### Java
 
 - WASM instance count can be tuned via `CONFIDENCE_NUMBER_OF_WASM_INSTANCES`
@@ -535,11 +553,40 @@ Standard logging frameworks are used. Configure your application's logging as us
 - Browser builds use `import.meta.url` for WASM resolution
 - Custom `fetch` can be injected for testing or Node.js < 18
 
+#### Migration from Online Resolver
+
+If you're currently using the [online resolver](https://github.com/spotify/confidence-sdk-js/tree/main/packages/openfeature-server-provider), migration to the local resolver is straightforward. See the [Migration Guide](../openfeature-provider/js/MIGRATION.md) for details.
+
+#### Browser Usage
+
+The package exports a browser ESM build that compiles the WASM via streaming and stores a singleton Promise for initialization. This ensures the WASM module is only loaded once regardless of how many times the provider is instantiated.
+
 ### Ruby
 
-- Uses **online resolver** (network call per evaluation)
+> ⚠️ **Important**: The Ruby provider uses the **online resolver** approach — **each flag evaluation makes a network call** to Confidence. This introduces latency (typically 50-200ms) compared to local WASM evaluation. Proper error handling is critical for network failures.
+
 - Region must be specified (EU or US)
 - Multi-process servers (Puma, Unicorn) need per-worker shutdown
+
+#### Rails Shutdown Patterns
+
+In multi-process servers, each worker process should shut down its own provider instance:
+
+```ruby
+# config/puma.rb
+on_worker_shutdown do
+  ActiveSupport::Notifications.instrument("shutdown.confidence") do
+    OpenFeature::SDK.shutdown
+  end
+end
+
+# config/environments/production.rb
+config.after_initialize do
+  at_exit do
+    OpenFeature::SDK.shutdown
+  end
+end
+```
 
 ---
 
