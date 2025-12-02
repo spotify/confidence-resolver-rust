@@ -134,13 +134,12 @@ By default, **sticky assignments are managed by Confidence servers**:
 ### Benefits
 
 - **Zero configuration**: Works out of the box with no additional setup
-- **Managed storage**: Confidence handles all storage, TTL, and consistency
-- **Automatic renewal**: TTL is refreshed on each access
-- **Global availability**: Materializations are available across all your services
+- **Managed storage**: Confidence handles all storage and consistency
+- **Global availability**: Materializations are available across all your services that are using this flag
 
 ### Latency Considerations
 
-When a sticky assignment is needed, the provider makes a network call to Confidence's cloud resolvers. This introduces additional latency (typically 50-200ms depending on your location) compared to local WASM evaluation.
+When a sticky assignment is needed, the provider makes a network call to Confidence's cloud resolvers. This introduces additional latency (the network latency between your location and Confidence servers) compared to local WASM evaluation.
 
 ### Custom Materialization Storage
 
@@ -149,7 +148,6 @@ Some providers support custom storage backends to eliminate network calls for st
 - [Java Provider](java/README.md#sticky-assignments) - Supports custom `MaterializationRepository`
 - [JavaScript Provider](js/README.md#sticky-assignments) - Coming soon
 - [Go Provider](go/README.md) - Coming soon
-- [Ruby Provider](ruby/README.md) - Coming soon
 
 ### Deep Dive
 
