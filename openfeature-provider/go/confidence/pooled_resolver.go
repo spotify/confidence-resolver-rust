@@ -16,9 +16,9 @@ type PooledResolverFactory struct {
 	inner LocalResolverFactory
 }
 
-func NewPooledResolverFactory(inner LocalResolverFactory, n int) LocalResolverFactory {
+func NewPooledResolverFactory(inner LocalResolverFactory, size int) LocalResolverFactory {
 	return &PooledResolverFactory{
-		size:  n,
+		size:  size,
 		inner: inner,
 	}
 }
@@ -33,20 +33,20 @@ func (f *PooledResolverFactory) Close(ctx context.Context) error {
 
 type slot struct {
 	lr LocalResolver
-	rw sync.RWMutex
+	rw *sync.RWMutex
 }
 
 type PooledResolver struct {
 	supplier LocalResolverSupplier
 	slots    []slot
 	rr       atomic.Uint64
-	mmu      sync.Mutex
+	mmu      *sync.Mutex
 }
 
 var _ LocalResolver = (*PooledResolver)(nil)
 
-func NewPooledResolver(n int, supplier LocalResolverSupplier) *PooledResolver {
-	slots := make([]slot, n+1)
+func NewPooledResolver(size int, supplier LocalResolverSupplier) *PooledResolver {
+	slots := make([]slot, size+1)
 	for i := range slots {
 		slots[i] = slot{
 			lr: supplier(),
