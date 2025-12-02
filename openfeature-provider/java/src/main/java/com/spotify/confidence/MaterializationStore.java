@@ -60,7 +60,7 @@ public interface MaterializationStore {
    * @throws MaterializationNotSupportedException if the store doesn't support reads (triggers
    *     fallback to remote gRPC resolution)
    */
-  CompletionStage<List<ReadResult>> read(List<? extends ReadOp> ops);
+  CompletionStage<List<ReadResult>> read(List<? extends ReadOp> ops) throws MaterializationNotSupportedException;
 
   /**
    * Performs a batch write of materialization data.
@@ -69,15 +69,15 @@ public interface MaterializationStore {
    * resolution. This includes storing sticky variant assignments and materialized segment
    * memberships. Implementations should be idempotent.
    *
-   * <p><strong>Default Implementation:</strong> Throws {@link UnsupportedOperationException}.
+   * <p><strong>Default Implementation:</strong> Throws {@link MaterializationNotSupportedException}.
    * Override this method if you want to support writing materialization data.
    *
    * @param ops the set of write operations to perform, never null
    * @return a CompletionStage that completes when all writes are finished
-   * @throws UnsupportedOperationException by default if not overridden
+   * @throws MaterializationNotSupportedException by default if not overridden
    */
-  default CompletionStage<Void> write(Set<? extends WriteOp> ops) {
-    throw new UnsupportedOperationException("Unimplemented method 'write'");
+  default CompletionStage<Void> write(Set<? extends WriteOp> ops) throws MaterializationNotSupportedException {
+    throw new MaterializationNotSupportedException();
   }
 
   /**
