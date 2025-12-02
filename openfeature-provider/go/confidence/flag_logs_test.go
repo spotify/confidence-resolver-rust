@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
-	"github.com/tetratelabs/wazero"
 )
 
 // Unit tests that verify WriteFlagLogs contains correct flag assignment data.
@@ -44,20 +43,16 @@ func setupFlagLogsUnitTest(t *testing.T) (*CapturingFlagLogger, openfeature.ICli
 	}
 
 	// Create wazero runtime
-	runtimeConfig := wazero.NewRuntimeConfig()
-	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
+	runtime := NewWasmResolverFactory(ctx, noopLogSink)
 
 	// Create SwapWasmResolverApi
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, capturingLogger, logger)
-	if err != nil {
-		t.Fatalf("Failed to create resolver API: %v", err)
-	}
+	resolverAPI := runtime.New()
 
 	// Create provider
 	provider := NewLocalResolverProvider(resolverAPI, stateProvider, capturingLogger, unitTestClientSecret, logger)
 
 	// Set provider and wait for ready
-	err = openfeature.SetProviderAndWait(provider)
+	err := openfeature.SetProviderAndWait(provider)
 	if err != nil {
 		t.Fatalf("Failed to set provider: %v", err)
 	}
