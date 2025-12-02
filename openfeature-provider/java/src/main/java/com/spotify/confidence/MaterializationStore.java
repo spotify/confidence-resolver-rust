@@ -111,8 +111,8 @@ public interface MaterializationStore {
   /**
    * Represents the result of a read operation.
    *
-   * <p>This sealed interface ensures type-safety and is implemented by {@link Inclusion} and
-   * {@link Variant} result types.
+   * <p>This sealed interface ensures type-safety and is implemented by {@link Inclusion} and {@link
+   * Variant} result types.
    */
   sealed interface ReadResult permits ReadResult.Inclusion, ReadResult.Variant {
     /** Returns the materialization identifier. */
@@ -151,8 +151,8 @@ public interface MaterializationStore {
   /**
    * Represents a read operation to query materialization data.
    *
-   * <p>This sealed interface ensures type-safety and is implemented by {@link Inclusion} and
-   * {@link Variant} operation types.
+   * <p>This sealed interface ensures type-safety and is implemented by {@link Inclusion} and {@link
+   * Variant} operation types.
    */
   sealed interface ReadOp permits ReadOp.Inclusion, ReadOp.Variant {
     /** Returns the materialization identifier. */

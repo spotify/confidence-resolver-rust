@@ -154,7 +154,7 @@ class ResolveTest {
                                   Flag.Rule.MaterializationSpec.MaterializationReadMode.newBuilder()
                                       .setMaterializationMustMatch(
                                           false) // true means the intake is paused. false means we
-                                                 // accept new assignments
+                                      // accept new assignments
                                       .setSegmentTargetingCanBeIgnored(false)
                                       .build())
                               .setWriteMaterialization("write-mat")
@@ -310,6 +310,26 @@ class ResolveTest {
     assertEquals(variantOn.getName(), response.getResolvedFlags(0).getVariant());
     assertEquals(expectedValue, response.getResolvedFlags(0).getValue());
     assertEquals(schema1, response.getResolvedFlags(0).getFlagSchema());
+  }
+
+  @Test
+  public void testResolveFlagWithMaterializationsIsProtectedAgainstInfiniteRecursion() {
+    useStateWithFlagsWithMaterialization();
+    when(mockMaterializationStore.write(any())).thenReturn(CompletableFuture.completedFuture(null));
+    when(mockMaterializationStore.read(
+            argThat(
+                (arg) ->
+                    arg.get(0).materialization().equalsIgnoreCase("read-mat")
+                        && arg.get(0).unit().equalsIgnoreCase("foo"))))
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                List.of())); // this will cause recursion in the resolve.
+    try {
+      resolveWithContext(List.of(flag1), "foo", Struct.newBuilder().build(), true);
+    } catch (Exception e) {
+      assertThat(e).isInstanceOf(RuntimeException.class);
+      assertThat(e.getMessage()).contains("Max retries exceeded for missing materializations: 3");
+    }
   }
 
   @Test

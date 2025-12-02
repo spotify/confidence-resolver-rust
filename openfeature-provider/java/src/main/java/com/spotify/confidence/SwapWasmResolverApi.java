@@ -10,6 +10,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 class SwapWasmResolverApi implements ResolverApi {
+  private static final int MAX_CLOSED_RETRIES = 10;
+  private static final int MAX_MATERIALIZATION_RETRIES = 3;
+
   private final AtomicReference<WasmResolveApi> wasmResolverApiRef = new AtomicReference<>();
   private final MaterializationStore materializationStore;
   private final WasmFlagLogger flagLogger;
@@ -60,12 +63,21 @@ class SwapWasmResolverApi implements ResolverApi {
 
   @Override
   public CompletionStage<ResolveFlagsResponse> resolveWithSticky(ResolveWithStickyRequest request) {
+    return resolveWithStickyInternal(request, 0, 0);
+  }
+
+  private CompletionStage<ResolveFlagsResponse> resolveWithStickyInternal(
+      ResolveWithStickyRequest request, int closedRetries, int materializationRetries) {
     final var instance = wasmResolverApiRef.get();
     final ResolveWithStickyResponse response;
     try {
       response = instance.resolveWithSticky(request);
     } catch (IsClosedException e) {
-      return resolveWithSticky(request);
+      if (closedRetries >= MAX_CLOSED_RETRIES) {
+        throw new RuntimeException(
+            "Max retries exceeded for IsClosedException: " + MAX_CLOSED_RETRIES, e);
+      }
+      return resolveWithStickyInternal(request, closedRetries + 1, materializationRetries);
     }
 
     switch (response.getResolveResultCase()) {
@@ -77,9 +89,14 @@ class SwapWasmResolverApi implements ResolverApi {
         return CompletableFuture.completedFuture(success.getResponse());
       }
       case MISSING_MATERIALIZATIONS -> {
+        if (materializationRetries >= MAX_MATERIALIZATION_RETRIES) {
+          throw new RuntimeException(
+              "Max retries exceeded for missing materializations: " + MAX_MATERIALIZATION_RETRIES);
+        }
         final var missingMaterializations = response.getMissingMaterializations();
         return handleMissingMaterializations(request, missingMaterializations)
-            .thenCompose(this::resolveWithSticky);
+            .thenCompose(
+                req -> resolveWithStickyInternal(req, closedRetries, materializationRetries + 1));
       }
       case RESOLVERESULT_NOT_SET ->
           throw new RuntimeException("Invalid response: resolve result not set");
