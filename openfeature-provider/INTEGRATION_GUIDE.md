@@ -110,7 +110,9 @@ For debugging, use the `details` methods to get error information:
 
 ## Sticky Assignments
 
-Confidence provides **sticky** flag assignments to ensure users receive consistent variant assignments across evaluations. This is essential for A/B testing integrity and consistent user experiences.
+Confidence provides **sticky** flag assignments to ensure users receive consistent variant assignments across evaluations. It can be used for two things:
+- Pause intake of new entities to an experiment
+- Ensure that entities are assigned the same variant throughout an experiment even if some of their targeting attributes change during the experiment.
 
 ### What are Sticky Assignments?
 
