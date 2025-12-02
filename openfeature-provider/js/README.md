@@ -138,11 +138,6 @@ The provider periodically:
 
 ---
 
-## Migration from online resolver
-If you're currently using the ["online resolver"](https://github.com/spotify/confidence-sdk-js/tree/main/packages/openfeature-server-provider) and want to improve the resolve latency, [migration](MIGRATION.md) is easy!
-
----
-
 ## Sticky Assignments
 
 The provider supports **Sticky Assignments** for consistent variant assignments across flag evaluations.
