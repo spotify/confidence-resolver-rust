@@ -47,10 +47,10 @@ If anything goes wrong, the provider returns `DEFAULT_VALUE` instead of throwing
 
 | Scenario | What Happens | Common Causes |
 |----------|--------------|---------------|
-| **Flag doesn't exist** | Returns default | Flag not created, wrong name, not published |
-| **Type mismatch** | Returns default | Requesting boolean for string flag |
+| **Flag doesn't exist** | Returns default | Flag not created, wrong name, not enabled for the client |
+| **Type mismatch** | Returns default | Requesting boolean for string or object property. Or requesting boolean for the _flag_. Flags are objects in Confidence |
 | **Network failure** | Returns default | Confidence API unreachable (Ruby only) |
-| **Initialization failure** | Returns default | CDN unreachable, invalid credentials |
+| **Initialization failure** | Returns default | CDN unreachable, invalid credentials not backend type |
 | **Invalid context** | Returns default | Malformed attributes, missing targeting key |
 | **Provider not ready** | Returns default | Called before initialization complete |
 
