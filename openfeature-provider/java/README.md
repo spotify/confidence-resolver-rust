@@ -152,28 +152,32 @@ This is particularly useful for:
 - **Production customization**: Custom TLS settings, proxies, or connection pooling
 - **Debugging**: Add custom logging or tracing interceptors
 
-## Sticky Assignments
+## Materializations
 
-The provider supports **Sticky Assignments** for consistent variant assignments across flag evaluations. This ensures users receive the same variant even when their targeting attributes change, and enables pausing experiment intake.
+The provider supports **materializations** for two key use cases:
 
+1. **Sticky Assignments**: Maintain consistent variant assignments across evaluations even when targeting attributes change. This enables pausing intake (stopping new users from entering an experiment) while keeping existing users in their assigned variants.
 **📖 See the [Integration Guide: Sticky Assignments](../INTEGRATION_GUIDE.md#sticky-assignments)** for how sticky assignments work and their benefits.
 
-**By default, sticky assignments are managed by Confidence servers.** When sticky assignment data is needed, the provider makes a network call to Confidence, which maintains the sticky repository server-side with automatic 90-day TTL management. This requires no additional setup.
+1. **Custom Targeting via Materialized Segments**: Efficiently target precomputed sets of identifiers from datasets. Instead of evaluating complex targeting rules at runtime, materializations allow for fast lookups of whether a unit (user, session, etc.) is included in a target segment.
+
+**By default, materializations are managed by Confidence servers.** When sticky assignment data is needed, the provider makes a network call to Confidence, which maintains the sticky repository server-side with automatic 90-day TTL management. This requires no additional setup.
 
 ### Custom Materialization Storage
 
-Optionally, you can implement a custom `MaterializationRepository` to manage sticky assignments in your own storage (Redis, database, etc.) to eliminate network calls and improve latency:
+Optionally, you can implement a custom `MaterializationStore` to manage materialization data in your own storage (Redis, database, etc.) to eliminate network calls and improve latency:
 
 ```java
-// Optional: Custom storage for sticky assignments
-MaterializationRepository repository = new RedisMaterializationRepository(jedisPool, "myapp");
+// Optional: Custom storage for materialization data
+MaterializationStore store = new RedisMaterializationStore(jedisPool);
 OpenFeatureLocalResolveProvider provider = new OpenFeatureLocalResolveProvider(
     clientSecret,
-    repository
+    store
 );
 ```
 
 For detailed information on how to implement custom storage backends, see [STICKY_RESOLVE.md](STICKY_RESOLVE.md).
+See the `InMemoryMaterializationStoreExample` class in the test sources for a reference implementation, or review the `MaterializationStore` javadoc for detailed API documentation.
 
 ## Requirements
 

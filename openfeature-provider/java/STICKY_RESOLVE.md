@@ -1,89 +1,129 @@
-# Sticky Resolve Documentation
+# Materialization Store Documentation
 
 ## Overview
 
-Sticky Resolve ensures users receive the same variant throughout an experiment, even if their targeting attributes change or you pause new assignments.
+The Materialization Store provides persistent storage for flag resolution data, supporting two key use cases:
 
-**Two main use cases:**
-1. **Consistent experience** - User moves countries but keeps the same variant
-2. **Pause intake** - Stop new assignments while maintaining existing ones
+1. **Sticky Assignments** - Maintain consistent variant assignments across evaluations even when targeting attributes change. This enables pausing intake (stopping new users from entering an experiment) while keeping existing users in their assigned variants.
 
-**Default behavior:** Sticky assignments are managed by Confidence servers with automatic 90-day TTL. When needed, the provider makes a network call to Confidence. No setup required.
+2. **Custom Targeting via Materialized Segments** - Precomputed sets of identifiers from datasets that should be targeted. Instead of evaluating complex targeting rules at runtime, materializations allow efficient lookup of whether a unit (user, session, etc.) is included in a target segment.
+
+**Default behavior:** Materializations are managed by Confidence servers with automatic 90-day TTL. When needed, the provider makes a network call to Confidence. No setup required.
 
 ## How It Works
 
-### Default: Server-Side Storage (RemoteResolverFallback)
+### Default: Server-Side Storage (UnsupportedMaterializationStore)
 
 **Flow:**
 1. Local WASM resolver attempts to resolve
-2. If sticky data needed → network call to Confidence
-3. Confidence checks its sticky repository, returns variant
-4. Assignment stored server-side with 90-day TTL (auto-renewed on access)
+2. If materialization data needed → `UnsupportedMaterializationStore` throws exception
+3. Provider falls back to remote gRPC resolution via Confidence
+4. Confidence checks its materialization repository, returns variant/inclusion data
+5. Data stored server-side with 90-day TTL (auto-renewed on access)
 
 **Server-side configuration (in Confidence UI):**
 - Optionally skip targeting criteria for sticky assignments
 - Pause/resume new entity intake
 - Automatic TTL management
 
-### Custom: Local Storage (MaterializationRepository)
+### Custom: Local Storage (MaterializationStore)
 
-Implement `MaterializationRepository` to store assignments locally and eliminate network calls.
+Implement `MaterializationStore` to store materialization data locally and eliminate network calls.
 
 **Interface:**
 ```java
-public interface MaterializationRepository extends StickyResolveStrategy {
-  // Load assignments for a unit (e.g., user ID)
-  CompletableFuture<Map<String, MaterializationInfo>> loadMaterializedAssignmentsForUnit(
-      String unit, String materialization);
+public interface MaterializationStore {
+  // Batch read of materialization data
+  CompletionStage<List<ReadResult>> read(List<? extends ReadOp> ops);
 
-  // Store new assignments
-  CompletableFuture<Void> storeAssignment(
-      String unit, Map<String, MaterializationInfo> assignments);
+  // Batch write of materialization data (optional)
+  default CompletionStage<Void> write(Set<? extends WriteOp> ops) {
+    throw new UnsupportedOperationException("Unimplemented method 'write'");
+  }
 }
 ```
 
-**MaterializationInfo structure:**
+**Key Concepts:**
+- **Materialization** - Identifier for a materialization context (experiment, flag, or materialized segment)
+- **Unit** - Entity identifier (user ID, session ID, etc.)
+- **Rule** - Targeting rule identifier within a flag
+- **Variant** - Assigned variant name for the unit+rule combination
+
+**Operation Types:**
+
+Read operations (`ReadOp`):
 ```java
-record MaterializationInfo(
-    boolean isUnitInMaterialization,
-    Map<String, String> ruleToVariant  // rule ID -> variant name
-)
+// Check if unit is in materialized segment
+sealed interface ReadOp {
+  record Inclusion(String materialization, String unit) implements ReadOp {}
+  record Variant(String materialization, String unit, String rule) implements ReadOp {}
+}
+```
+
+Read results (`ReadResult`):
+```java
+sealed interface ReadResult {
+  // Result for segment membership check
+  record Inclusion(String materialization, String unit, boolean included) implements ReadResult {}
+
+  // Result for sticky variant assignment
+  record Variant(String materialization, String unit, String rule, Optional<String> variant)
+      implements ReadResult {}
+}
+```
+
+Write operations (`WriteOp`):
+```java
+sealed interface WriteOp {
+  // Store sticky variant assignment
+  record Variant(String materialization, String unit, String rule, String variant)
+      implements WriteOp {}
+}
 ```
 
 ## Implementation Examples
 
-### In-Memory (Testing/Development)
+### In-Memory (Testing/Development Only)
 
-[Here is an example](src/test/java/com/spotify/confidence/InMemoryMaterializationRepoExample.java) on how to implement a simple in-memory `MaterializationRepository`. The same approach can be used with other more persistent storages (like Redis or similar) which is highly recommended for production use cases. 
+**Warning: Do not use in-memory storage in production.** In-memory implementations lose all materialization data on restart, breaking sticky assignments and materialized segments. Production systems require persistent storage (Redis, database, etc.).
+
+See `InMemoryMaterializationStoreExample` for a reference implementation. Use this pattern with persistent storage backends for production.
 
 #### Usage
 
 ```java
-MaterializationRepository repository = new InMemoryMaterializationRepoExample();
+MaterializationStore store = new InMemoryMaterializationStore();
 
 OpenFeatureLocalResolveProvider provider = new OpenFeatureLocalResolveProvider(
     clientSecret,
-    repository
+    store
 );
 ```
 
 ## Best Practices
 
-1. **Fail gracefully** - Storage errors shouldn't fail flag resolution
-2. **Use 90-day TTL** - Match Confidence's default behavior, renew on read
-3. **Connection pooling** - Use pools for Redis/DB connections
-4. **Monitor metrics** - Track cache hit rate, storage latency, errors
-5. **Test both paths** - Missing assignments (cold start) and existing assignments
+1. **Thread-safe implementation** - Implementations must be thread-safe for concurrent flag resolution
+2. **Fail gracefully** - Storage errors shouldn't fail flag resolution; throw `MaterializationNotSupportedException` to trigger remote fallback
+3. **Use 90-day TTL** - Match Confidence's default behavior, renew on read
+4. **Idempotent writes** - Write operations should be idempotent
+5. **Batch operations** - Both `read` and `write` accept batches for efficiency
+6. **Connection pooling** - Use pools for Redis/DB connections
+7. **Monitor metrics** - Track cache hit rate, storage latency, errors
+8. **Test both paths** - Missing assignments (cold start) and existing assignments
 
 ## When to Use Custom Storage
 
-| Strategy | Best For | Trade-offs |
+| Implementation | Best For | Trade-offs |
 |----------|----------|------------|
-| **RemoteResolverFallback** (default) | Most apps | Simple, managed by Confidence. Network calls when needed. |
-| **MaterializationRepository** (in-memory) | Single-instance apps, testing | Fast, no network. Lost on restart. |
-| **MaterializationRepository** (Redis/DB) | Distributed/Multi instance apps | No network calls. Requires storage infra. |
+| **UnsupportedMaterializationStore** (default) | Most apps | Simple, managed by Confidence. Network calls when needed. |
+| **MaterializationStore** (in-memory) | Testing/development only | Fast, no network. **Lost on restart - do not use in production.** |
+| **MaterializationStore** (Redis/DB) | Production apps needing local storage | No network calls. Requires persistent storage infrastructure. |
 
-**Start with the default.** Only implement custom storage if you need to eliminate network calls or work offline.
+**Start with the default.** Only implement custom storage with persistent backends (Redis, database) if you need to eliminate network calls or work offline.
+
+## Error Handling
+
+When implementing `read()`, throw `MaterializationNotSupportedException` to trigger fallback to remote gRPC resolution. This allows graceful degradation when local storage is unavailable.
 
 ## Additional Resources
 

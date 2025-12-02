@@ -40,7 +40,8 @@ class OpenFeatureLocalResolveProviderFlagLogsTest {
    * A no-op ResolverFallback for testing that never returns results. Since we're testing local
    * resolution with real state, this fallback should never be called.
    */
-  private static class NoOpResolverFallback implements ResolverFallback {
+  private static class NoOpResolverFallback implements RemoteResolver {
+
     @Override
     public CompletableFuture<ResolveFlagsResponse> resolve(ResolveFlagsRequest request) {
       return CompletableFuture.completedFuture(ResolveFlagsResponse.getDefaultInstance());
@@ -68,7 +69,11 @@ class OpenFeatureLocalResolveProviderFlagLogsTest {
     // Create provider with capturing logger
     provider =
         new OpenFeatureLocalResolveProvider(
-            stateProvider, FLAG_CLIENT_SECRET, new NoOpResolverFallback(), capturingLogger);
+            stateProvider,
+            FLAG_CLIENT_SECRET,
+            new UnsupportedMaterializationStore(),
+            capturingLogger,
+            new NoOpResolverFallback());
 
     OpenFeatureAPI.getInstance().setProviderAndWait(provider);
 
