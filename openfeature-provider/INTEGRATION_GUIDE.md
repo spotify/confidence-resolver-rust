@@ -65,12 +65,13 @@ For debugging, use the `details` methods to get error information:
 - `PARSE_ERROR`: Response couldn't be parsed
 - `GENERAL_ERROR`: Other errors (network, timeout, etc.)
 
-**Reasons:**
-- `DEFAULT`: Default value returned (flag not evaluated)
-- `TARGETING_MATCH`: Flag evaluated successfully
-- `NO_SEGMENT_MATCH`: Evaluation didn't match any variant
+**Reasons** (standard OpenFeature reasons):
+- `TARGETING_MATCH`: Flag evaluated successfully and matched targeting rules
+- `DEFAULT`: Default value returned (no segment/variant matched)
+- `DISABLED`: Flag is disabled or archived
+- `STALE`: Stale cached value
 - `ERROR`: Evaluation failed (see error code)
-- `STATIC`: Static flag value (no targeting rules)
+- `UNKNOWN`: Reason could not be determined
 
 ### Production Best Practices
 
