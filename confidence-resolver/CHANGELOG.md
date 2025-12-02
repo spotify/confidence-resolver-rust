@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0](https://github.com/spotify/confidence-resolver/compare/confidence_resolver-v0.7.0...confidence_resolver-v0.8.0) (2025-12-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* migrate to cdn state fetch, publish logs using client secret ([#166](https://github.com/spotify/confidence-resolver/issues/166))
+
+### Features
+
+* migrate to cdn state fetch, publish logs using client secret ([#166](https://github.com/spotify/confidence-resolver/issues/166)) ([6c8d959](https://github.com/spotify/confidence-resolver/commit/6c8d959f124faa419c1ace103d8832457248eb26))
+
 ## [0.7.0](https://github.com/spotify/confidence-resolver/compare/confidence_resolver-v0.6.0...confidence_resolver-v0.7.0) (2025-11-24)
 
 
