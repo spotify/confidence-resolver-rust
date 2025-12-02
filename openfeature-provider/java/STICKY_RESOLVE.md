@@ -113,7 +113,7 @@ OpenFeatureLocalResolveProvider provider = new OpenFeatureLocalResolveProvider(
 
 ## When to Use Custom Storage
 
-| Strategy | Best For | Trade-offs |
+| Implementation | Best For | Trade-offs |
 |----------|----------|------------|
 | **UnsupportedMaterializationStore** (default) | Most apps | Simple, managed by Confidence. Network calls when needed. |
 | **MaterializationStore** (in-memory) | Testing/development only | Fast, no network. **Lost on restart - do not use in production.** |

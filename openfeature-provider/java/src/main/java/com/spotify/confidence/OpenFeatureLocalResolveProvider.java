@@ -119,7 +119,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
 
   /**
    * Creates a new OpenFeature provider for local flag resolution with a custom sticky resolve
-   * strategy.
+   * implementation.
    *
    * <p>This constructor uses the default gRPC channel factory but allows you to provide a custom
    * {@link MaterializationStore} such as a {@link MaterializationStore} for local storage of sticky
@@ -135,7 +135,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
    *
    * @param clientSecret the client secret for your application, used for flag resolution
    *     authentication
-   * @param materializationStore the strategy to use for handling sticky flag resolution
+   * @param materializationStore the implementation to use for handling sticky flag resolution
    */
   public OpenFeatureLocalResolveProvider(
       String clientSecret, MaterializationStore materializationStore) {
@@ -144,12 +144,12 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
 
   /**
    * Creates a new OpenFeature provider for local flag resolution with custom channel factory and
-   * sticky resolve strategy.
+   * sticky resolve implementation.
    *
    * @param config the provider configuration including optional channel factory
    * @param clientSecret the client secret for your application, used for flag resolution
    *     authentication
-   * @param materializationStore the strategy to use for handling sticky flag resolution
+   * @param materializationStore the implementation to use for handling sticky flag resolution
    */
   public OpenFeatureLocalResolveProvider(
       LocalProviderConfig config, String clientSecret, MaterializationStore materializationStore) {
@@ -169,7 +169,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
    *
    * @param accountStateProvider the state provider for resolver state
    * @param clientSecret the client secret for authentication
-   * @param materializationStore the strategy for sticky flag resolution
+   * @param materializationStore the implementation for sticky flag resolution
    * @param wasmFlagLogger the flag logger to use (e.g., CapturingWasmFlagLogger for testing)
    */
   @VisibleForTesting
