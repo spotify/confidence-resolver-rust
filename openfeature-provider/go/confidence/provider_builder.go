@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"os"
 
+	fl "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/flag_logger"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
-	"github.com/tetratelabs/wazero"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -40,9 +41,6 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		}))
 	}
 
-	runtimeConfig := wazero.NewRuntimeConfig()
-	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
-
 	// Create gRPC connection for flag logger
 	hooks := config.TransportHooks
 	if hooks == nil {
@@ -57,7 +55,6 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	target, opts := hooks.ModifyGRPCDial(confidenceDomain, baseOpts)
 	conn, err := grpc.NewClient(target, opts...)
 	if err != nil {
-		wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 
@@ -66,13 +63,11 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	// Build HTTP transport using hooks and pass into state fetcher
 	transport := hooks.WrapHTTP(http.DefaultTransport)
 	stateProvider := NewFlagsAdminStateFetcherWithTransport(config.ClientSecret, logger, transport)
-	flagLogger := NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
+	flagLogger := fl.NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
 
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, flagLogger, logger)
-	if err != nil {
-		wasmRuntime.Close(ctx)
-		return nil, fmt.Errorf("failed to create resolver API: %w", err)
-	}
+	// TODO the following two calls are unsafe and can panic, we should move them to provider init
+	localResolverFactory := lr.DefaultResolverFactory(flagLogger.Write)
+	resolverAPI := localResolverFactory.New()
 
 	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger)
 
@@ -95,14 +90,9 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 		}))
 	}
 
-	runtimeConfig := wazero.NewRuntimeConfig()
-	wasmRuntime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
+	localResolverFactory := lr.DefaultResolverFactory(config.FlagLogger.Write)
 
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, wasmRuntime, defaultWasmBytes, config.FlagLogger, logger)
-	if err != nil {
-		wasmRuntime.Close(ctx)
-		return nil, fmt.Errorf("failed to create resolver API: %w", err)
-	}
+	resolverAPI := localResolverFactory.New()
 
 	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, config.ClientSecret, logger)
 

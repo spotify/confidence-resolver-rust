@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
+	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -21,7 +23,7 @@ const defaultPollIntervalSeconds = 30
 // LocalResolverProvider implements the OpenFeature FeatureProvider interface
 // for local flag resolution using the Confidence WASM resolver
 type LocalResolverProvider struct {
-	resolverAPI   WasmResolverApi
+	resolverAPI   lr.LocalResolver
 	stateProvider StateProvider
 	flagLogger    FlagLogger
 	clientSecret  string
@@ -40,7 +42,7 @@ var (
 
 // NewLocalResolverProvider creates a new LocalResolverProvider
 func NewLocalResolverProvider(
-	resolverAPI WasmResolverApi,
+	resolverAPI lr.LocalResolver,
 	stateProvider StateProvider,
 	flagLogger FlagLogger,
 	clientSecret string,
@@ -420,7 +422,11 @@ func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationCon
 	}
 
 	// Update resolver with initial state (triggers WASM compilation and initialization)
-	if err := p.resolverAPI.UpdateStateAndFlushLogs(initialState, accountId); err != nil {
+	setResolverStateRequest := &proto.SetResolverStateRequest{
+		State:     initialState,
+		AccountId: accountId,
+	}
+	if err := p.resolverAPI.SetResolverState(setResolverStateRequest); err != nil {
 		p.logger.Error("Failed to initialize resolver with initial state", "error", err)
 		return fmt.Errorf("failed to initialize resolver: %w", err)
 	}
@@ -434,6 +440,7 @@ func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationCon
 
 // Shutdown closes the provider and cleans up resources (part of StateHandler interface)
 func (p *LocalResolverProvider) Shutdown() {
+	ctx := context.Background()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -453,7 +460,7 @@ func (p *LocalResolverProvider) Shutdown() {
 	// Wait for background goroutines to exit
 	p.wg.Wait()
 
-	ctx := context.Background()
+	// ctx := context.Background()
 
 	// Close resolver API (which flushes final logs)
 	if p.resolverAPI != nil {
@@ -490,6 +497,9 @@ func (p *LocalResolverProvider) startScheduledTasks(parentCtx context.Context) {
 		ticker := time.NewTicker(p.pollInterval)
 		defer ticker.Stop()
 
+		assignTicker := time.NewTicker(100 * time.Millisecond)
+		defer assignTicker.Stop()
+
 		for {
 			select {
 			case <-ticker.C:
@@ -504,10 +514,21 @@ func (p *LocalResolverProvider) startScheduledTasks(parentCtx context.Context) {
 					p.logger.Error("AccountID inside fetched state is empty, skipping this state update attempt")
 					continue
 				}
+				if err := p.resolverAPI.FlushAllLogs(); err != nil {
+					p.logger.Error("Failed to flush all logs", "error", err)
+				}
 
 				// Update state and flush logs
-				if err := p.resolverAPI.UpdateStateAndFlushLogs(state, accountId); err != nil {
+				setResolverStateRequest := &proto.SetResolverStateRequest{
+					State:     state,
+					AccountId: accountId,
+				}
+				if err := p.resolverAPI.SetResolverState(setResolverStateRequest); err != nil {
 					p.logger.Error("Failed to update state and flush logs", "error", err)
+				}
+			case <-assignTicker.C:
+				if err := p.resolverAPI.FlushAssignLogs(); err != nil {
+					p.logger.Error("Failed to flush assign logs", "error", err)
 				}
 			case <-ctx.Done():
 				return

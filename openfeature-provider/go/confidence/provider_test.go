@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -459,17 +460,18 @@ type mockResolverAPIForInit struct {
 	resolveWithSticky func(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
 }
 
-func (m *mockResolverAPIForInit) UpdateStateAndFlushLogs(state []byte, accountID string) error {
+func (m *mockResolverAPIForInit) SetResolverState(request *messages.SetResolverStateRequest) error {
 	if m.updateStateFunc != nil {
-		return m.updateStateFunc(state, accountID)
+		return m.updateStateFunc(request.State, request.AccountId)
 	}
 	return nil
 }
 
-func (m *mockResolverAPIForInit) Close(ctx context.Context) {
+func (m *mockResolverAPIForInit) Close(ctx context.Context) error {
 	if m.closeFunc != nil {
 		m.closeFunc(ctx)
 	}
+	return nil
 }
 
 func (m *mockResolverAPIForInit) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
@@ -477,6 +479,14 @@ func (m *mockResolverAPIForInit) ResolveWithSticky(request *resolver.ResolveWith
 		return m.resolveWithSticky(request)
 	}
 	return nil, nil
+}
+
+func (m *mockResolverAPIForInit) FlushAllLogs() error {
+	return nil
+}
+
+func (m *mockResolverAPIForInit) FlushAssignLogs() error {
+	return nil
 }
 
 // TestLocalResolverProvider_Init_NilStateProvider verifies Init fails when stateProvider is nil
