@@ -75,41 +75,29 @@ For debugging, use the `details` methods to get error information:
 ### Production Best Practices
 
 1. **Choose safe defaults**
+   Example:
    ```
    ✅ GOOD: Default to "off" for risky features
    ❌ BAD: Default to "on" for untested code
-
-   ✅ GOOD: Default to conservative values (low timeouts, small batches)
-   ❌ BAD: Default to aggressive values that could cause issues
    ```
 
 2. **Log errors for debugging**
-   - Track evaluation failures in your monitoring system
+   - Track evaluation failures in your monitoring system. You can use OpenFeature [hooks](https://openfeature.dev/docs/reference/concepts/hooks/) for this.
    - Include flag key, error code, and context in logs
    - Set up alerts for elevated error rates
 
 3. **Monitor error rates**
    - Track `errorCode != null` metrics
    - Alert if error rate exceeds threshold (e.g., >5%)
-   - Investigate spikes (may indicate Confidence API issues)
+   - Investigate spikes (may indicate misconfigured flag setup or SDK integration)
 
-4. **Use feature flags for graceful degradation**
-   ```
-   enabled = getFlag("risky-feature", false)  // Default: OFF
-   if (enabled) {
-     // New, potentially risky code
-   } else {
-     // Stable, proven code path
-   }
-   ```
-
-5. **Test error scenarios**
+4. **Test error scenarios**
    - Verify app works when Confidence is unreachable
    - Test with invalid credentials
    - Test with non-existent flags
    - Verify graceful handling of type mismatches
 
-6. **Document your defaults**
+5. **Document your defaults**
    ```
    // Default: false - feature is opt-in for safety
    const enabled = getFlag("new-payment-flow", false)
