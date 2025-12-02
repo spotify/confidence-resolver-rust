@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
@@ -46,7 +47,7 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	}
 
 	// Use different client secret that won't match
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)), NewUnsupportedMaterializationStore()))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -97,7 +98,7 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	}
 
 	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)), NewUnsupportedMaterializationStore()))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -253,7 +254,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			t.Fatalf("Failed to initialize swap with state: %v", err)
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)), NewUnsupportedMaterializationStore()))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -277,7 +278,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		}
 	})
 
-	t.Run("Provider returns missing materializations error message", func(t *testing.T) {
+	t.Run("Provider reads stored materialization correctly", func(t *testing.T) {
 		// Create runtime for this subtest
 		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
 		defer runtime.Close(ctx)
@@ -286,8 +287,10 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		stickyState := createStateWithStickyFlag()
 		accountId := "test-account"
 
+		debugLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
 		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, debugLogger)
 		if err != nil {
 			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
 		}
@@ -298,7 +301,13 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 			t.Fatalf("Failed to initialize swap with state: %v", err)
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+		// Use empty materialization store that returns no variants
+		inMemoryStore := NewInMemoryMaterializationStore(debugLogger)
+		defer inMemoryStore.Close()
+		// Pre-populate store with variant assignment for the test user
+		inMemoryStore.Write(ctx, []WriteOp{NewWriteOpVariant("experiment_v1", "test-user-123", "flags/sticky-test-flag/rules/sticky-rule", "flags/sticky-test-flag/variants/on")})
+
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", debugLogger, inMemoryStore))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -307,18 +316,107 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 		defaultValue := false
 		result, error := client.BooleanValueDetails(ctx, "sticky-test-flag.enabled", defaultValue, evalCtx)
-		if error == nil {
+		if error != nil {
 			t.Error("Expected error when materializations missing, got nil")
-		} else if error.Error() != "error code: GENERAL: missing materializations" {
-			t.Errorf("Expected 'error code: GENERAL: missing materializations', got: %v", error.Error())
 		}
 
-		if result.Value != defaultValue {
-			t.Errorf("Expected default value %v when materializations missing, got %v", defaultValue, result.Value)
+		if result.Variant != "flags/sticky-test-flag/variants/on" {
+			t.Errorf("Expected variant 'flags/sticky-test-flag/variants/on', got %v", result.Variant)
 		}
 
-		if result.Reason != openfeature.ErrorReason {
-			t.Errorf("Expected ErrorReason when materializations missing, got %v", result.Reason)
+		if result.Value == defaultValue {
+			t.Error("Expected resolved value, got default value")
+		}
+
+		expectedValue := true
+		if result.Value != expectedValue {
+			t.Errorf("Expected value %v, got %v", expectedValue, result.Value)
+		}
+
+		if result.Reason != openfeature.TargetingMatchReason {
+			t.Errorf("Expected TargetingMatchReason got %v", result.Reason)
 		}
 	})
+
+	t.Run("Provider writes materialization correctly", func(t *testing.T) {
+		// Create runtime for this subtest
+		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+		defer runtime.Close(ctx)
+
+		// Create state with a flag that requires materializations
+		stickyState := createStateWithStickyFlag()
+		accountId := "test-account"
+
+		debugLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+		flagLogger := NewNoOpWasmFlagLogger()
+		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, debugLogger)
+		if err != nil {
+			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+		}
+		defer swap.Close(ctx)
+
+		// Initialize with sticky state
+		if err := swap.UpdateStateAndFlushLogs(stickyState, accountId); err != nil {
+			t.Fatalf("Failed to initialize swap with state: %v", err)
+		}
+
+		// Use empty materialization store that returns no variants
+		inMemoryStore := NewInMemoryMaterializationStore(debugLogger)
+		defer inMemoryStore.Close()
+
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", debugLogger, inMemoryStore))
+		client := openfeature.NewClient("test-client")
+
+		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
+			"user_id": "test-user-123",
+		})
+
+		defaultValue := false
+		result, error := client.BooleanValueDetails(ctx, "sticky-test-flag.enabled", defaultValue, evalCtx)
+		if error != nil {
+			t.Error("Expected no error when materializations written, got " + error.Error())
+		}
+
+		// wait for goroutines to finish writing
+		time.Sleep(10 * time.Millisecond)
+
+		// expected a write to the in memory store
+		memoryStoreDump := inMemoryStore.Dump()
+		if len(memoryStoreDump) != 1 {
+			t.Error("Expected inMemoryStore to have one entry, got", len(memoryStoreDump))
+		}
+
+		foundVariant := false
+		if variantResult, ok := memoryStoreDump[0].(*ReadResultVariant); ok {
+			if variantResult.Unit() == "test-user-123" &&
+				variantResult.Materialization() == "experiment_v1" &&
+				variantResult.Rule() == "flags/sticky-test-flag/rules/sticky-rule" &&
+				*variantResult.Variant() == "flags/sticky-test-flag/variants/on" {
+				foundVariant = true
+			}
+		}
+
+		if !foundVariant {
+			t.Error("Expected to find written variant in materialization store, found", memoryStoreDump[len(memoryStoreDump)-1].(*ReadResultVariant))
+		}
+
+		if result.Variant != "flags/sticky-test-flag/variants/on" {
+			t.Errorf("Expected variant 'flags/sticky-test-flag/variants/on', got %v", result.Variant)
+		}
+
+		if result.Value == defaultValue {
+			t.Error("Expected resolved value, got default value")
+		}
+
+		expectedValue := true
+		if result.Value != expectedValue {
+			t.Errorf("Expected value %v, got %v", expectedValue, result.Value)
+		}
+
+		if result.Reason != openfeature.TargetingMatchReason {
+			t.Errorf("Expected TargetingMatchReason got %v", result.Reason)
+		}
+	})
+
 }

@@ -16,16 +16,18 @@ import (
 const confidenceDomain = "edge-grpc.spotify.com"
 
 type ProviderConfig struct {
-	ClientSecret   string
-	Logger         *slog.Logger
-	TransportHooks TransportHooks
+	ClientSecret         string
+	Logger               *slog.Logger
+	TransportHooks       TransportHooks       // Optional: defaults to DefaultTransportHooks
+	MaterializationStore MaterializationStore // Optional: defaults to UnsupportedMaterializationStore
 }
 
 type ProviderTestConfig struct {
-	StateProvider StateProvider
-	FlagLogger    FlagLogger
-	ClientSecret  string
-	Logger        *slog.Logger
+	StateProvider        StateProvider
+	FlagLogger           FlagLogger
+	ClientSecret         string
+	Logger               *slog.Logger
+	MaterializationStore MaterializationStore // Optional: defaults to UnsupportedMaterializationStore
 }
 
 func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProvider, error) {
@@ -74,7 +76,12 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
-	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger)
+	materializationStore := config.MaterializationStore
+	if materializationStore == nil {
+		materializationStore = NewUnsupportedMaterializationStore()
+	}
+
+	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger, materializationStore)
 
 	return provider, nil
 }
@@ -104,7 +111,12 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 		return nil, fmt.Errorf("failed to create resolver API: %w", err)
 	}
 
-	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, config.ClientSecret, logger)
+	materializationStore := config.MaterializationStore
+	if materializationStore == nil {
+		materializationStore = NewUnsupportedMaterializationStore()
+	}
+
+	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, config.ClientSecret, logger, materializationStore)
 
 	return provider, nil
 }

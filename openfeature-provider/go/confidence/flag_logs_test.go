@@ -54,7 +54,7 @@ func setupFlagLogsUnitTest(t *testing.T) (*CapturingFlagLogger, openfeature.ICli
 	}
 
 	// Create provider
-	provider := NewLocalResolverProvider(resolverAPI, stateProvider, capturingLogger, unitTestClientSecret, logger)
+	provider := NewLocalResolverProvider(resolverAPI, stateProvider, capturingLogger, unitTestClientSecret, logger, NewUnsupportedMaterializationStore())
 
 	// Set provider and wait for ready
 	err = openfeature.SetProviderAndWait(provider)

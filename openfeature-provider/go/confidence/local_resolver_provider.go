@@ -21,15 +21,16 @@ const defaultPollIntervalSeconds = 30
 // LocalResolverProvider implements the OpenFeature FeatureProvider interface
 // for local flag resolution using the Confidence WASM resolver
 type LocalResolverProvider struct {
-	resolverAPI   WasmResolverApi
-	stateProvider StateProvider
-	flagLogger    FlagLogger
-	clientSecret  string
-	logger        *slog.Logger
-	cancelFunc    context.CancelFunc
-	wg            sync.WaitGroup
-	mu            sync.Mutex
-	pollInterval  time.Duration
+	resolverAPI          WasmResolverApi
+	stateProvider        StateProvider
+	flagLogger           FlagLogger
+	clientSecret         string
+	logger               *slog.Logger
+	cancelFunc           context.CancelFunc
+	wg                   sync.WaitGroup
+	mu                   sync.Mutex
+	pollInterval         time.Duration
+	materializationStore MaterializationStore
 }
 
 // Compile-time interface conformance checks
@@ -45,6 +46,7 @@ func NewLocalResolverProvider(
 	flagLogger FlagLogger,
 	clientSecret string,
 	logger *slog.Logger,
+	materializationStore MaterializationStore,
 ) *LocalResolverProvider {
 	// Create a default logger if none provided
 	if logger == nil {
@@ -54,12 +56,13 @@ func NewLocalResolverProvider(
 	}
 
 	return &LocalResolverProvider{
-		resolverAPI:   resolverAPI,
-		stateProvider: stateProvider,
-		flagLogger:    flagLogger,
-		clientSecret:  clientSecret,
-		logger:        logger,
-		pollInterval:  getPollIntervalSeconds(),
+		resolverAPI:          resolverAPI,
+		stateProvider:        stateProvider,
+		flagLogger:           flagLogger,
+		clientSecret:         clientSecret,
+		logger:               logger,
+		pollInterval:         getPollIntervalSeconds(),
+		materializationStore: materializationStore,
 	}
 }
 
@@ -276,7 +279,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 	stickyRequest := &resolver.ResolveWithStickyRequest{
 		ResolveRequest:          request,
 		MaterializationsPerUnit: make(map[string]*resolver.MaterializationMap),
-		FailFastOnSticky:        true,
+		FailFastOnSticky:        false,
 		NotProcessSticky:        false,
 	}
 
@@ -293,27 +296,15 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 		}
 	}
 
-	// Extract the actual resolve response from the sticky response
-	var response *resolver.ResolveFlagsResponse
-	switch result := stickyResponse.ResolveResult.(type) {
-	case *resolver.ResolveWithStickyResponse_Success_:
-		response = result.Success.Response
-	case *resolver.ResolveWithStickyResponse_MissingMaterializations_:
-		p.logger.Error("Missing materializations for flag", "flag", flagPath)
+	// Handle the sticky response
+	response, err := p.handleStickyResponse(ctx, stickyRequest, stickyResponse)
+	if err != nil {
+		p.logger.Error("Failed to handle sticky response", "flag", flagPath, "error", err)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewGeneralResolutionError("missing materializations"),
-			},
-		}
-	default:
-		p.logger.Error("Unexpected resolve result type for flag", "flag", flagPath)
-		return openfeature.InterfaceResolutionDetail{
-			Value: defaultValue,
-			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewGeneralResolutionError("unexpected resolve result"),
+				ResolutionError: openfeature.NewGeneralResolutionError(fmt.Sprintf("resolve failed: %v", err)),
 			},
 		}
 	}
@@ -704,4 +695,136 @@ func mapResolveReasonToOpenFeature(reason resolvertypes.ResolveReason) openfeatu
 	default:
 		return openfeature.UnknownReason
 	}
+}
+
+// handleStickyResponse processes the sticky response and returns the actual resolve response
+func (p *LocalResolverProvider) handleStickyResponse(
+	ctx context.Context,
+	request *resolver.ResolveWithStickyRequest,
+	stickyResponse *resolver.ResolveWithStickyResponse,
+) (*resolver.ResolveFlagsResponse, error) {
+	switch result := stickyResponse.ResolveResult.(type) {
+	case *resolver.ResolveWithStickyResponse_Success_:
+		success := result.Success
+		// Store updates if present
+		if len(success.GetUpdates()) > 0 {
+			p.storeUpdates(ctx, success.GetUpdates())
+		}
+		return success.Response, nil
+
+	case *resolver.ResolveWithStickyResponse_MissingMaterializations_:
+		missingMaterializations := result.MissingMaterializations
+		// Try to load missing materializations from store
+		updatedRequest, err := p.handleMissingMaterializations(ctx, request, missingMaterializations.GetItems())
+		if err != nil {
+			return nil, fmt.Errorf("failed to handle missing materializations: %w", err)
+		}
+		// Retry with the updated request
+		retryResponse, err := p.resolverAPI.ResolveWithSticky(updatedRequest)
+		if err != nil {
+			return nil, err
+		}
+		// Recursively handle the response (in case there are more missing materializations)
+		return p.handleStickyResponse(ctx, updatedRequest, retryResponse)
+
+	default:
+		return nil, fmt.Errorf("unexpected resolve result type: %T", stickyResponse.ResolveResult)
+	}
+}
+
+// storeUpdates stores materialization updates asynchronously
+func (p *LocalResolverProvider) storeUpdates(ctx context.Context, updates []*resolver.ResolveWithStickyResponse_MaterializationUpdate) {
+	// Convert protobuf updates to WriteOp slice
+	writeOps := make([]WriteOp, len(updates))
+	for i, update := range updates {
+		writeOps[i] = NewWriteOpVariant(
+			update.GetWriteMaterialization(),
+			update.GetUnit(),
+			update.GetRule(),
+			update.GetVariant(),
+		)
+	}
+
+	// Store updates asynchronously
+	go func() {
+		if err := p.materializationStore.Write(ctx, writeOps); err != nil {
+			// Check if it's an unsupported operation error (expected for UnsupportedMaterializationStore)
+			if _, ok := err.(*MaterializationNotSupportedError); !ok {
+				p.logger.Error("Failed to store materialization updates", "error", err)
+			}
+		}
+	}()
+}
+
+// handleMissingMaterializations loads missing materializations from the store
+// and returns an updated request with the materializations added
+func (p *LocalResolverProvider) handleMissingMaterializations(
+	ctx context.Context,
+	request *resolver.ResolveWithStickyRequest,
+	missingItems []*resolver.ResolveWithStickyResponse_MissingMaterializationItem,
+) (*resolver.ResolveWithStickyRequest, error) {
+	// Convert missing items to ReadOp slice
+	readOps := make([]ReadOp, len(missingItems))
+	for i, item := range missingItems {
+		readOps[i] = NewReadOpVariant(
+			item.GetReadMaterialization(),
+			item.GetUnit(),
+			item.GetRule(),
+		)
+	}
+
+	// Read from the store
+	results, err := p.materializationStore.Read(ctx, readOps)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert results to protobuf MaterializationMap format
+	// Group by unit for efficiency
+	materializationsPerUnit := make(map[string]*resolver.MaterializationMap)
+
+	// Copy existing materializations
+	for k, v := range request.GetMaterializationsPerUnit() {
+		materializationsPerUnit[k] = v
+	}
+
+	// Add loaded materializations
+	for _, result := range results {
+		variantResult, ok := result.(*ReadResultVariant)
+		if !ok {
+			continue
+		}
+
+		unit := variantResult.Unit()
+		mat := variantResult.Materialization()
+
+		// Ensure the map exists for this unit
+		if materializationsPerUnit[unit] == nil {
+			materializationsPerUnit[unit] = &resolver.MaterializationMap{
+				InfoMap: make(map[string]*resolver.MaterializationInfo),
+			}
+		}
+
+		// Get or create the info for this materialization
+		if materializationsPerUnit[unit].InfoMap[mat] == nil {
+			materializationsPerUnit[unit].InfoMap[mat] = &resolver.MaterializationInfo{
+				UnitInInfo:    false,
+				RuleToVariant: make(map[string]string),
+			}
+		}
+
+		// Add the variant if it exists
+		if variantResult.Variant() != nil {
+			materializationsPerUnit[unit].InfoMap[mat].RuleToVariant[variantResult.Rule()] = *variantResult.Variant()
+			materializationsPerUnit[unit].InfoMap[mat].UnitInInfo = true
+		}
+	}
+
+	// Create a new request with the updated materializations
+	return &resolver.ResolveWithStickyRequest{
+		ResolveRequest:          request.GetResolveRequest(),
+		MaterializationsPerUnit: materializationsPerUnit,
+		FailFastOnSticky:        request.GetFailFastOnSticky(),
+		NotProcessSticky:        request.GetNotProcessSticky(),
+	}, nil
 }

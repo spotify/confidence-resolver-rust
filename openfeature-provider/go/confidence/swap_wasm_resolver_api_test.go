@@ -71,6 +71,23 @@ func createMinimalResolverState() []byte {
 
 // Helper to create a resolver state with a flag that requires materializations
 func createStateWithStickyFlag() []byte {
+	segments := []*adminv1.Segment{
+		{
+			Name: "segments/always-true",
+		},
+	}
+
+	// Build bitsets for each segment
+	bitsets := make([]*adminv1.ResolverState_PackedBitset, 0, len(segments))
+	for _, segment := range segments {
+		bitsets = append(bitsets, &adminv1.ResolverState_PackedBitset{
+			Segment: segment.Name,
+			Bitset: &adminv1.ResolverState_PackedBitset_FullBitset{
+				FullBitset: true,
+			},
+		})
+	}
+
 	state := &adminv1.ResolverState{
 		Flags: []*adminv1.Flag{
 			{
@@ -99,11 +116,11 @@ func createStateWithStickyFlag() []byte {
 				Rules: []*adminv1.Flag_Rule{
 					{
 						Name:                 "flags/sticky-test-flag/rules/sticky-rule",
-						Segment:              "segments/always-true",
+						Segment:              segments[0].Name,
 						TargetingKeySelector: "user_id",
 						Enabled:              true,
 						AssignmentSpec: &adminv1.Flag_Rule_AssignmentSpec{
-							BucketCount: 10000,
+							BucketCount: 2,
 							Assignments: []*adminv1.Flag_Rule_Assignment{
 								{
 									AssignmentId: "variant-assignment",
@@ -114,7 +131,8 @@ func createStateWithStickyFlag() []byte {
 									},
 									BucketRanges: []*adminv1.Flag_Rule_BucketRange{
 										{
-											Upper: 10000,
+											Lower: 0,
+											Upper: 2,
 										},
 									},
 								},
@@ -133,17 +151,14 @@ func createStateWithStickyFlag() []byte {
 				},
 			},
 		},
-		SegmentsNoBitsets: []*adminv1.Segment{
-			{
-				Name: "segments/always-true",
-				// Empty segment - may not match any users
-			},
-		},
+		SegmentsNoBitsets: segments,
 		Clients: []*iamv1.Client{
 			{
 				Name: "clients/test-client",
 			},
 		},
+		// All-one bitset for each segment
+		Bitsets: bitsets,
 		ClientCredentials: []*iamv1.ClientCredential{
 			{
 				// ClientCredential name must start with the client name
