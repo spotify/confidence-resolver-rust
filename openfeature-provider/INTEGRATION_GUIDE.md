@@ -68,6 +68,7 @@ For debugging, use the `details` methods to get error information:
 **Reasons:**
 - `DEFAULT`: Default value returned (flag not evaluated)
 - `TARGETING_MATCH`: Flag evaluated successfully
+- `NO_SEGMENT_MATCH`: Evaluation didn't match any variant
 - `ERROR`: Evaluation failed (see error code)
 - `STATIC`: Static flag value (no targeting rules)
 
