@@ -70,7 +70,6 @@ For debugging, use the `details` methods to get error information:
 - `TARGETING_MATCH`: Flag evaluated successfully
 - `ERROR`: Evaluation failed (see error code)
 - `STATIC`: Static flag value (no targeting rules)
-- `CACHED`: Value from cache (if caching enabled)
 
 ### Production Best Practices
 
