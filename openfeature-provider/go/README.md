@@ -221,29 +221,7 @@ The provider logs at different levels: `Debug` (flag resolution details), `Info`
 
 ```go
 // Shutdown the provider on application exit
-defer func() {
-    if err := provider.Shutdown(ctx); err != nil {
-        log.Printf("Error during shutdown: %v", err)
-    }
-}()
-
-// Or using signal handling
-sigChan := make(chan os.Signal, 1)
-signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-go func() {
-    <-sigChan
-    log.Println("Shutting down...")
-
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
-
-    if err := provider.Shutdown(ctx); err != nil {
-        log.Printf("Error during shutdown: %v", err)
-    }
-
-    os.Exit(0)
-}()
+    openfeature.Shutdown()
 ```
 
 ### What Happens During Shutdown?
