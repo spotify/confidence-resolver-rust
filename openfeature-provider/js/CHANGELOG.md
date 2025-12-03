@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-js-v0.2.0...openfeature-provider-js-v0.3.0) (2025-12-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* migrate to cdn state fetch, publish logs using client secret ([#166](https://github.com/spotify/confidence-resolver/issues/166))
+
+### Features
+
+* migrate to cdn state fetch, publish logs using client secret ([#166](https://github.com/spotify/confidence-resolver/issues/166)) ([6c8d959](https://github.com/spotify/confidence-resolver/commit/6c8d959f124faa419c1ace103d8832457248eb26))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * rust-guest bumped from 0.1.10 to 0.1.11
+
 ## [0.2.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-js-v0.1.1...openfeature-provider-js-v0.2.0) (2025-11-24)
 
 
