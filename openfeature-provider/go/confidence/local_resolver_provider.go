@@ -80,30 +80,36 @@ func (p *LocalResolverProvider) BooleanEvaluation(
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
 	if result.Value == nil {
-		return openfeature.BoolResolutionDetail{
+		detail := openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	}
 
 	boolVal, ok := result.Value.(bool)
 	if !ok {
-		return openfeature.BoolResolutionDetail{
+		detail := openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a boolean"),
 			},
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	}
 
-	return openfeature.BoolResolutionDetail{
+	detail := openfeature.BoolResolutionDetail{
 		Value:                    boolVal,
 		ProviderResolutionDetail: result.ProviderResolutionDetail,
 	}
+	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+	return detail
 }
 
 // StringEvaluation evaluates a string flag
@@ -116,30 +122,36 @@ func (p *LocalResolverProvider) StringEvaluation(
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
 	if result.Value == nil {
-		return openfeature.StringResolutionDetail{
+		detail := openfeature.StringResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	}
 
 	strVal, ok := result.Value.(string)
 	if !ok {
-		return openfeature.StringResolutionDetail{
+		detail := openfeature.StringResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a string"),
 			},
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	}
 
-	return openfeature.StringResolutionDetail{
+	detail := openfeature.StringResolutionDetail{
 		Value:                    strVal,
 		ProviderResolutionDetail: result.ProviderResolutionDetail,
 	}
+	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+	return detail
 }
 
 // FloatEvaluation evaluates a float flag
@@ -152,30 +164,36 @@ func (p *LocalResolverProvider) FloatEvaluation(
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
 	if result.Value == nil {
-		return openfeature.FloatResolutionDetail{
+		detail := openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	}
 
 	floatVal, ok := result.Value.(float64)
 	if !ok {
-		return openfeature.FloatResolutionDetail{
+		detail := openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a float"),
 			},
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	}
 
-	return openfeature.FloatResolutionDetail{
+	detail := openfeature.FloatResolutionDetail{
 		Value:                    floatVal,
 		ProviderResolutionDetail: result.ProviderResolutionDetail,
 	}
+	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+	return detail
 }
 
 // IntEvaluation evaluates an int flag
@@ -188,35 +206,43 @@ func (p *LocalResolverProvider) IntEvaluation(
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
 	if result.Value == nil {
-		return openfeature.IntResolutionDetail{
+		detail := openfeature.IntResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	}
 
 	// Handle both int64 and float64 (JSON numbers are float64)
 	switch v := result.Value.(type) {
 	case int64:
-		return openfeature.IntResolutionDetail{
+		detail := openfeature.IntResolutionDetail{
 			Value:                    v,
 			ProviderResolutionDetail: result.ProviderResolutionDetail,
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	case float64:
-		return openfeature.IntResolutionDetail{
+		detail := openfeature.IntResolutionDetail{
 			Value:                    int64(v),
 			ProviderResolutionDetail: result.ProviderResolutionDetail,
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	default:
-		return openfeature.IntResolutionDetail{
+		detail := openfeature.IntResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not an integer"),
 			},
 		}
+		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+		return detail
 	}
 }
 
@@ -309,7 +335,6 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 
 	// Check if flag was found
 	if len(response.ResolvedFlags) == 0 {
-		p.logger.Warn("No active flag was found", "flag", flagPath)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -650,6 +675,13 @@ func getValueForPath(path string, value interface{}) interface{} {
 	}
 
 	return current
+}
+
+// logResolutionErrorIfPresent logs a warning if the resolution detail contains an error
+func (p *LocalResolverProvider) logResolutionErrorIfPresent(flag string, detail openfeature.ProviderResolutionDetail) {
+	if detail.ResolutionError.Error() != "" {
+		p.logger.Warn("Flag evaluation error", "flag", flag, "error_code", detail.ResolutionError.Error())
+	}
 }
 
 // mapResolveReasonToOpenFeature converts Confidence ResolveReason to OpenFeature Reason
