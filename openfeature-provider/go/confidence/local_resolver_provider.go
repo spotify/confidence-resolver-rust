@@ -79,35 +79,31 @@ func (p *LocalResolverProvider) BooleanEvaluation(
 ) openfeature.BoolResolutionDetail {
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
+	var detail openfeature.BoolResolutionDetail
+
 	if result.Value == nil {
-		detail := openfeature.BoolResolutionDetail{
+		detail = openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
-	}
-
-	boolVal, ok := result.Value.(bool)
-	if !ok {
-		detail := openfeature.BoolResolutionDetail{
+	} else if boolVal, ok := result.Value.(bool); !ok {
+		detail = openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a boolean"),
 			},
 		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
+	} else {
+		detail = openfeature.BoolResolutionDetail{
+			Value:                    boolVal,
+			ProviderResolutionDetail: result.ProviderResolutionDetail,
+		}
 	}
 
-	detail := openfeature.BoolResolutionDetail{
-		Value:                    boolVal,
-		ProviderResolutionDetail: result.ProviderResolutionDetail,
-	}
 	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
 	return detail
 }
@@ -121,35 +117,31 @@ func (p *LocalResolverProvider) StringEvaluation(
 ) openfeature.StringResolutionDetail {
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
+	var detail openfeature.StringResolutionDetail
+
 	if result.Value == nil {
-		detail := openfeature.StringResolutionDetail{
+		detail = openfeature.StringResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
-	}
-
-	strVal, ok := result.Value.(string)
-	if !ok {
-		detail := openfeature.StringResolutionDetail{
+	} else if strVal, ok := result.Value.(string); !ok {
+		detail = openfeature.StringResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a string"),
 			},
 		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
+	} else {
+		detail = openfeature.StringResolutionDetail{
+			Value:                    strVal,
+			ProviderResolutionDetail: result.ProviderResolutionDetail,
+		}
 	}
 
-	detail := openfeature.StringResolutionDetail{
-		Value:                    strVal,
-		ProviderResolutionDetail: result.ProviderResolutionDetail,
-	}
 	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
 	return detail
 }
@@ -163,35 +155,31 @@ func (p *LocalResolverProvider) FloatEvaluation(
 ) openfeature.FloatResolutionDetail {
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
+	var detail openfeature.FloatResolutionDetail
+
 	if result.Value == nil {
-		detail := openfeature.FloatResolutionDetail{
+		detail = openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
-	}
-
-	floatVal, ok := result.Value.(float64)
-	if !ok {
-		detail := openfeature.FloatResolutionDetail{
+	} else if floatVal, ok := result.Value.(float64); !ok {
+		detail = openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a float"),
 			},
 		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
+	} else {
+		detail = openfeature.FloatResolutionDetail{
+			Value:                    floatVal,
+			ProviderResolutionDetail: result.ProviderResolutionDetail,
+		}
 	}
 
-	detail := openfeature.FloatResolutionDetail{
-		Value:                    floatVal,
-		ProviderResolutionDetail: result.ProviderResolutionDetail,
-	}
 	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
 	return detail
 }
@@ -205,45 +193,42 @@ func (p *LocalResolverProvider) IntEvaluation(
 ) openfeature.IntResolutionDetail {
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
+	var detail openfeature.IntResolutionDetail
+
 	if result.Value == nil {
-		detail := openfeature.IntResolutionDetail{
+		detail = openfeature.IntResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
+	} else {
+		// Handle both int64 and float64 (JSON numbers are float64)
+		switch v := result.Value.(type) {
+		case int64:
+			detail = openfeature.IntResolutionDetail{
+				Value:                    v,
+				ProviderResolutionDetail: result.ProviderResolutionDetail,
+			}
+		case float64:
+			detail = openfeature.IntResolutionDetail{
+				Value:                    int64(v),
+				ProviderResolutionDetail: result.ProviderResolutionDetail,
+			}
+		default:
+			detail = openfeature.IntResolutionDetail{
+				Value: defaultValue,
+				ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+					Reason:          openfeature.ErrorReason,
+					ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not an integer"),
+				},
+			}
+		}
 	}
 
-	// Handle both int64 and float64 (JSON numbers are float64)
-	switch v := result.Value.(type) {
-	case int64:
-		detail := openfeature.IntResolutionDetail{
-			Value:                    v,
-			ProviderResolutionDetail: result.ProviderResolutionDetail,
-		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
-	case float64:
-		detail := openfeature.IntResolutionDetail{
-			Value:                    int64(v),
-			ProviderResolutionDetail: result.ProviderResolutionDetail,
-		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
-	default:
-		detail := openfeature.IntResolutionDetail{
-			Value: defaultValue,
-			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not an integer"),
-			},
-		}
-		p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
-		return detail
-	}
+	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+	return detail
 }
 
 // ObjectEvaluation evaluates an object flag (core implementation)
