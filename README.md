@@ -2,30 +2,31 @@
 
 ![Status: Experimental](https://img.shields.io/badge/status-experimental-orange)
 
-The Confidence Flag Resolver implemented in Rust, plus example hosts and a Cloudflare Worker build. This workspace compiles the core resolver to native and WebAssembly and demonstrates how to call it from Go, Node.js, Python, and Java.
+The Confidence flag resolver implemented in Rust, local-resolve OpenFeature Providers and edge-compatible resolver runnables.
 
 ## Repository layout
 
 - `confidence-resolver`: Core resolver crate
-- `confidence-cloudflare-resolver`: Cloudflare Worker-compatible WASM target
-- `wasm-msg`: Minimal WASM messaging layer shared by hosts
-- `wasm/python-host`: Python host example calling the resolver. Only intended to be an example and used for integration tests.
-- `data/`: Sample local development data (e.g., resolver state)
+- `wasm` and `wasm-msg`: WASM resolver with communication contract towards the hosting environment 
+- `data`: Sample local development data (e.g., resolver state)
 
-## Prerequisites
+The tools and SDKs published for direct usage:
+- `confidence-cloudflare-resolver`: Confidence resolver service as a CloudFlare Worker 
+- `openfeature-provider`: The OpenFeature providers for flag resolving
 
-**Option 1: Docker only**
-- Docker - Everything runs in containers, no other tools needed
+To deploy the CloudFlare resolver, follow [this README](./confidence-cloudflare-resolver/deployer/).
 
-**Option 2: Local development**
-- Rust toolchain (automatically installed via `rust-toolchain.toml`)
-- For Python host example: Python 3
+To integrate OpenFeature SDKs in your environment, you can refer to the READMEs for the desired language in the [openfeature-provider](./openfeature-provider) folder.
 
-## Quick Start
+
+## Development - Quick Start
 
 ```bash
 # With Docker (reproducible, no setup needed)
 docker build .                    # Build, test, lint everything
+```
+Without docker, the building is managed via Makefile:
+```
 make                              # Same, using Makefile
 
 # E2E tests require Confidence credentials passed as Docker secret
@@ -39,30 +40,11 @@ make test                         # Run tests
 make lint                         # Run linting
 make build                        # Build WASM
 
-# Run Python host example
-make run-python
-```
-
-## Running the Python host example
-
-There is a Python host implementation in the `wasm/python-host` folder.
-It is used for integration tests, but you can manually run it:
-
-```bash
-make run-python-host
-```
-
-## Cloudflare Worker build
-
-Build the Cloudflare-compatible resolver (WASM):
-
-```bash
+# Build the Cloudflare-compatible resolver (WASM):
 make cloudflare
 ```
 
-You can then integrate with Wrangler using `confidence-cloudflare-resolver/wrangler.toml`.
-
-## Benchmarks (WIP)
+## Benchmarks
 
 Small local benchmarks exist for Go and Node.js to validate end-to-end wiring. They are a work-in-progress and do not produce meaningful or representative performance numbers yet.
 
