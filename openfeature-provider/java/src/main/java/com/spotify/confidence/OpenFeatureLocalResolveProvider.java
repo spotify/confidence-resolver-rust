@@ -264,13 +264,24 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
           String.format("Cannot cast value '%s' to expected type", objectEvaluation.getValue()));
     }
 
-    return ProviderEvaluation.<T>builder()
-        .value(castedValue)
-        .variant(objectEvaluation.getVariant())
-        .reason(objectEvaluation.getReason())
-        .errorMessage(objectEvaluation.getErrorMessage())
-        .errorCode(objectEvaluation.getErrorCode())
-        .build();
+    final ProviderEvaluation<T> result =
+        ProviderEvaluation.<T>builder()
+            .value(castedValue)
+            .variant(objectEvaluation.getVariant())
+            .reason(objectEvaluation.getReason())
+            .errorMessage(objectEvaluation.getErrorMessage())
+            .errorCode(objectEvaluation.getErrorCode())
+            .build();
+
+    if (result.getErrorCode() != null) {
+      log.warn(
+          "Flag evaluation for '{}' returned error code: {}, message: {}",
+          key,
+          result.getErrorCode(),
+          result.getErrorMessage());
+    }
+
+    return result;
   }
 
   @Override

@@ -137,7 +137,13 @@ export class ConfidenceServerProviderLocal implements Provider {
     };
 
     const response = await this.resolveWithStickyInternal(stickyRequest);
-    return this.extractValue(response.resolvedFlags[0], flagName, path, defaultValue);
+    const result = this.extractValue(response.resolvedFlags[0], flagName, path, defaultValue);
+
+    if (result.errorCode) {
+      logger.warn(`Flag evaluation for '${flagKey}' returned error code: ${result.errorCode}`);
+    }
+
+    return result;
   }
 
   /**
