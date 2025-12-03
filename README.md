@@ -9,6 +9,10 @@ The Confidence flag resolver implemented in Rust, local-resolve OpenFeature Prov
 The tools and SDKs published for direct usage:
 - `confidence-cloudflare-resolver`: Confidence resolver service as a Cloudflare Worker (readme [here](./confidence-cloudflare-resolver/deployer/))
 - `openfeature-provider`: The OpenFeature providers for flag resolving
+  - [Go](./openfeature-provider/go/README.md)
+  - [Java](./openfeature-provider/java/README.md)
+  - [JavaScript/TypeScript](./openfeature-provider/js/README.md)
+  - [Ruby](./openfeature-provider/ruby/README.md)
 
 Underlying building blocks:
 - `confidence-resolver`: Core resolver crate
