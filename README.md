@@ -11,10 +11,10 @@ The Confidence flag resolver implemented in Rust, local-resolve OpenFeature Prov
 - `data`: Sample local development data (e.g., resolver state)
 
 The tools and SDKs published for direct usage:
-- `confidence-cloudflare-resolver`: Confidence resolver service as a CloudFlare Worker 
+- `confidence-cloudflare-resolver`: Confidence resolver service as a Cloudflare Worker 
 - `openfeature-provider`: The OpenFeature providers for flag resolving
 
-To deploy the CloudFlare resolver, follow [this README](./confidence-cloudflare-resolver/deployer/).
+To deploy the Cloudflare resolver, follow [this README](./confidence-cloudflare-resolver/deployer/).
 
 To integrate OpenFeature SDKs in your environment, you can refer to the READMEs for the desired language in the [openfeature-provider](./openfeature-provider) folder.
 
