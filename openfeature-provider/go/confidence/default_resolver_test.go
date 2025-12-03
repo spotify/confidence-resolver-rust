@@ -4,11 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
+	tu "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/testutil"
 	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
@@ -19,24 +18,6 @@ import (
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, nil))
-}
-
-func loadTestResolverState(t *testing.T) []byte {
-	dataPath := filepath.Join("..", "..", "..", "data", "resolver_state_current.pb")
-	data, err := os.ReadFile(dataPath)
-	if err != nil {
-		t.Skipf("Skipping test - could not load test resolver state: %v", err)
-	}
-	return data
-}
-
-func loadTestAccountID(t *testing.T) string {
-	dataPath := filepath.Join("..", "..", "..", "data", "account_id")
-	data, err := os.ReadFile(dataPath)
-	if err != nil {
-		t.Skipf("Skipping test - could not load test account ID: %v", err)
-	}
-	return strings.TrimSpace(string(data))
 }
 
 // Helper function to create minimal valid resolver state for testing
@@ -226,8 +207,8 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	defer runtime.Close(ctx)
 
 	// Load real test state from data directory
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
+	testState := tu.LoadTestResolverState(t)
+	testAcctID := tu.LoadTestAccountID(t)
 
 	swap := runtime.New()
 	defer swap.Close(ctx)
@@ -321,8 +302,8 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	defer runtime.Close(ctx)
 
 	// Load real test state
-	initialState := loadTestResolverState(t)
-	accountId := loadTestAccountID(t)
+	initialState := tu.LoadTestResolverState(t)
+	accountId := tu.LoadTestAccountID(t)
 
 	swap := runtime.New()
 	defer swap.Close(ctx)
@@ -336,7 +317,7 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	}
 
 	// Update with new state - the key test is that UpdateStateAndFlushLogs succeeds
-	newState := loadTestResolverState(t)
+	newState := tu.LoadTestResolverState(t)
 	err := swap.SetResolverState(&messages.SetResolverStateRequest{
 		State:     newState,
 		AccountId: accountId,
@@ -381,8 +362,8 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 	defer runtime.Close(ctx)
 
 	// Load real test state
-	initialState := loadTestResolverState(t)
-	accountId := loadTestAccountID(t)
+	initialState := tu.LoadTestResolverState(t)
+	accountId := tu.LoadTestAccountID(t)
 
 	swap := runtime.New()
 	defer swap.Close(ctx)
@@ -397,7 +378,7 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 
 	// Perform multiple state updates to verify the swap mechanism works correctly
 	for i := 0; i < 3; i++ {
-		newState := loadTestResolverState(t)
+		newState := tu.LoadTestResolverState(t)
 		err := swap.SetResolverState(&messages.SetResolverStateRequest{
 			State:     newState,
 			AccountId: accountId,
@@ -478,8 +459,8 @@ func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
+	testState := tu.LoadTestResolverState(t)
+	testAcctID := tu.LoadTestAccountID(t)
 
 	swap := runtime.New()
 	defer swap.Close(ctx)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/open-feature/go-sdk/openfeature"
 	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
+	tu "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/testutil"
 	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
@@ -81,8 +82,8 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	defer runtime.Close(ctx)
 
 	// Load real test state
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
+	testState := tu.LoadTestResolverState(t)
+	testAcctID := tu.LoadTestAccountID(t)
 
 	swap := runtime.New()
 	defer swap.Close(ctx)
@@ -168,8 +169,8 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		defer runtime.Close(ctx)
 
 		// Load real test state
-		testState := loadTestResolverState(t)
-		testAcctID := loadTestAccountID(t)
+		testState := tu.LoadTestResolverState(t)
+		testAcctID := tu.LoadTestAccountID(t)
 
 		swap := runtime.New()
 		defer swap.Close(ctx)

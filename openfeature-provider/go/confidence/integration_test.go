@@ -12,6 +12,7 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 	fl "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/flag_logger"
 	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
+	tu "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/testutil"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"google.golang.org/grpc"
 )
@@ -95,8 +96,8 @@ func (m *mockGrpcStubForIntegration) GetCallsReceived() int32 {
 // async goroutines complete before Shutdown() returns, ensuring no data loss.
 func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
 	// Load test state
-	testState := loadTestResolverState(t)
-	accountID := loadTestAccountID(t)
+	testState := tu.LoadTestResolverState(t)
+	accountID := tu.LoadTestAccountID(t)
 
 	ctx := context.Background()
 
