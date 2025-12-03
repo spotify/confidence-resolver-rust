@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.9.0...openfeature-provider-java-v0.9.1) (2025-12-03)
+
+
+### Bug Fixes
+
+* formatting ([#189](https://github.com/spotify/confidence-resolver/issues/189)) ([b88849a](https://github.com/spotify/confidence-resolver/commit/b88849aa804f80ab014e6b94ef84569556efa7a3))
+
 ## [0.9.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.8.0...openfeature-provider-java-v0.9.0) (2025-12-02)
 
 
