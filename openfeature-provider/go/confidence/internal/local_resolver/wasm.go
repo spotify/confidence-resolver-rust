@@ -3,7 +3,7 @@ package local_resolver
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -41,7 +41,7 @@ func (r *WasmResolver) ResolveWithSticky(request *resolver.ResolveWithStickyRequ
 func (r *WasmResolver) FlushAllLogs() error {
 	resp := &resolverv1.WriteFlagLogsRequest{}
 	err := r.call("wasm_msg_guest_bounded_flush_logs", nil, resp)
-	if err == nil {
+	if err == nil && proto.Size(resp) > 0 {
 		r.logSink(resp)
 	}
 	return err
@@ -57,7 +57,8 @@ func (r *WasmResolver) FlushAssignLogs() error {
 }
 
 func (r *WasmResolver) Close(ctx context.Context) error {
-	// TODO we might consider calling flush logs here. But how do we bind it to ctx?
+	// TODO we should call flush assigned until it doesn't flush any more
+	r.FlushAllLogs()
 	return r.instance.Close(ctx)
 }
 
@@ -85,7 +86,7 @@ func (r *WasmResolver) call(fnName string, request proto.Message, response proto
 		mustUnmarshal(resBytes, wsmMsgRes)
 		errMsg := wsmMsgRes.GetError()
 		if errMsg != "" {
-			return fmt.Errorf("error calling %s: %s", fn.Definition().Name(), errMsg)
+			return errors.New(errMsg)
 		}
 		if response != nil {
 			return proto.Unmarshal(wsmMsgRes.GetData(), response)
@@ -124,10 +125,12 @@ func NewWasmResolverFactory(wasmBytes []byte, logSink LogSink) LocalResolverFact
 		Export("wasm_msg_host_current_time").
 		Instantiate(ctx)
 	if err != nil {
+		runtime.Close(ctx)
 		panic(err)
 	}
 	module, err := runtime.CompileModule(ctx, wasmBytes)
 	if err != nil {
+		runtime.Close(ctx)
 		panic(err)
 	}
 	return &WasmResolverFactory{

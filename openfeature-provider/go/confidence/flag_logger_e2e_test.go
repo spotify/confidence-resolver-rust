@@ -26,7 +26,7 @@ func TestFlagLogs_ShouldSuccessfullySendToRealBackend(t *testing.T) {
 
 	// Create a custom logger that captures log messages
 	var logBuffer logCaptureBuffer
-	captureHandler := slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelInfo})
+	captureHandler := slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(captureHandler)
 
 	// Create a real provider with real gRPC connection

@@ -419,6 +419,7 @@ func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationCon
 
 // Shutdown closes the provider and cleans up resources (part of StateHandler interface)
 func (p *LocalResolverProvider) Shutdown() {
+	ctx := context.Background()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -441,12 +442,12 @@ func (p *LocalResolverProvider) Shutdown() {
 	// ctx := context.Background()
 
 	// Close resolver API (which flushes final logs)
-	// if p.resolverAPI != nil {
-	// 	p.resolverAPI.Close(ctx)
-	// 	if p.logger != nil {
-	// 		p.logger.Info("Closed resolver API")
-	// 	}
-	// }
+	if p.resolverAPI != nil {
+		p.resolverAPI.Close(ctx)
+		if p.logger != nil {
+			p.logger.Info("Closed resolver API")
+		}
+	}
 
 	// Shutdown flag logger (which waits for log sends to complete)
 	if p.flagLogger != nil {

@@ -218,28 +218,22 @@ func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 		t.Fatal("Expected non-nil SwapWasmResolverApi")
 	}
 
-	// if swap.runtime == nil {
-	// 	t.Error("Expected runtime to be set")
-	// }
-
-	// if swap.compiledModule == nil {
-	// 	t.Error("Expected compiled module to be set")
-	// }
-
-	// if swap.flagLogger == nil {
-	// 	t.Error("Expected flag logger to be set")
-	// }
 }
 
-// func TestSwapWasmResolverApi_NewSwapWasmResolverApi_InvalidWasm(t *testing.T) {
-// 	ctx := context.Background()
-// 	invalidWasmBytes := []byte("not valid wasm")
-// 	runtime := NewWasmResolverFactory(ctx, invalidWasmBytes, noopLogSink)
-// 	defer runtime.Close(ctx)
+func TestSwapWasmResolverApi_NewSwapWasmResolverApi_InvalidWasm(t *testing.T) {
+	ctx := context.Background()
+	invalidWasmBytes := []byte("not valid wasm")
 
-// 	// Use invalid WASM bytes
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected panic, got none")
+		}
+	}()
 
-// }
+	runtime := lr.DefaultResolverFactory(invalidWasmBytes, lr.NoOpLogSink)
+	defer runtime.Close(ctx)
+
+}
 
 func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	ctx := context.Background()

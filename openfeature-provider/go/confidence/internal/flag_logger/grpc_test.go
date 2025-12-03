@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	resolverevents "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverevents"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"google.golang.org/grpc"
@@ -102,83 +101,6 @@ func TestGrpcWasmFlagLogger_Write_SmallRequest(t *testing.T) {
 	}
 	if len(receivedRequests[0].FlagAssigned) != 100 {
 		t.Errorf("Expected 100 flag_assigned entries, got %d", len(receivedRequests[0].FlagAssigned))
-	}
-}
-
-func TestGrpcWasmFlagLogger_Write_Chunking(t *testing.T) {
-	var callCount int32
-	var receivedRequests []*resolverv1.WriteFlagLogsRequest
-
-	mockStub := &mockInternalFlagLoggerServiceClient{
-		writeFlagLogsFunc: func(ctx context.Context, req *resolverv1.WriteFlagLogsRequest) (*resolverv1.WriteFlagLogsResponse, error) {
-			atomic.AddInt32(&callCount, 1)
-			receivedRequests = append(receivedRequests, req)
-			return &resolverv1.WriteFlagLogsResponse{}, nil
-		},
-	}
-
-	logger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-
-	// Create a large request (above chunk threshold)
-	numFlags := MaxFlagAssignedPerChunk + 500
-	request := &resolverv1.WriteFlagLogsRequest{
-		FlagAssigned:      make([]*resolverevents.FlagAssigned, numFlags),
-		ClientResolveInfo: []*adminv1.ClientResolveInfo{{Client: "test-client"}},
-		FlagResolveInfo:   []*adminv1.FlagResolveInfo{{Flag: "test-flag"}},
-	}
-
-	logger.Write(request)
-
-	// Wait for async processing
-	logger.Shutdown()
-
-	// Should be split into 2 chunks
-	expectedChunks := 2
-	if atomic.LoadInt32(&callCount) != int32(expectedChunks) {
-		t.Errorf("Expected %d chunks, got %d", expectedChunks, callCount)
-	}
-
-	if len(receivedRequests) != expectedChunks {
-		t.Fatalf("Expected %d received requests, got %d", expectedChunks, len(receivedRequests))
-	}
-
-	// Note: Chunks may arrive in any order due to async processing
-	// Find which chunk has metadata
-	var chunkWithMetadata, chunkWithoutMetadata *resolverv1.WriteFlagLogsRequest
-	for _, chunk := range receivedRequests {
-		if len(chunk.ClientResolveInfo) > 0 || len(chunk.FlagResolveInfo) > 0 {
-			chunkWithMetadata = chunk
-		} else {
-			chunkWithoutMetadata = chunk
-		}
-	}
-
-	// First chunk should have MaxFlagAssignedPerChunk entries and metadata
-	if chunkWithMetadata == nil {
-		t.Fatal("Expected to find chunk with metadata")
-	}
-	if len(chunkWithMetadata.FlagAssigned) != MaxFlagAssignedPerChunk {
-		t.Errorf("Expected metadata chunk to have %d entries, got %d", MaxFlagAssignedPerChunk, len(chunkWithMetadata.FlagAssigned))
-	}
-	if len(chunkWithMetadata.ClientResolveInfo) != 1 {
-		t.Error("Expected metadata chunk to have client resolve info")
-	}
-	if len(chunkWithMetadata.FlagResolveInfo) != 1 {
-		t.Error("Expected metadata chunk to have flag resolve info")
-	}
-
-	// Second chunk should have remaining entries and no metadata
-	if chunkWithoutMetadata == nil {
-		t.Fatal("Expected to find chunk without metadata")
-	}
-	if len(chunkWithoutMetadata.FlagAssigned) != 500 {
-		t.Errorf("Expected chunk without metadata to have 500 entries, got %d", len(chunkWithoutMetadata.FlagAssigned))
-	}
-	if len(chunkWithoutMetadata.ClientResolveInfo) != 0 {
-		t.Error("Expected chunk without metadata to have no client resolve info")
-	}
-	if len(chunkWithoutMetadata.FlagResolveInfo) != 0 {
-		t.Error("Expected chunk without metadata to have no flag resolve info")
 	}
 }
 

@@ -188,7 +188,7 @@ func createProviderWithTestState(
 	logger FlagLogger,
 ) (*LocalResolverProvider, error) {
 	// Create wazero runtime
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, logger.Write)
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
 	resolverAPI := runtime.New()
