@@ -309,7 +309,7 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 
 	// Check if flag was found
 	if len(response.ResolvedFlags) == 0 {
-		p.logger.Info("No active flag was found", "flag", flagPath)
+		p.logger.Warn("No active flag was found", "flag", flagPath)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -425,7 +425,7 @@ func (p *LocalResolverProvider) Shutdown() {
 		p.cancelFunc()
 		p.cancelFunc = nil
 		if p.logger != nil {
-			p.logger.Info("Cancelled scheduled tasks")
+			p.logger.Debug("Cancelled scheduled tasks")
 		}
 	}
 
@@ -438,7 +438,7 @@ func (p *LocalResolverProvider) Shutdown() {
 	if p.resolverAPI != nil {
 		p.resolverAPI.Close(ctx)
 		if p.logger != nil {
-			p.logger.Info("Closed resolver API")
+			p.logger.Debug("Closed resolver API")
 		}
 	}
 
@@ -446,12 +446,12 @@ func (p *LocalResolverProvider) Shutdown() {
 	if p.flagLogger != nil {
 		p.flagLogger.Shutdown()
 		if p.logger != nil {
-			p.logger.Info("Shut down flag logger")
+			p.logger.Debug("Shut down flag logger")
 		}
 	}
 
 	if p.logger != nil {
-		p.logger.Info("Provider shut down")
+		p.logger.Info("Provider has been shut down")
 	}
 }
 
@@ -480,7 +480,7 @@ func (p *LocalResolverProvider) startScheduledTasks(parentCtx context.Context) {
 				}
 
 				if accountId == "" {
-					p.logger.Warn("AccountID is empty, skipping state update")
+					p.logger.Error("AccountID inside fetched state is empty, skipping this state update attempt")
 					continue
 				}
 
