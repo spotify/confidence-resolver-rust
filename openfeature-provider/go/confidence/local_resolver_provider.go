@@ -374,10 +374,21 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 
 	// If a path was specified, extract the nested value
 	if path != "" {
-		value = getValueForPath(path, value)
+		var found bool
+		value, found = getValueForPath(path, value)
+		// If path was specified but not found, return FLAG_NOT_FOUND error
+		if !found {
+			return openfeature.InterfaceResolutionDetail{
+				Value: defaultValue,
+				ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+					Reason:          openfeature.ErrorReason,
+					ResolutionError: openfeature.NewFlagNotFoundResolutionError(fmt.Sprintf("path '%s' not found in flag '%s'", path, flagPath)),
+				},
+			}
+		}
 	}
 
-	// If value is nil, use default
+	// If value is nil (flag has no value), use default
 	if value == nil {
 		value = defaultValue
 	}
@@ -657,9 +668,10 @@ func protoValueToGo(value *structpb.Value) interface{} {
 
 // getValueForPath extracts a nested value from a map using dot notation
 // e.g., "nested.value" from map{"nested": map{"value": 42}} returns 42
-func getValueForPath(path string, value interface{}) interface{} {
+// Returns (value, found) where found indicates if the path was fully traversed
+func getValueForPath(path string, value interface{}) (interface{}, bool) {
 	if path == "" {
-		return value
+		return value, true
 	}
 
 	parts := strings.Split(path, ".")
@@ -668,19 +680,26 @@ func getValueForPath(path string, value interface{}) interface{} {
 	for _, part := range parts {
 		switch v := current.(type) {
 		case map[string]interface{}:
-			current = v[part]
+			var exists bool
+			current, exists = v[part]
+			if !exists {
+				return nil, false
+			}
 		default:
-			return nil
+			// Can't traverse further - path not found
+			return nil, false
 		}
 	}
 
-	return current
+	return current, true
 }
 
 // logResolutionErrorIfPresent logs a warning if the resolution detail contains an error
 func (p *LocalResolverProvider) logResolutionErrorIfPresent(flag string, detail openfeature.ProviderResolutionDetail) {
-	if detail.ResolutionError.Error() != "" {
-		p.logger.Warn("Flag evaluation error", "flag", flag, "error_code", detail.ResolutionError.Error())
+	errStr := detail.ResolutionError.Error()
+	// Empty ResolutionError returns ": ", so check for meaningful error
+	if errStr != "" && errStr != ": " {
+		p.logger.Warn("Flag evaluation error", "flag", flag, "error_code", errStr)
 	}
 }
 
