@@ -1,4 +1,4 @@
-package confidence
+package flag_logger
 
 import (
 	"context"

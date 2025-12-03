@@ -1,4 +1,4 @@
-package confidence
+package flag_logger
 
 import (
 	"context"
@@ -17,20 +17,12 @@ const (
 	MaxFlagAssignedPerChunk = 1000
 )
 
-type FlagLogger interface {
-	Write(request *resolverv1.WriteFlagLogsRequest)
-	Shutdown()
-}
-
 type GrpcFlagLogger struct {
 	stub         resolverv1.InternalFlagLoggerServiceClient
 	clientSecret string
 	logger       *slog.Logger
 	wg           sync.WaitGroup
 }
-
-// Compile-time interface conformance check
-var _ FlagLogger = (*GrpcFlagLogger)(nil)
 
 func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, clientSecret string, logger *slog.Logger) *GrpcFlagLogger {
 	return &GrpcFlagLogger{
@@ -99,9 +91,6 @@ func (g *GrpcFlagLogger) Shutdown() {
 
 // NoOpWasmFlagLogger is a flag logger that drops all requests (for disabled logging)
 type NoOpWasmFlagLogger struct{}
-
-// Compile-time interface conformance check
-var _ FlagLogger = (*NoOpWasmFlagLogger)(nil)
 
 func NewNoOpWasmFlagLogger() *NoOpWasmFlagLogger {
 	return &NoOpWasmFlagLogger{}

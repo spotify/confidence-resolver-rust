@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	fl "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/flag_logger"
 	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"google.golang.org/grpc"
@@ -63,7 +64,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	// Build HTTP transport using hooks and pass into state fetcher
 	transport := hooks.WrapHTTP(http.DefaultTransport)
 	stateProvider := NewFlagsAdminStateFetcherWithTransport(config.ClientSecret, logger, transport)
-	flagLogger := NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
+	flagLogger := fl.NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
 
 	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, flagLogger.Write)
 

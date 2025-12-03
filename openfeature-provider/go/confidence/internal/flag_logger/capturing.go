@@ -1,4 +1,4 @@
-package confidence
+package flag_logger
 
 import (
 	"sync"
@@ -31,9 +31,6 @@ type CapturingFlagLogger struct {
 	capturedRequests []*resolverv1.WriteFlagLogsRequest
 	shutdownCalled   bool
 }
-
-// Compile-time interface conformance check
-var _ FlagLogger = (*CapturingFlagLogger)(nil)
 
 // NewCapturingFlagLogger creates a new CapturingFlagLogger
 func NewCapturingFlagLogger() *CapturingFlagLogger {
