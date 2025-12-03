@@ -64,11 +64,8 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	transport := hooks.WrapHTTP(http.DefaultTransport)
 	stateProvider := NewFlagsAdminStateFetcherWithTransport(config.ClientSecret, logger, transport)
 	flagLogger := NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
-	noopLogSink := func(logs *resolverv1.WriteFlagLogsRequest) {
-		logger.Info("writing logs", "count", len(logs.FlagAssigned))
-	}
 
-	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, noopLogSink)
+	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, flagLogger.Write)
 
 	// TODO this call is unsafe and can panic, we should create the factories and instance in provider init
 	resolverAPI := localResolverFactory.New()
@@ -94,7 +91,7 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 		}))
 	}
 
-	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, func(logs *resolverv1.WriteFlagLogsRequest) {})
+	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, config.FlagLogger.Write)
 
 	resolverAPI := localResolverFactory.New()
 

@@ -1,7 +1,6 @@
 package confidence
 
 import (
-	"context"
 	"sync"
 
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
@@ -44,11 +43,10 @@ func NewCapturingFlagLogger() *CapturingFlagLogger {
 }
 
 // Write captures the request for later inspection
-func (c *CapturingFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+func (c *CapturingFlagLogger) Write(request *resolverv1.WriteFlagLogsRequest) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.capturedRequests = append(c.capturedRequests, request)
-	return nil
 }
 
 // Shutdown marks that shutdown was called

@@ -18,7 +18,7 @@ const (
 )
 
 type FlagLogger interface {
-	Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error
+	Write(request *resolverv1.WriteFlagLogsRequest)
 	Shutdown()
 }
 
@@ -41,14 +41,14 @@ func NewGrpcWasmFlagLogger(stub resolverv1.InternalFlagLoggerServiceClient, clie
 }
 
 // Write writes flag logs, splitting into chunks if necessary
-func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+func (g *GrpcFlagLogger) Write(request *resolverv1.WriteFlagLogsRequest) {
 	flagAssignedCount := len(request.FlagAssigned)
 	clientResolveCount := len(request.ClientResolveInfo)
 	flagResolveCount := len(request.FlagResolveInfo)
 
 	if clientResolveCount == 0 && flagAssignedCount == 0 && flagResolveCount == 0 {
 		g.logger.Debug("Skipping empty flag log request")
-		return nil
+		return
 	}
 
 	if request.TelemetryData != nil {
@@ -58,7 +58,7 @@ func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFla
 			sdkID = request.TelemetryData.Sdk.GetId().String()
 			sdkVersion = request.TelemetryData.Sdk.Version
 		}
-		g.logger.Info("Telemetry Data",
+		g.logger.Debug("Telemetry Data",
 			"sdk_id", sdkID,
 			"sdk_version", sdkVersion)
 	}
@@ -68,58 +68,11 @@ func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFla
 		"client_resolve_info", clientResolveCount,
 		"flag_resolve_info", flagResolveCount)
 
-	// If flag_assigned list is small enough, send everything as-is
-	if flagAssignedCount <= MaxFlagAssignedPerChunk {
-		return g.sendAsync(ctx, request)
-	}
+	g.sendAsync(request)
 
-	// Split flag_assigned into chunks and send each chunk asynchronously
-	g.logger.Debug("Splitting flag_assigned entries into chunks",
-		"total_entries", flagAssignedCount,
-		"chunk_size", MaxFlagAssignedPerChunk)
-
-	chunks := g.createFlagAssignedChunks(request)
-	for _, chunk := range chunks {
-		if err := g.sendAsync(ctx, chunk); err != nil {
-			g.logger.Error("Failed to send flag log chunk", "error", err)
-			return err
-		}
-	}
-
-	return nil
 }
 
-// createFlagAssignedChunks splits the WriteFlagLogsRequest into chunks
-func (g *GrpcFlagLogger) createFlagAssignedChunks(request *resolverv1.WriteFlagLogsRequest) []*resolverv1.WriteFlagLogsRequest {
-	chunks := make([]*resolverv1.WriteFlagLogsRequest, 0)
-	totalFlags := len(request.FlagAssigned)
-
-	for i := 0; i < totalFlags; i += MaxFlagAssignedPerChunk {
-		end := i + MaxFlagAssignedPerChunk
-		if end > totalFlags {
-			end = totalFlags
-		}
-
-		chunkBuilder := &resolverv1.WriteFlagLogsRequest{
-			FlagAssigned: request.FlagAssigned[i:end],
-		}
-
-		// Include telemetry and resolve info only in the first chunk
-		if i == 0 {
-			if request.TelemetryData != nil {
-				chunkBuilder.TelemetryData = request.TelemetryData
-			}
-			chunkBuilder.ClientResolveInfo = request.ClientResolveInfo
-			chunkBuilder.FlagResolveInfo = request.FlagResolveInfo
-		}
-
-		chunks = append(chunks, chunkBuilder)
-	}
-
-	return chunks
-}
-
-func (g *GrpcFlagLogger) sendAsync(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+func (g *GrpcFlagLogger) sendAsync(request *resolverv1.WriteFlagLogsRequest) {
 	g.wg.Add(1)
 	go func() {
 		defer g.wg.Done()
@@ -137,7 +90,6 @@ func (g *GrpcFlagLogger) sendAsync(ctx context.Context, request *resolverv1.Writ
 			g.logger.Info("Successfully sent flag log", "entries", len(request.FlagAssigned))
 		}
 	}()
-	return nil
 }
 
 // Shutdown waits for all pending async writes to complete
@@ -155,9 +107,8 @@ func NewNoOpWasmFlagLogger() *NoOpWasmFlagLogger {
 	return &NoOpWasmFlagLogger{}
 }
 
-func (n *NoOpWasmFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+func (n *NoOpWasmFlagLogger) Write(request *resolverv1.WriteFlagLogsRequest) {
 	// Drop the request - do nothing
-	return nil
 }
 
 func (n *NoOpWasmFlagLogger) Shutdown() {

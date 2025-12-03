@@ -39,9 +39,9 @@ type trackingFlagLogger struct {
 	lastWriteCompleted chan struct{}
 }
 
-func (t *trackingFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+func (t *trackingFlagLogger) Write(request *resolverv1.WriteFlagLogsRequest) {
 	atomic.AddInt32(&t.logsSentCount, int32(len(request.FlagAssigned)))
-	return t.actualLogger.Write(ctx, request)
+	t.actualLogger.Write(request)
 }
 
 func (t *trackingFlagLogger) Shutdown() {

@@ -57,14 +57,10 @@ func TestGrpcWasmFlagLogger_Write_Empty(t *testing.T) {
 	}
 
 	logger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	ctx := context.Background()
 
 	// Empty request should be skipped
 	request := &resolverv1.WriteFlagLogsRequest{}
-	err := logger.Write(ctx, request)
-	if err != nil {
-		t.Errorf("Expected no error for empty request, got %v", err)
-	}
+	logger.Write(request)
 
 	// Wait for async processing
 	logger.Shutdown()
@@ -87,17 +83,13 @@ func TestGrpcWasmFlagLogger_Write_SmallRequest(t *testing.T) {
 	}
 
 	logger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	ctx := context.Background()
 
 	// Create a small request (below chunk threshold)
 	request := &resolverv1.WriteFlagLogsRequest{
 		FlagAssigned: make([]*resolverevents.FlagAssigned, 100),
 	}
 
-	err := logger.Write(ctx, request)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
+	logger.Write(request)
 
 	// Wait for async processing
 	logger.Shutdown()
@@ -126,7 +118,6 @@ func TestGrpcWasmFlagLogger_Write_Chunking(t *testing.T) {
 	}
 
 	logger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	ctx := context.Background()
 
 	// Create a large request (above chunk threshold)
 	numFlags := MaxFlagAssignedPerChunk + 500
@@ -136,10 +127,7 @@ func TestGrpcWasmFlagLogger_Write_Chunking(t *testing.T) {
 		FlagResolveInfo:   []*adminv1.FlagResolveInfo{{Flag: "test-flag"}},
 	}
 
-	err := logger.Write(ctx, request)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
+	logger.Write(request)
 
 	// Wait for async processing
 	logger.Shutdown()
@@ -194,47 +182,6 @@ func TestGrpcWasmFlagLogger_Write_Chunking(t *testing.T) {
 	}
 }
 
-func TestGrpcWasmFlagLogger_CreateChunks(t *testing.T) {
-	mockStub := &mockInternalFlagLoggerServiceClient{}
-	logger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-
-	// Create request with metadata
-	request := &resolverv1.WriteFlagLogsRequest{
-		FlagAssigned:      make([]*resolverevents.FlagAssigned, 2500),
-		ClientResolveInfo: []*adminv1.ClientResolveInfo{{Client: "test"}},
-		FlagResolveInfo:   []*adminv1.FlagResolveInfo{{Flag: "flag"}},
-	}
-
-	chunks := logger.createFlagAssignedChunks(request)
-
-	// Should create 3 chunks: 1000 + 1000 + 500
-	if len(chunks) != 3 {
-		t.Errorf("Expected 3 chunks, got %d", len(chunks))
-	}
-
-	// Verify chunk sizes
-	if len(chunks[0].FlagAssigned) != MaxFlagAssignedPerChunk {
-		t.Errorf("Expected chunk 0 to have %d entries, got %d", MaxFlagAssignedPerChunk, len(chunks[0].FlagAssigned))
-	}
-	if len(chunks[1].FlagAssigned) != MaxFlagAssignedPerChunk {
-		t.Errorf("Expected chunk 1 to have %d entries, got %d", MaxFlagAssignedPerChunk, len(chunks[1].FlagAssigned))
-	}
-	if len(chunks[2].FlagAssigned) != 500 {
-		t.Errorf("Expected chunk 2 to have 500 entries, got %d", len(chunks[2].FlagAssigned))
-	}
-
-	// Only first chunk should have metadata
-	if len(chunks[0].ClientResolveInfo) == 0 || len(chunks[0].FlagResolveInfo) == 0 {
-		t.Error("Expected first chunk to have metadata")
-	}
-	if len(chunks[1].ClientResolveInfo) != 0 || len(chunks[1].FlagResolveInfo) != 0 {
-		t.Error("Expected second chunk to have no metadata")
-	}
-	if len(chunks[2].ClientResolveInfo) != 0 || len(chunks[2].FlagResolveInfo) != 0 {
-		t.Error("Expected third chunk to have no metadata")
-	}
-}
-
 func TestGrpcWasmFlagLogger_ErrorHandling(t *testing.T) {
 	var callCount int32
 	expectedErr := errors.New("test error")
@@ -247,17 +194,13 @@ func TestGrpcWasmFlagLogger_ErrorHandling(t *testing.T) {
 	}
 
 	logger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	ctx := context.Background()
 
 	request := &resolverv1.WriteFlagLogsRequest{
 		FlagAssigned: make([]*resolverevents.FlagAssigned, 10),
 	}
 
 	// Write should not return error (async)
-	err := logger.Write(ctx, request)
-	if err != nil {
-		t.Errorf("Expected no error from Write (async), got %v", err)
-	}
+	logger.Write(request)
 
 	// Wait for async processing
 	logger.Shutdown()
@@ -279,14 +222,13 @@ func TestGrpcWasmFlagLogger_Shutdown(t *testing.T) {
 	}
 
 	logger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	ctx := context.Background()
 
 	// Send multiple requests
 	for i := 0; i < 5; i++ {
 		request := &resolverv1.WriteFlagLogsRequest{
 			FlagAssigned: make([]*resolverevents.FlagAssigned, 10),
 		}
-		_ = logger.Write(ctx, request)
+		logger.Write(request)
 	}
 
 	// Shutdown should wait for all to complete
@@ -299,17 +241,13 @@ func TestGrpcWasmFlagLogger_Shutdown(t *testing.T) {
 
 func TestNoOpWasmFlagLogger(t *testing.T) {
 	logger := NewNoOpWasmFlagLogger()
-	ctx := context.Background()
 
 	request := &resolverv1.WriteFlagLogsRequest{
 		FlagAssigned: make([]*resolverevents.FlagAssigned, 100),
 	}
 
 	// Should not return error
-	err := logger.Write(ctx, request)
-	if err != nil {
-		t.Errorf("Expected no error from NoOp logger, got %v", err)
-	}
+	logger.Write(request)
 
 	// Shutdown should not panic
 	logger.Shutdown()

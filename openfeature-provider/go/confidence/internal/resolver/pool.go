@@ -101,17 +101,14 @@ func (s *PooledResolver) Close(ctx context.Context) error {
 
 func (s *PooledResolver) maintenance(fn func(LocalResolver) error) error {
 	errs := []error{}
-	n := len(s.slots) - 1
 	s.mmu.Lock()
 	defer s.mmu.Unlock()
-	for i := range s.slots {
-		slot := &s.slots[n-i]
-
+	for i, slot := range s.slots {
 		func() {
 			slot.rw.Lock()
 			defer slot.rw.Unlock()
 			if err := fn(slot.lr); err != nil {
-				errs = append(errs, fmt.Errorf("slot %d: %w", n-i, err))
+				errs = append(errs, fmt.Errorf("slot %d: %w", i, err))
 			}
 		}()
 	}
