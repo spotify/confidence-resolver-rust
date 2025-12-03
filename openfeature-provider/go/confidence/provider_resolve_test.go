@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
-	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
 	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"

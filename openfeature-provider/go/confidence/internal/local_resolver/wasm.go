@@ -1,4 +1,4 @@
-package resolver
+package local_resolver
 
 import (
 	"context"

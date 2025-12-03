@@ -9,7 +9,7 @@ import (
 	"time"
 
 	fl "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/flag_logger"
-	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
 
 	"github.com/open-feature/go-sdk/openfeature"
 )
