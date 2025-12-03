@@ -83,11 +83,7 @@ func (f *FlagsAdminStateFetcher) GetAccountID() string {
 
 // Reload fetches and updates the state if it has changed
 func (f *FlagsAdminStateFetcher) Reload(ctx context.Context) error {
-	if err := f.fetchAndUpdateStateIfChanged(ctx); err != nil {
-		f.logger.Error("Failed attempt to fetch or reload state", "error", err)
-		return err
-	}
-	return nil
+	return f.fetchAndUpdateStateIfChanged(ctx)
 }
 
 // Provide implements the StateProvider interface
