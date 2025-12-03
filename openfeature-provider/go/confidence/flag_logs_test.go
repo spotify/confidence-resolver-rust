@@ -46,7 +46,7 @@ func setupFlagLogsUnitTest(t *testing.T) (*fl.CapturingFlagLogger, openfeature.I
 	}
 
 	// Create wazero runtime
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, capturingLogger.Write)
+	runtime := lr.DefaultResolverFactory(capturingLogger.Write)
 
 	// Create SwapWasmResolverApi
 	resolverAPI := runtime.New()

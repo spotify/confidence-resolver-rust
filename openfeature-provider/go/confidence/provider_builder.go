@@ -66,7 +66,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	stateProvider := NewFlagsAdminStateFetcherWithTransport(config.ClientSecret, logger, transport)
 	flagLogger := fl.NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
 
-	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, flagLogger.Write)
+	localResolverFactory := lr.DefaultResolverFactory(flagLogger.Write)
 
 	// TODO this call is unsafe and can panic, we should create the factories and instance in provider init
 	resolverAPI := localResolverFactory.New()
@@ -92,7 +92,7 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 		}))
 	}
 
-	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, config.FlagLogger.Write)
+	localResolverFactory := lr.DefaultResolverFactory(config.FlagLogger.Write)
 
 	resolverAPI := localResolverFactory.New()
 

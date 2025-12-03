@@ -197,7 +197,7 @@ func createTutorialFeatureRequest() *resolver.ResolveFlagsRequest {
 
 func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	initialState := createMinimalResolverState()
@@ -220,24 +220,9 @@ func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 
 }
 
-func TestSwapWasmResolverApi_NewSwapWasmResolverApi_InvalidWasm(t *testing.T) {
-	ctx := context.Background()
-	invalidWasmBytes := []byte("not valid wasm")
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("expected panic, got none")
-		}
-	}()
-
-	runtime := lr.DefaultResolverFactory(invalidWasmBytes, lr.NoOpLogSink)
-	defer runtime.Close(ctx)
-
-}
-
 func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state from data directory
@@ -332,7 +317,7 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 
 func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state
@@ -392,7 +377,7 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 
 func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state
@@ -452,7 +437,7 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 
 func TestSwapWasmResolverApi_Close(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	initialState := createMinimalResolverState()
@@ -490,7 +475,7 @@ func TestSwapWasmResolverApi_Close(t *testing.T) {
 // State from data sample, flag without sticky rules
 func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	testState := loadTestResolverState(t)
@@ -576,7 +561,7 @@ func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 
 func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	stickyState := createStateWithStickyFlag()

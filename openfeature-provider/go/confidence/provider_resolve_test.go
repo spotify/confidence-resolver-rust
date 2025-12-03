@@ -16,7 +16,7 @@ import (
 
 func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Create minimal state with wrong client secret
@@ -77,7 +77,7 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 
 func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state
@@ -164,7 +164,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 	t.Run("Provider returns resolved value for flag without sticky rules", func(t *testing.T) {
 		// Create runtime for this subtest
-		runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+		runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 		defer runtime.Close(ctx)
 
 		// Load real test state
@@ -208,7 +208,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 	t.Run("Provider returns missing materializations error message", func(t *testing.T) {
 		// Create runtime for this subtest
-		runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
+		runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 		defer runtime.Close(ctx)
 
 		// Create state with a flag that requires materializations

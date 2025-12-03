@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	_ "embed"
+
 	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
@@ -15,6 +17,15 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// defaultWasmBytes contains the embedded WASM resolver module.
+// This file is automatically populated during the build process from wasm/confidence_resolver.wasm.
+// The WASM file is built from the Rust source in wasm/rust-guest/ and must be kept in sync.
+//
+// CI validates that this embedded file matches the built WASM to prevent version drift.
+
+//go:embed assets/confidence_resolver.wasm
+var wasmBytes []byte
 
 type LogSink func(logs *resolverv1.WriteFlagLogsRequest)
 
@@ -103,7 +114,7 @@ type WasmResolverFactory struct {
 
 var _ LocalResolverFactory = (*WasmResolverFactory)(nil)
 
-func NewWasmResolverFactory(wasmBytes []byte, logSink LogSink) LocalResolverFactory {
+func NewWasmResolverFactory(logSink LogSink) LocalResolverFactory {
 	ctx := context.Background()
 	runtime := wazero.NewRuntime(ctx)
 	_, err := runtime.NewHostModuleBuilder("wasm_msg").

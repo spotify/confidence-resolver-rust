@@ -24,8 +24,8 @@ type LocalResolver interface {
 }
 
 // DefaultResolverFactory composes the default stack: Wasm -> Recovering -> Pooled(GOMAXPROCS)
-func DefaultResolverFactory(wasmBytes []byte, logSink LogSink) LocalResolverFactory {
-	base := NewWasmResolverFactory(wasmBytes, logSink)
+func DefaultResolverFactory(logSink LogSink) LocalResolverFactory {
+	base := NewWasmResolverFactory(logSink)
 	rcv := NewRecoveringResolverFactory(base)
 	return NewPooledResolverFactory(rcv, runtime.GOMAXPROCS(0))
 }

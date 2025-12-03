@@ -381,9 +381,6 @@ RUN go mod download
 # Copy source code
 COPY openfeature-provider/go/confidence/ ./confidence/
 
-# Copy WASM module to embedded location
-COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ./confidence/wasm/confidence_resolver.wasm
-
 # Set environment variable
 ENV IN_DOCKER_BUILD=1
 
@@ -399,7 +396,7 @@ RUN apk add --no-cache diffutils
 COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm /built/confidence_resolver.wasm
 
 # Copy committed WASM from source
-COPY openfeature-provider/go/confidence/wasm/confidence_resolver.wasm /committed/confidence_resolver.wasm
+COPY openfeature-provider/go/confidence/internal/local_resolver/assets/confidence_resolver.wasm /committed/confidence_resolver.wasm
 
 # Compare files
 RUN set -e; \
