@@ -525,24 +525,15 @@ func TestLocalResolverProvider_Init_StateProviderError(t *testing.T) {
 	}
 }
 
-// TestLocalResolverProvider_Init_EmptyAccountID verifies Init handles empty accountID
+// TestLocalResolverProvider_Init_EmptyAccountID verifies Init fails when accountID is empty
 func TestLocalResolverProvider_Init_EmptyAccountID(t *testing.T) {
-	updateStateCalled := false
-	receivedAccountID := ""
-
 	mockStateProvider := &mockStateProviderForInit{
 		provideFunc: func(ctx context.Context) ([]byte, string, error) {
 			return []byte("test-state"), "", nil // Empty accountID
 		},
 	}
 
-	mockResolverAPI := &mockResolverAPIForInit{
-		updateStateFunc: func(state []byte, accountID string) error {
-			updateStateCalled = true
-			receivedAccountID = accountID
-			return nil
-		},
-	}
+	mockResolverAPI := &mockResolverAPIForInit{}
 
 	provider := NewLocalResolverProvider(
 		mockResolverAPI,
@@ -553,17 +544,11 @@ func TestLocalResolverProvider_Init_EmptyAccountID(t *testing.T) {
 	)
 
 	err := provider.Init(openfeature.EvaluationContext{})
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
+	if err == nil {
+		t.Fatal("Expected error when accountID is empty")
 	}
-
-	if !updateStateCalled {
-		t.Error("Expected UpdateStateAndFlushLogs to be called")
-	}
-
-	// Should use "unknown" when accountID is empty
-	if receivedAccountID != "unknown" {
-		t.Errorf("Expected accountID to be 'unknown', got: %s", receivedAccountID)
+	if err.Error() != "AccountID is empty in the initial state" {
+		t.Errorf("Expected specific error message, got: %v", err)
 	}
 }
 

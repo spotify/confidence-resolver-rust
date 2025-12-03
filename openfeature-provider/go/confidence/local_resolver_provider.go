@@ -394,8 +394,8 @@ func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationCon
 	}
 
 	if accountId == "" {
-		p.logger.Warn("AccountID is empty after state fetch")
-		accountId = "unknown"
+		p.logger.Error("AccountID is empty in the fetched state, this should not happen")
+		return fmt.Errorf("AccountID is empty in the initial state")
 	}
 
 	// Update resolver with initial state (triggers WASM compilation and initialization)
