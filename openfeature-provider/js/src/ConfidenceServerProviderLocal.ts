@@ -273,13 +273,13 @@ export class ConfidenceServerProviderLocal implements Provider {
   private async sendFlagLogs(encodedWriteFlagLogRequest: Uint8Array, signal = this.main.signal): Promise<void> {
     try {
       const response = await this.fetch('https://resolver.confidence.dev/v1/clientFlagLogs:write', {
-      method: 'post',
-      signal,
-      headers: {
-        'Content-Type': 'application/x-protobuf',
-        Authorization: `ClientSecret ${this.options.flagClientSecret}`,
-      },
-      body: encodedWriteFlagLogRequest as Uint8Array<ArrayBuffer>,
+        method: 'post',
+        signal,
+        headers: {
+          'Content-Type': 'application/x-protobuf',
+          Authorization: `ClientSecret ${this.options.flagClientSecret}`,
+        },
+        body: encodedWriteFlagLogRequest as Uint8Array<ArrayBuffer>,
       });
       if (!response.ok) {
         logger.error(`Failed to write flag logs: ${response.status} ${response.statusText} - ${await response.text()}`);
