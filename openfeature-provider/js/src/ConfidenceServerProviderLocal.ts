@@ -283,7 +283,6 @@ export class ConfidenceServerProviderLocal implements Provider {
       });
       if (!response.ok) {
         logger.error(`Failed to write flag logs: ${response.status} ${response.statusText} - ${await response.text()}`);
-        throw new Error(`${response.status}: ${response.statusText}`);
       }
     } catch (err) {
       // Network error (DNS/connect/TLS) - already retried by middleware, log and rethrow
