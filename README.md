@@ -4,22 +4,14 @@
 
 The Confidence flag resolver implemented in Rust, local-resolve OpenFeature Providers and edge-compatible resolver runnables.
 
-## SDKs and Tools
+## Repository layout
 
-**OpenFeature Providers** — Local flag resolution for your application:
-- [Go](./openfeature-provider/go/README.md)
-- [Java](./openfeature-provider/java/README.md)
-- [JavaScript/TypeScript](./openfeature-provider/js/README.md)
-- [Ruby](./openfeature-provider/ruby/README.md)
+The tools and SDKs published for direct usage:
+- `confidence-cloudflare-resolver`: Confidence resolver service as a Cloudflare Worker (readme [here](./confidence-cloudflare-resolver/deployer/))
+- `openfeature-provider`: The OpenFeature providers for flag resolving
 
-See the [Integration Guide](./openfeature-provider/INTEGRATION_GUIDE.md) for setup instructions.
-
-**Edge Resolver** — Deploy the Confidence resolver at the edge:
-- [Cloudflare Worker](./confidence-cloudflare-resolver/deployer/README.md)
-
-## Internal Crates
-
-- `confidence-resolver`: Core resolver logic
+Underlying building blocks:
+- `confidence-resolver`: Core resolver crate
 - `wasm` and `wasm-msg`: WASM resolver with communication contract towards the hosting environment 
 - `data`: Sample local development data (e.g., resolver state)
 
