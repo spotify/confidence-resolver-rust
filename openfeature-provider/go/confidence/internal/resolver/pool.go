@@ -1,4 +1,4 @@
-package confidence
+package resolver
 
 import (
 	"context"
@@ -50,11 +50,13 @@ func NewPooledResolver(size int, supplier LocalResolverSupplier) *PooledResolver
 	for i := range slots {
 		slots[i] = slot{
 			lr: supplier(),
+			rw: &sync.RWMutex{},
 		}
 	}
 	return &PooledResolver{
 		supplier: supplier,
 		slots:    slots,
+		mmu:      &sync.Mutex{},
 	}
 }
 

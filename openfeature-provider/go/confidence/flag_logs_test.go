@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
+
 	"github.com/open-feature/go-sdk/openfeature"
 )
 
@@ -43,7 +45,7 @@ func setupFlagLogsUnitTest(t *testing.T) (*CapturingFlagLogger, openfeature.ICli
 	}
 
 	// Create wazero runtime
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 
 	// Create SwapWasmResolverApi
 	resolverAPI := runtime.New()

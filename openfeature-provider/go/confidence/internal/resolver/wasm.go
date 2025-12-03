@@ -1,4 +1,4 @@
-package confidence
+package resolver
 
 import (
 	"context"
@@ -18,12 +18,12 @@ import (
 
 type LogSink func(logs *resolverv1.WriteFlagLogsRequest)
 
-func noopLogSink(logs *resolverv1.WriteFlagLogsRequest) {}
+func NoOpLogSink(logs *resolverv1.WriteFlagLogsRequest) {}
 
 type WasmResolver struct {
 	instance api.Module
 	logSink  LogSink
-	mu       sync.Mutex
+	mu       *sync.Mutex
 }
 
 var _ LocalResolver = (*WasmResolver)(nil)
@@ -102,7 +102,8 @@ type WasmResolverFactory struct {
 
 var _ LocalResolverFactory = (*WasmResolverFactory)(nil)
 
-func NewWasmResolverFactory(ctx context.Context, logSink LogSink) LocalResolverFactory {
+func NewWasmResolverFactory(wasmBytes []byte, logSink LogSink) LocalResolverFactory {
+	ctx := context.Background()
 	runtime := wazero.NewRuntime(ctx)
 	_, err := runtime.NewHostModuleBuilder("wasm_msg").
 		NewFunctionBuilder().
@@ -125,7 +126,7 @@ func NewWasmResolverFactory(ctx context.Context, logSink LogSink) LocalResolverF
 	if err != nil {
 		panic(err)
 	}
-	module, err := runtime.CompileModule(ctx, defaultWasmBytes)
+	module, err := runtime.CompileModule(ctx, wasmBytes)
 	if err != nil {
 		panic(err)
 	}
@@ -146,6 +147,7 @@ func (wrf *WasmResolverFactory) New() LocalResolver {
 	return &WasmResolver{
 		instance: instance,
 		logSink:  wrf.logSink,
+		mu:       &sync.Mutex{},
 	}
 }
 

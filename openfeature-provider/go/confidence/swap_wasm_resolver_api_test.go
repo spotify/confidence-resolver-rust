@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
 	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
@@ -196,7 +197,7 @@ func createTutorialFeatureRequest() *resolver.ResolveFlagsRequest {
 
 func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	initialState := createMinimalResolverState()
@@ -242,7 +243,7 @@ func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 
 func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state from data directory
@@ -337,7 +338,7 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 
 func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state
@@ -397,7 +398,7 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 
 func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state
@@ -457,7 +458,7 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 
 func TestSwapWasmResolverApi_Close(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	initialState := createMinimalResolverState()
@@ -495,7 +496,7 @@ func TestSwapWasmResolverApi_Close(t *testing.T) {
 // State from data sample, flag without sticky rules
 func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	testState := loadTestResolverState(t)
@@ -581,7 +582,7 @@ func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 
 func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	stickyState := createStateWithStickyFlag()

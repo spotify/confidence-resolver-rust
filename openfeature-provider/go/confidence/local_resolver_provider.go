@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	resolvertypes "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolvertypes"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
@@ -22,7 +23,7 @@ const defaultPollIntervalSeconds = 30
 // LocalResolverProvider implements the OpenFeature FeatureProvider interface
 // for local flag resolution using the Confidence WASM resolver
 type LocalResolverProvider struct {
-	resolverAPI   LocalResolver
+	resolverAPI   lr.LocalResolver
 	stateProvider StateProvider
 	flagLogger    FlagLogger
 	clientSecret  string
@@ -41,7 +42,7 @@ var (
 
 // NewLocalResolverProvider creates a new LocalResolverProvider
 func NewLocalResolverProvider(
-	resolverAPI LocalResolver,
+	resolverAPI lr.LocalResolver,
 	stateProvider StateProvider,
 	flagLogger FlagLogger,
 	clientSecret string,

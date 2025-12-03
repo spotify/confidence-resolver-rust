@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"runtime"
 
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -68,9 +68,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 		logger.Info("writing logs", "count", len(logs.FlagAssigned))
 	}
 
-	localResolverFactory := NewWasmResolverFactory(ctx, noopLogSink)
-	localResolverFactory = NewRecoveringResolverFactory(localResolverFactory)
-	localResolverFactory = NewPooledResolverFactory(localResolverFactory, runtime.GOMAXPROCS(0))
+	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, noopLogSink)
 
 	// TODO this call is unsafe and can panic, we should create the factories and instance in provider init
 	resolverAPI := localResolverFactory.New()
@@ -96,7 +94,7 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 		}))
 	}
 
-	localResolverFactory := NewWasmResolverFactory(ctx, noopLogSink)
+	localResolverFactory := lr.DefaultResolverFactory(defaultWasmBytes, func(logs *resolverv1.WriteFlagLogsRequest) {})
 
 	resolverAPI := localResolverFactory.New()
 

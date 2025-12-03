@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	"google.golang.org/grpc"
 )
@@ -186,7 +187,7 @@ func createProviderWithTestState(
 	logger FlagLogger,
 ) (*LocalResolverProvider, error) {
 	// Create wazero runtime
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 
 	// Create SwapWasmResolverApi without initial state (lazy initialization)
 	resolverAPI := runtime.New()

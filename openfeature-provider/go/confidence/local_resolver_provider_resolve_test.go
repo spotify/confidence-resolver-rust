@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/resolver"
 	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
@@ -15,7 +16,7 @@ import (
 
 func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Create minimal state with wrong client secret
@@ -76,7 +77,7 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 
 func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewWasmResolverFactory(ctx, noopLogSink)
+	runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state
@@ -163,7 +164,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 	t.Run("Provider returns resolved value for flag without sticky rules", func(t *testing.T) {
 		// Create runtime for this subtest
-		runtime := NewWasmResolverFactory(ctx, noopLogSink)
+		runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 		defer runtime.Close(ctx)
 
 		// Load real test state
@@ -207,7 +208,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 
 	t.Run("Provider returns missing materializations error message", func(t *testing.T) {
 		// Create runtime for this subtest
-		runtime := NewWasmResolverFactory(ctx, noopLogSink)
+		runtime := lr.DefaultResolverFactory(defaultWasmBytes, lr.NoOpLogSink)
 		defer runtime.Close(ctx)
 
 		// Create state with a flag that requires materializations

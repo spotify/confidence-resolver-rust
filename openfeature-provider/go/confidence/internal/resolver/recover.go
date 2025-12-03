@@ -1,4 +1,4 @@
-package confidence
+package resolver
 
 import (
 	"context"
