@@ -1,12 +1,10 @@
-package confidence
+package local_resolver
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"testing"
 
-	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
 	tu "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/testutil"
 	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
@@ -16,8 +14,12 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stderr, nil))
+var resolverFactory LocalResolverFactory
+
+func TestMain(m *testing.M) {
+	resolverFactory = DefaultResolverFactory(NoOpLogSink)
+	defer resolverFactory.Close(context.Background())
+	os.Exit(m.Run())
 }
 
 // Helper function to create minimal valid resolver state for testing
@@ -178,24 +180,22 @@ func createTutorialFeatureRequest() *resolver.ResolveFlagsRequest {
 
 func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
 
 	initialState := createMinimalResolverState()
 	accountId := "test-account"
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
+	defaultResolver := resolverFactory.New()
+	defer defaultResolver.Close(ctx)
 
 	// Initialize with test state
-	if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	if err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 		State:     initialState,
 		AccountId: accountId,
 	}); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		t.Fatalf("Failed to initialize defaultResolver with state: %v", err)
 	}
 
-	if swap == nil {
+	if defaultResolver == nil {
 		t.Fatal("Expected non-nil SwapWasmResolverApi")
 	}
 
@@ -203,22 +203,20 @@ func TestSwapWasmResolverApi_NewSwapWasmResolverApi(t *testing.T) {
 
 func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
 
 	// Load real test state from data directory
 	testState := tu.LoadTestResolverState(t)
 	testAcctID := tu.LoadTestAccountID(t)
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
+	defaultResolver := resolverFactory.New()
+	defer defaultResolver.Close(ctx)
 
 	// Initialize with test state
-	if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	if err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 		State:     testState,
 		AccountId: testAcctID,
 	}); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		t.Fatalf("Failed to initialize defaultResolver with state: %v", err)
 	}
 
 	request := createResolveWithStickyRequest(
@@ -228,7 +226,7 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 		false, // notProcessSticky
 	)
 
-	stickyResponse, err := swap.ResolveWithSticky(request)
+	stickyResponse, err := defaultResolver.ResolveWithSticky(request)
 	if err != nil {
 		t.Fatalf("Unexpected error resolving tutorial-feature flag: %v", err)
 	}
@@ -298,27 +296,25 @@ func TestSwapWasmResolverApi_WithRealState(t *testing.T) {
 
 func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
 
 	// Load real test state
 	initialState := tu.LoadTestResolverState(t)
 	accountId := tu.LoadTestAccountID(t)
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
+	defaultResolver := resolverFactory.New()
+	defer defaultResolver.Close(ctx)
 
 	// Initialize with test state
-	if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	if err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 		State:     initialState,
 		AccountId: accountId,
 	}); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		t.Fatalf("Failed to initialize defaultResolver with state: %v", err)
 	}
 
 	// Update with new state - the key test is that UpdateStateAndFlushLogs succeeds
 	newState := tu.LoadTestResolverState(t)
-	err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 		State:     newState,
 		AccountId: accountId,
 	})
@@ -334,7 +330,7 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 		false, // notProcessSticky
 	)
 
-	stickyResponse, err := swap.ResolveWithSticky(request)
+	stickyResponse, err := defaultResolver.ResolveWithSticky(request)
 	if err != nil {
 		t.Fatalf("Resolve failed after update: %v", err)
 	}
@@ -358,28 +354,26 @@ func TestSwapWasmResolverApi_UpdateStateAndFlushLogs(t *testing.T) {
 
 func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
 
 	// Load real test state
 	initialState := tu.LoadTestResolverState(t)
 	accountId := tu.LoadTestAccountID(t)
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
+	defaultResolver := resolverFactory.New()
+	defer defaultResolver.Close(ctx)
 
 	// Initialize with test state
-	if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	if err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 		State:     initialState,
 		AccountId: accountId,
 	}); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		t.Fatalf("Failed to initialize defaultResolver with state: %v", err)
 	}
 
-	// Perform multiple state updates to verify the swap mechanism works correctly
+	// Perform multiple state updates to verify the defaultResolver mechanism works correctly
 	for i := 0; i < 3; i++ {
 		newState := tu.LoadTestResolverState(t)
-		err := swap.SetResolverState(&messages.SetResolverStateRequest{
+		err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 			State:     newState,
 			AccountId: accountId,
 		})
@@ -395,7 +389,7 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 			false, // notProcessSticky
 		)
 
-		stickyResponse, resolveErr := swap.ResolveWithSticky(request)
+		stickyResponse, resolveErr := defaultResolver.ResolveWithSticky(request)
 		if resolveErr != nil {
 			t.Fatalf("Update %d: Resolve failed: %v", i, resolveErr)
 		}
@@ -405,7 +399,7 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 			t.Fatalf("Update %d: Expected successful resolve response", i)
 		}
 
-		// Verify we got the expected variant after each swap
+		// Verify we got the expected variant after each defaultResolver
 		if len(response.ResolvedFlags) != 1 {
 			t.Errorf("Update %d: Expected 1 resolved flag, got %d", i, len(response.ResolvedFlags))
 		} else if response.ResolvedFlags[0].Variant != "flags/tutorial-feature/variants/exciting-welcome" {
@@ -417,25 +411,22 @@ func TestSwapWasmResolverApi_MultipleUpdates(t *testing.T) {
 }
 
 func TestSwapWasmResolverApi_Close(t *testing.T) {
-	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
-
+	
 	initialState := createMinimalResolverState()
 	accountId := "test-account"
 
-	swap := runtime.New()
+	defaultResolver := resolverFactory.New()
 
 	// Initialize with test state
-	if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	if err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 		State:     initialState,
 		AccountId: accountId,
 	}); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		t.Fatalf("Failed to initialize defaultResolver with state: %v", err)
 	}
 
 	// Close should not panic
-	// swap.Close(ctx)
+	// defaultResolver.Close(ctx)
 
 	// Note: Closing again may cause issues with WASM module, so we don't test double-close
 }
@@ -456,21 +447,19 @@ func TestSwapWasmResolverApi_Close(t *testing.T) {
 // State from data sample, flag without sticky rules
 func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
 
 	testState := tu.LoadTestResolverState(t)
 	testAcctID := tu.LoadTestAccountID(t)
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
+	defaultResolver := resolverFactory.New()
+	defer defaultResolver.Close(ctx)
 
 	// Initialize with test state
-	if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	if err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 		State:     testState,
 		AccountId: testAcctID,
 	}); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		t.Fatalf("Failed to initialize defaultResolver with state: %v", err)
 	}
 
 	stickyRequest := createResolveWithStickyRequest(
@@ -480,7 +469,7 @@ func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 		false, // notProcessSticky
 	)
 
-	response, err := swap.ResolveWithSticky(stickyRequest)
+	response, err := defaultResolver.ResolveWithSticky(stickyRequest)
 	if err != nil {
 		t.Fatalf("Unexpected error resolving tutorial-feature flag with sticky: %v", err)
 	}
@@ -542,21 +531,19 @@ func TestSwapWasmResolverApi_ResolveFlagWithNoStickyRules(t *testing.T) {
 
 func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
 
 	stickyState := createStateWithStickyFlag()
 	accountId := "test-account"
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
+	defaultResolver := resolverFactory.New()
+	defer defaultResolver.Close(ctx)
 
 	// Initialize with test state
-	if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	if err := defaultResolver.SetResolverState(&messages.SetResolverStateRequest{
 		State:     stickyState,
 		AccountId: accountId,
 	}); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		t.Fatalf("Failed to initialize defaultResolver with state: %v", err)
 	}
 
 	stickyRequest := createResolveWithStickyRequest(
@@ -575,7 +562,7 @@ func TestSwapWasmResolverApi_ResolveFlagWithStickyRules_MissingMaterializations(
 		false, // notProcessSticky
 	)
 
-	response, err := swap.ResolveWithSticky(stickyRequest)
+	response, err := defaultResolver.ResolveWithSticky(stickyRequest)
 	if err != nil {
 		t.Fatalf("Unexpected error from ResolveWithSticky: %v", err)
 	}
