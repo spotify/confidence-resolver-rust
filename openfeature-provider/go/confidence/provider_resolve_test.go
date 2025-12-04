@@ -213,7 +213,7 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 		defer runtime.Close(ctx)
 
 		// Create state with a flag that requires materializations
-		stickyState := createStateWithStickyFlag()
+		stickyState := tu.CreateStateWithStickyFlag()
 		accountId := "test-account"
 
 		swap := runtime.New()

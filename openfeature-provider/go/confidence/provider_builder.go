@@ -55,7 +55,6 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	target, opts := hooks.ModifyGRPCDial(confidenceDomain, baseOpts)
 	conn, err := grpc.NewClient(target, opts...)
 	if err != nil {
-		// wasmRuntime.Close(ctx)
 		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 
@@ -66,9 +65,8 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	stateProvider := NewFlagsAdminStateFetcherWithTransport(config.ClientSecret, logger, transport)
 	flagLogger := fl.NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
 
+	// TODO the following two calls are unsafe and can panic, we should move them to provider init
 	localResolverFactory := lr.DefaultResolverFactory(flagLogger.Write)
-
-	// TODO this call is unsafe and can panic, we should create the factories and instance in provider init
 	resolverAPI := localResolverFactory.New()
 
 	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger)
