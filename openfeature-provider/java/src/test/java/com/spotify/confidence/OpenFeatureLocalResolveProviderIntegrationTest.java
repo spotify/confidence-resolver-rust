@@ -24,7 +24,6 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -112,22 +111,13 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
     // Create custom channel factory that connects to in-process server
     final ChannelFactory testChannelFactory =
         new ChannelFactory() {
-          private final List<ManagedChannel> channels = new ArrayList<>();
-
           @Override
           public ManagedChannel create(String target, List<ClientInterceptor> interceptors) {
             InProcessChannelBuilder builder = InProcessChannelBuilder.forName(serverName);
             if (!interceptors.isEmpty()) {
               builder.intercept(interceptors.toArray(new ClientInterceptor[0]));
             }
-            ManagedChannel channel = builder.build();
-            this.channels.add(channel);
-            return channel;
-          }
-
-          @Override
-          public void shutdown() {
-            channels.stream().forEach(ManagedChannel::shutdown);
+            return builder.build();
           }
         };
 

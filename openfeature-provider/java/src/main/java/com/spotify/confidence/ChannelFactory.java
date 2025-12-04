@@ -22,9 +22,8 @@ import java.util.List;
  *   <li>Debugging: add custom logging or tracing interceptors
  * </ul>
  *
- * <p><strong>Lifecycle:</strong> The factory is responsible for managing the lifecycle of all
- * channels it creates. When {@link #shutdown()} is called, it should shut down all channels that
- * were created via {@link #create(String, List)}.
+ * <p><strong>Channel Lifecycle:</strong> Channels created by this factory must be shut down by the
+ * caller when they are no longer needed. The factory does not manage channel lifecycles.
  */
 public interface ChannelFactory {
   /**
@@ -35,13 +34,4 @@ public interface ChannelFactory {
    * @return a configured ManagedChannel
    */
   ManagedChannel create(String target, List<ClientInterceptor> defaultInterceptors);
-
-  /**
-   * Shuts down all channels created by this factory. This method should be called when the provider
-   * is shutting down to ensure proper resource cleanup.
-   *
-   * <p>Implementations should shut down all channels that were created via {@link #create(String,
-   * List)} and wait for them to terminate gracefully.
-   */
-  void shutdown();
 }

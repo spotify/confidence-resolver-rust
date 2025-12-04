@@ -315,9 +315,6 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     // writes
     this.wasmResolveApi.close();
 
-    if (this.channelFactory != null) {
-      this.channelFactory.shutdown();
-    }
     FeatureProvider.super.shutdown();
   }
 

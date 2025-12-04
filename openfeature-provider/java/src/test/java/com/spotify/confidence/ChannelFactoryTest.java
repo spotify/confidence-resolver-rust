@@ -34,11 +34,6 @@ public class ChannelFactoryTest {
             }
             return builder.build();
           }
-
-          @Override
-          public void shutdown() {
-            // Test implementation - no-op
-          }
         };
 
     new OpenFeatureLocalResolveProvider(new LocalProviderConfig(customFactory), "clientsecret");

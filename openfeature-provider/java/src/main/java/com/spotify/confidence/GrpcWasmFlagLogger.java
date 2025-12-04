@@ -5,13 +5,7 @@ import static com.spotify.confidence.GrpcUtil.createConfidenceChannel;
 import com.google.common.annotations.VisibleForTesting;
 import com.spotify.confidence.flags.resolver.v1.InternalFlagLoggerServiceGrpc;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsRequest;
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
+import io.grpc.*;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +29,7 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
   private final ExecutorService executorService;
   private final FlagLogWriter writer;
   private final Duration shutdownTimeout;
+  private ManagedChannel channel;
 
   @VisibleForTesting
   public GrpcWasmFlagLogger(String clientSecret, FlagLogWriter writer) {
@@ -71,9 +66,9 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
                 });
   }
 
-  private static InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub createAuthStub(
+  private InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub createAuthStub(
       ChannelFactory channelFactory, String clientSecret) {
-    final var channel = createConfidenceChannel(channelFactory);
+    this.channel = createConfidenceChannel(channelFactory);
     return addAuthInterceptor(InternalFlagLoggerServiceGrpc.newBlockingStub(channel), clientSecret);
   }
 
@@ -181,6 +176,9 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
    */
   @Override
   public void shutdown() {
+    if (channel != null) {
+      channel.shutdown();
+    }
     executorService.shutdown();
     try {
       if (!executorService.awaitTermination(shutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
