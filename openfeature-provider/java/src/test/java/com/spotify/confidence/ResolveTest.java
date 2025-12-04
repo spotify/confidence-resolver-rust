@@ -3,20 +3,55 @@ package com.spotify.confidence;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 import com.google.protobuf.Struct;
 import com.google.protobuf.util.Structs;
 import com.google.protobuf.util.Values;
 import com.spotify.confidence.flags.admin.v1.Flag;
 import com.spotify.confidence.flags.admin.v1.Segment;
-import com.spotify.confidence.flags.resolver.v1.ResolveReason;
+import com.spotify.confidence.flags.resolver.v1.*;
 import com.spotify.confidence.flags.types.v1.FlagSchema;
+import com.spotify.confidence.iam.v1.ClientCredential;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeAll;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-abstract class ResolveTest extends TestBase {
+class ResolveTest {
+
+  protected final MaterializationStore mockMaterializationStore = mock(MaterializationStore.class);
+  protected static final ClientCredential.ClientSecret secret =
+      ClientCredential.ClientSecret.newBuilder().setSecret("very-secret").build();
+  static final String clientName = "clients/client";
+  static final String credentialName = clientName + "/credentials/creddy";
+  private final ResolverApi resolverApi;
+
+  public ResolveTest() {
+    final var wasmResolverApi =
+        new SwapWasmResolverApi(
+            new WasmFlagLogger() {
+              @Override
+              public void write(WriteFlagLogsRequest request) {}
+
+              @Override
+              public void shutdown() {}
+            },
+            new byte[0],
+            "",
+            mockMaterializationStore);
+    this.resolverApi = wasmResolverApi;
+  }
+
+  @BeforeEach
+  void setUp() {
+    useStateWithoutFlagsWithMaterialization();
+  }
+
+  private static final String ACCOUNT = "account";
   private static final String flag1 = "flags/flag-1";
 
   private static final String flagOff = flag1 + "/variants/offf";
@@ -117,7 +152,9 @@ abstract class ResolveTest extends TestBase {
                               .setReadMaterialization("read-mat")
                               .setMode(
                                   Flag.Rule.MaterializationSpec.MaterializationReadMode.newBuilder()
-                                      .setMaterializationMustMatch(true)
+                                      .setMaterializationMustMatch(
+                                          false) // true means the intake is paused. false means we
+                                      // accept new assignments
                                       .setSegmentTargetingCanBeIgnored(false)
                                       .build())
                               .setWriteMaterialization("write-mat")
@@ -162,13 +199,12 @@ abstract class ResolveTest extends TestBase {
     exampleStateWithMaterializationBytes = buildResolverStateBytes(flagsWithMaterialization);
   }
 
-  protected ResolveTest(boolean isWasm) {
-    super(exampleStateBytes);
+  protected void useStateWithFlagsWithMaterialization() {
+    resolverApi.updateStateAndFlushLogs(exampleStateWithMaterializationBytes, ACCOUNT);
   }
 
-  @BeforeAll
-  public static void beforeAll() {
-    TestBase.setup();
+  protected void useStateWithoutFlagsWithMaterialization() {
+    resolverApi.updateStateAndFlushLogs(exampleStateBytes, ACCOUNT);
   }
 
   @Test
@@ -218,31 +254,83 @@ abstract class ResolveTest extends TestBase {
     assertThat(response.getResolveToken()).isNotEmpty();
   }
 
-  //  @Test
-  //  public void perf() {
-  //    final ScheduledExecutorService flagsFetcherExecutor =
-  //            Executors.newScheduledThreadPool(1, new
-  // ThreadFactoryBuilder().setDaemon(true).build());
-  //
-  //    flagsFetcherExecutor.scheduleAtFixedRate(
-  //            () -> {
-  //              System.out.println("flagsFetcherExecutor started");
-  //              resolverServiceFactory.setState(desiredState.toProto().toByteArray());
-  //              System.out.println("flagsFetcherExecutor ended");
-  //            },
-  //            2,
-  //            2,
-  //            TimeUnit.SECONDS);
-  //
-  //    for (int i = 1; i <= 100; i++) {
-  //      final var start = System.currentTimeMillis();
-  //      for (int j = 0; j < 10000; j++) {
-  //        resolveWithContext(List.of(flag1), "foo", "bar", Struct.newBuilder().build(), true);
-  //      }
-  //      System.out.println(
-  //          "Iteration " + i + " took " + (System.currentTimeMillis() - start) + " ms");
-  //    }
-  //  }
+  @Test
+  public void testResolveFlagWithMaterializationsWithMockedStoreContainingVariant() {
+    useStateWithFlagsWithMaterialization();
+    when(mockMaterializationStore.write(any())).thenReturn(CompletableFuture.completedFuture(null));
+    when(mockMaterializationStore.read(
+            argThat(
+                (arg) ->
+                    arg.get(0).materialization().equalsIgnoreCase("read-mat")
+                        && arg.get(0).unit().equalsIgnoreCase("foo"))))
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                List.of(
+                    new MaterializationStore.ReadResult.Variant(
+                        "read-mat", "foo", "MyRule", Optional.of(flagOn)))));
+    ResolveFlagsResponse response =
+        resolveWithContext(List.of(flag1), "foo", Struct.newBuilder().build(), true);
+
+    final Struct expectedValue = variantOn.getValue();
+    assertEquals(variantOn.getName(), response.getResolvedFlags(0).getVariant());
+    assertEquals(expectedValue, response.getResolvedFlags(0).getValue());
+    assertEquals(schema1, response.getResolvedFlags(0).getFlagSchema());
+  }
+
+  @Test
+  public void testResolveFlagWithMaterializationsWithMockedStoreNotContainingVariant() {
+    useStateWithFlagsWithMaterialization();
+    when(mockMaterializationStore.write(any())).thenReturn(CompletableFuture.completedFuture(null));
+    when(mockMaterializationStore.read(
+            argThat(
+                (arg) ->
+                    arg.get(0).materialization().equalsIgnoreCase("read-mat")
+                        && arg.get(0).unit().equalsIgnoreCase("foo"))))
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                List.of(
+                    new MaterializationStore.ReadResult.Variant(
+                        "read-mat", "foo", "MyRule", Optional.empty()))));
+    ResolveFlagsResponse response =
+        resolveWithContext(List.of(flag1), "foo", Struct.newBuilder().build(), true);
+    verify(mockMaterializationStore)
+        .write(
+            argThat(
+                set -> {
+                  MaterializationStore.WriteOp.Variant writeOp =
+                      (MaterializationStore.WriteOp.Variant) set.stream().toList().get(0);
+                  return set.size() == 1
+                      && writeOp.unit().equalsIgnoreCase("foo")
+                      && writeOp.materialization().equalsIgnoreCase("write-mat")
+                      && writeOp.rule().equalsIgnoreCase("MyRule")
+                      && writeOp.variant().equalsIgnoreCase(flagOn);
+                }));
+
+    final Struct expectedValue = variantOn.getValue();
+    assertEquals(variantOn.getName(), response.getResolvedFlags(0).getVariant());
+    assertEquals(expectedValue, response.getResolvedFlags(0).getValue());
+    assertEquals(schema1, response.getResolvedFlags(0).getFlagSchema());
+  }
+
+  @Test
+  public void testResolveFlagWithMaterializationsIsProtectedAgainstInfiniteRecursion() {
+    useStateWithFlagsWithMaterialization();
+    when(mockMaterializationStore.write(any())).thenReturn(CompletableFuture.completedFuture(null));
+    when(mockMaterializationStore.read(
+            argThat(
+                (arg) ->
+                    arg.get(0).materialization().equalsIgnoreCase("read-mat")
+                        && arg.get(0).unit().equalsIgnoreCase("foo"))))
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                List.of())); // this will cause recursion in the resolve.
+    try {
+      resolveWithContext(List.of(flag1), "foo", Struct.newBuilder().build(), true);
+    } catch (Exception e) {
+      assertThat(e).isInstanceOf(RuntimeException.class);
+      assertThat(e.getMessage()).contains("Max retries exceeded for missing materializations: 3");
+    }
+  }
 
   @Test
   public void testTooLongKey() {
@@ -292,8 +380,59 @@ abstract class ResolveTest extends TestBase {
     builder.addClientCredentials(
         com.spotify.confidence.iam.v1.ClientCredential.newBuilder()
             .setName(credentialName)
-            .setClientSecret(TestBase.secret)
+            .setClientSecret(secret)
             .build());
     return builder.build().toByteArray();
+  }
+
+  private ResolveFlagsResponse resolveWithContext(
+      List<String> flags, String username, Struct struct, boolean apply, String secret) {
+    return resolverApi
+        .resolveWithSticky(
+            ResolveWithStickyRequest.newBuilder()
+                .setFailFastOnSticky(false)
+                .setResolveRequest(
+                    ResolveFlagsRequest.newBuilder()
+                        .addAllFlags(flags)
+                        .setClientSecret(secret)
+                        .setEvaluationContext(
+                            Structs.of(
+                                "targeting_key", Values.of(username), "bar", Values.of(struct)))
+                        .setApply(apply))
+                .build())
+        .toCompletableFuture()
+        .join();
+  }
+
+  private ResolveFlagsResponse resolveWithNumericTargetingKey(
+      List<String> flags, Number targetingKey, Struct struct) {
+
+    final var builder =
+        ResolveFlagsRequest.newBuilder()
+            .addAllFlags(flags)
+            .setClientSecret(secret.getSecret())
+            .setApply(true);
+
+    if (targetingKey instanceof Double || targetingKey instanceof Float) {
+      builder.setEvaluationContext(
+          Structs.of(
+              "targeting_key", Values.of(targetingKey.doubleValue()), "bar", Values.of(struct)));
+    } else {
+      builder.setEvaluationContext(
+          Structs.of(
+              "targeting_key", Values.of(targetingKey.longValue()), "bar", Values.of(struct)));
+    }
+
+    final var request =
+        ResolveWithStickyRequest.newBuilder()
+            .setResolveRequest(builder)
+            .setFailFastOnSticky(false)
+            .build();
+    return resolverApi.resolveWithSticky(request).toCompletableFuture().join();
+  }
+
+  private ResolveFlagsResponse resolveWithContext(
+      List<String> flags, String username, Struct struct, boolean apply) {
+    return resolveWithContext(flags, username, struct, apply, secret.getSecret());
   }
 }

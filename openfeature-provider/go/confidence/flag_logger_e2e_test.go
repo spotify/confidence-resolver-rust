@@ -24,7 +24,7 @@ const (
 func TestFlagLogs_ShouldSuccessfullySendToRealBackend(t *testing.T) {
 	ctx := context.Background()
 
-	// Create a custom logger that captures log messages
+	// Create a custom logger that captures log messages (Debug level to capture all logs)
 	var logBuffer logCaptureBuffer
 	captureHandler := slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(captureHandler)

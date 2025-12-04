@@ -55,7 +55,7 @@ func (g *GrpcFlagLogger) Write(request *resolverv1.WriteFlagLogsRequest) {
 			"sdk_version", sdkVersion)
 	}
 
-	g.logger.Debug("Writing flag logs",
+	g.logger.Debug("Sending flag logs",
 		"flag_assigned", flagAssignedCount,
 		"client_resolve_info", clientResolveCount,
 		"flag_resolve_info", flagResolveCount)
@@ -79,7 +79,7 @@ func (g *GrpcFlagLogger) sendAsync(request *resolverv1.WriteFlagLogsRequest) {
 		if _, err := g.stub.ClientWriteFlagLogs(rpcCtx, request); err != nil {
 			g.logger.Error("Failed to write flag logs", "error", err)
 		} else {
-			g.logger.Info("Successfully sent flag log", "entries", len(request.FlagAssigned))
+			g.logger.Debug("Successfully sent flag log", "entries", len(request.FlagAssigned))
 		}
 	}()
 }

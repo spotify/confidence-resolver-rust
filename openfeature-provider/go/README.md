@@ -24,6 +24,16 @@ go mod tidy
 - Go 1.24+
 - OpenFeature Go SDK 1.16.0+
 
+## Getting Your Credentials
+
+You'll need a **client secret** from Confidence to use this provider.
+
+**📖 See the [Integration Guide: Getting Your Credentials](../INTEGRATION_GUIDE.md#getting-your-credentials)** for step-by-step instructions on:
+- How to navigate the Confidence dashboard
+- Creating a Backend integration
+- Creating a test flag for verification
+- Best practices for credential storage
+
 ## Quick Start
 
 ```go
@@ -40,32 +50,86 @@ import (
 func main() {
     ctx := context.Background()
 
-    // Create provider with required credentials
+    // Create provider with your client secret
     provider, err := confidence.NewProvider(ctx, confidence.ProviderConfig{
-        ClientSecret: "your-client-secret",
+        ClientSecret: "your-client-secret", // Get from Confidence dashboard
     })
     if err != nil {
         log.Fatalf("Failed to create provider: %v", err)
     }
 
-    // Set the provider
+    // Set the provider and wait for initialization
     openfeature.SetProviderAndWait(provider)
 
     // Get a client
     client := openfeature.NewClient("my-app")
 
-    // Evaluate a flag
-    evalCtx = openfeature.NewEvaluationContext("user-123", map[string]interface{}{
+    // Create evaluation context with user attributes for targeting
+    evalCtx := openfeature.NewEvaluationContext("user-123", map[string]interface{}{
         "country": "US",
         "plan":    "premium",
     })
 
-    value, err := client.BooleanValue(ctx, "my-flag.enabled", false, evalCtx)
+    // Evaluate a flag
+    value, err := client.BooleanValue(ctx, "test-flag.enabled", false, evalCtx)
     if err != nil {
-        log.Printf("Flag evaluation failed: %v", err)
+        log.Printf("Flag evaluation failed, using default: %v", err)
     }
 
     log.Printf("Flag value: %v", value)
+}
+```
+
+## Evaluation Context
+
+The evaluation context contains information about the user/session being evaluated for targeting and A/B testing.
+
+### Go-Specific Examples
+
+```go
+// Simple attributes
+evalCtx := openfeature.NewEvaluationContext("user-123", map[string]interface{}{
+    "country": "US",
+    "plan":    "premium",
+    "age":     25,
+})
+```
+
+## Error Handling
+
+The provider uses a **default value fallback** pattern - when evaluation fails, it returns your specified default value instead of throwing an error.
+
+**📖 See the [Integration Guide: Error Handling](../INTEGRATION_GUIDE.md#error-handling)** for:
+- Common failure scenarios
+- Error codes and meanings
+- Production best practices
+- Monitoring recommendations
+
+### Go-Specific Examples
+
+```go
+// The provider returns the default value on errors
+value, err := client.BooleanValue(ctx, "my-flag.enabled", false, evalCtx)
+if err != nil {
+    // Log the error for debugging
+    log.Printf("Flag evaluation failed, using default: %v", err)
+}
+// value will be 'false' if evaluation failed
+
+// For critical flags, you might want to check the error
+if err != nil && strings.Contains(err.Error(), "FLAG_NOT_FOUND") {
+    log.Warn("Flag 'my-flag' not found in Confidence - check flag name")
+}
+
+// During initialization with timeout
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+
+provider, err := confidence.NewProvider(ctx, confidence.ProviderConfig{
+    ClientSecret: "your-client-secret",
+})
+if err != nil {
+    log.Fatalf("Provider initialization failed: %v", err)
 }
 ```
 
@@ -88,36 +152,25 @@ The `ProviderConfig` struct contains all configuration options for the provider:
 #### Optional Fields
 
 - `Logger` (*slog.Logger): Custom logger for provider operations. If not provided, a default text logger is created. See [Logging](#logging) for details.
-- `ConnFactory` (func): Custom gRPC connection factory for advanced use cases (e.g., custom interceptors, TLS configuration)
+- `TransportHooks` (TransportHooks): Custom transport hooks for advanced use cases (e.g., custom gRPC interceptors, HTTP transport wrapping, TLS configuration)
 
 #### Advanced: Testing with Custom State Provider
 
-For testing purposes only, you can provide a custom `StateProvider` to supply resolver state from local sources (e.g., a file cache):
+For testing purposes only, you can provide a custom `StateProvider` and `FlagLogger` to supply resolver state and control logging behavior:
 
 ```go
 // WARNING: This is for testing only. Do not use in production.
-provider, err := confidence.NewProviderWithStateProvider(ctx,
-    confidence.ProviderConfigWithStateProvider{
-        ClientSecret:  "your-client-secret",
+provider, err := confidence.NewProviderForTest(ctx,
+    confidence.ProviderTestConfig{
         StateProvider: myCustomStateProvider,
-        AccountId:     "your-account-id",
-        // WasmBytes: customWasmBytes, // Optional: custom WASM module
+        FlagLogger:    myCustomFlagLogger,
+        ClientSecret:  "your-client-secret",
+        Logger:        myCustomLogger, // Optional: custom logger
     },
 )
 ```
 
-**Important**: This configuration disables automatic state fetching and exposure logging. For production deployments, always use `NewProvider()` with `ProviderConfig`.
-
-## Credentials
-
-Get your client secret from your [Confidence dashboard](https://confidence.spotify.com/):
-
-- `ClientSecret`: The client secret used for authentication and flag evaluation
-
-
-## WebAssembly Module
-
-The WASM module (`confidence_resolver.wasm`) is embedded in the Go binary using Go 1.16+ embed directives. No external WASM file is required at runtime.
+**Important**: This configuration requires you to provide both a `StateProvider` and `FlagLogger`. For production deployments, always use `NewProvider()` with `ProviderConfig`.
 
 ## Flag Evaluation
 
@@ -162,26 +215,23 @@ provider, err := confidence.NewProvider(ctx, confidence.ProviderConfig{
 
 The provider logs at different levels: `Debug` (flag resolution details), `Info` (state updates), `Warn` (non-critical issues), and `Error` (failures).
 
-## Troubleshooting
+## Shutdown
 
-### Provider Creation Fails
+**Important**: Always shut down the provider when your application exits to ensure proper cleanup and log flushing.
 
-If provider creation fails, verify:
-- `ClientSecret` is correct
-- Your application has network access to the Confidence CDN
-- Credentials have the necessary permissions in your Confidence dashboard
+```go
+// Shutdown the provider on application exit
+    openfeature.Shutdown()
+```
 
-### No Flag Evaluations Work
+### What Happens During Shutdown?
 
-Common issues:
-- Ensure you've called `openfeature.SetProviderAndWait(provider)` before creating clients
-- Check that your flags are published and active in Confidence
+1. **Flushes pending logs** to Confidence (exposure events, resolve analytics)
+2. **Closes gRPC connections** and releases network resources
+3. **Stops background tasks** (state polling, log batching)
+4. **Releases WASM instance** and memory
 
-### Performance Issues
-
-For optimal performance:
-- Reuse the same `provider` instance across your application
-- Create OpenFeature clients once and reuse them
+The shutdown respects the context timeout you provide.
 
 ## License
 

@@ -17,10 +17,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import java.time.Duration;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import org.slf4j.Logger;
@@ -51,7 +48,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   private final String clientSecret;
   private static final Logger log =
       org.slf4j.LoggerFactory.getLogger(OpenFeatureLocalResolveProvider.class);
-  private final StickyResolveStrategy stickyResolveStrategy;
+  private final MaterializationStore materializationStore;
   private final ResolverApi wasmResolveApi;
   private static final Duration POLL_LOG_INTERVAL = Duration.ofSeconds(10);
   private static final Duration DEFAULT_POLL_INTERVAL = Duration.ofSeconds(30);
@@ -62,6 +59,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
   private final AccountStateProvider stateProvider;
   private final AtomicReference<ProviderState> state =
       new AtomicReference<>(ProviderState.NOT_READY);
+  private final RemoteResolver grpcFlagResolver;
 
   private static long getPollIntervalSeconds() {
     return Optional.ofNullable(System.getenv("CONFIDENCE_RESOLVER_POLL_INTERVAL_SECONDS"))
@@ -116,60 +114,51 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
    *     authentication
    */
   public OpenFeatureLocalResolveProvider(LocalProviderConfig config, String clientSecret) {
-    this(config, clientSecret, new RemoteResolverFallback(config.getChannelFactory()));
+    this(config, clientSecret, new UnsupportedMaterializationStore());
   }
 
   /**
    * Creates a new OpenFeature provider for local flag resolution with a custom sticky resolve
-   * strategy.
+   * implementation.
    *
    * <p>This constructor uses the default gRPC channel factory but allows you to provide a custom
-   * {@link StickyResolveStrategy} such as a {@link MaterializationRepository} for local storage of
-   * sticky assignments.
+   * {@link MaterializationStore} such as a {@link MaterializationStore} for local storage of sticky
+   * assignments.
    *
    * <p><strong>Example with custom materialization repository:</strong>
    *
    * <pre>{@code
-   * MaterializationRepository repository = new InMemoryMaterializationRepoExample();
+   * MaterializationStore store = new InMemoryMaterializationStoreExample();
    * OpenFeatureLocalResolveProvider provider =
-   *     new OpenFeatureLocalResolveProvider("client-secret", repository);
+   *     new OpenFeatureLocalResolveProvider("client-secret", store);
    * }</pre>
    *
    * @param clientSecret the client secret for your application, used for flag resolution
    *     authentication
-   * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
+   * @param materializationStore the implementation to use for handling sticky flag resolution
    */
   public OpenFeatureLocalResolveProvider(
-      String clientSecret, StickyResolveStrategy stickyResolveStrategy) {
-    this(new LocalProviderConfig(), clientSecret, stickyResolveStrategy);
+      String clientSecret, MaterializationStore materializationStore) {
+    this(new LocalProviderConfig(), clientSecret, materializationStore);
   }
 
   /**
    * Creates a new OpenFeature provider for local flag resolution with custom channel factory and
-   * sticky resolve strategy.
+   * sticky resolve implementation.
    *
    * @param config the provider configuration including optional channel factory
    * @param clientSecret the client secret for your application, used for flag resolution
    *     authentication
-   * @param stickyResolveStrategy the strategy to use for handling sticky flag resolution
+   * @param materializationStore the implementation to use for handling sticky flag resolution
    */
   public OpenFeatureLocalResolveProvider(
-      LocalProviderConfig config,
-      String clientSecret,
-      StickyResolveStrategy stickyResolveStrategy) {
+      LocalProviderConfig config, String clientSecret, MaterializationStore materializationStore) {
     this.clientSecret = clientSecret;
-    this.stickyResolveStrategy = stickyResolveStrategy;
+    this.materializationStore = materializationStore;
     this.stateProvider = new FlagsAdminStateFetcher(clientSecret);
     final var wasmFlagLogger = new GrpcWasmFlagLogger(clientSecret, config.getChannelFactory());
-    this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, stickyResolveStrategy);
-  }
-
-  @VisibleForTesting
-  public OpenFeatureLocalResolveProvider(
-      AccountStateProvider accountStateProvider,
-      String clientSecret,
-      StickyResolveStrategy stickyResolveStrategy) {
-    this(accountStateProvider, clientSecret, stickyResolveStrategy, new NoOpWasmFlagLogger());
+    this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, materializationStore);
+    this.grpcFlagResolver = new ConfidenceGrpcFlagResolver(config.getChannelFactory());
   }
 
   /**
@@ -180,19 +169,21 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
    *
    * @param accountStateProvider the state provider for resolver state
    * @param clientSecret the client secret for authentication
-   * @param stickyResolveStrategy the strategy for sticky flag resolution
+   * @param materializationStore the implementation for sticky flag resolution
    * @param wasmFlagLogger the flag logger to use (e.g., CapturingWasmFlagLogger for testing)
    */
   @VisibleForTesting
   public OpenFeatureLocalResolveProvider(
       AccountStateProvider accountStateProvider,
       String clientSecret,
-      StickyResolveStrategy stickyResolveStrategy,
-      WasmFlagLogger wasmFlagLogger) {
-    this.stickyResolveStrategy = stickyResolveStrategy;
+      MaterializationStore materializationStore,
+      WasmFlagLogger wasmFlagLogger,
+      RemoteResolver remoteResolver) {
+    this.materializationStore = materializationStore;
     this.clientSecret = clientSecret;
     this.stateProvider = accountStateProvider;
-    this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, stickyResolveStrategy);
+    this.wasmResolveApi = new ThreadLocalSwapWasmResolverApi(wasmFlagLogger, materializationStore);
+    this.grpcFlagResolver = remoteResolver;
   }
 
   @Override
@@ -273,18 +264,29 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
           String.format("Cannot cast value '%s' to expected type", objectEvaluation.getValue()));
     }
 
-    return ProviderEvaluation.<T>builder()
-        .value(castedValue)
-        .variant(objectEvaluation.getVariant())
-        .reason(objectEvaluation.getReason())
-        .errorMessage(objectEvaluation.getErrorMessage())
-        .errorCode(objectEvaluation.getErrorCode())
-        .build();
+    final ProviderEvaluation<T> result =
+        ProviderEvaluation.<T>builder()
+            .value(castedValue)
+            .variant(objectEvaluation.getVariant())
+            .reason(objectEvaluation.getReason())
+            .errorMessage(objectEvaluation.getErrorMessage())
+            .errorCode(objectEvaluation.getErrorCode())
+            .build();
+
+    if (result.getErrorCode() != null) {
+      log.warn(
+          "Flag evaluation for '{}' returned error code: {}, message: {}",
+          key,
+          result.getErrorCode(),
+          result.getErrorMessage());
+    }
+
+    return result;
   }
 
   @Override
   public void shutdown() {
-    this.stickyResolveStrategy.close();
+    this.grpcFlagResolver.close();
     this.wasmResolveApi.close();
     FeatureProvider.super.shutdown();
   }
@@ -303,7 +305,7 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
 
     final Struct evaluationContext = OpenFeatureUtils.convertToProto(ctx);
     // resolve the flag by calling the resolver API
-    final ResolveFlagsResponse resolveFlagResponse;
+    ResolveFlagsResponse resolveFlagResponse;
     try {
       final String requestFlagName = "flags/" + flagPath.getFlag();
 
@@ -321,14 +323,19 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
                       .build())
               .build();
 
-      resolveFlagResponse =
-          wasmResolveApi
-              .resolveWithSticky(
-                  ResolveWithStickyRequest.newBuilder()
-                      .setResolveRequest(req)
-                      .setFailFastOnSticky(getFailFast(stickyResolveStrategy))
-                      .build())
-              .get();
+      try {
+        resolveFlagResponse =
+            wasmResolveApi
+                .resolveWithSticky(
+                    ResolveWithStickyRequest.newBuilder()
+                        .setResolveRequest(req)
+                        .setFailFastOnSticky(false)
+                        .build())
+                .toCompletableFuture()
+                .get();
+      } catch (MaterializationNotSupportedException e) {
+        resolveFlagResponse = remoteResolve(req).get();
+      }
 
       if (resolveFlagResponse.getResolvedFlagsList().isEmpty()) {
         log.warn("No active flag '{}' was found", flagPath.getFlag());
@@ -379,8 +386,11 @@ public class OpenFeatureLocalResolveProvider implements FeatureProvider {
     }
   }
 
-  private static boolean getFailFast(StickyResolveStrategy stickyResolveStrategy) {
-    return stickyResolveStrategy instanceof ResolverFallback;
+  private CompletableFuture<ResolveFlagsResponse> remoteResolve(ResolveFlagsRequest req) {
+    if (req.getFlagsList().isEmpty()) {
+      return CompletableFuture.completedFuture(ResolveFlagsResponse.newBuilder().build());
+    }
+    return grpcFlagResolver.resolve(req);
   }
 
   private static void handleStatusRuntimeException(StatusRuntimeException e) {

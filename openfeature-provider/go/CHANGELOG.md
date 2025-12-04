@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/go/v0.2.0...openfeature-provider/go/v0.3.0) (2025-12-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* customizable transport hooks ([#184](https://github.com/spotify/confidence-resolver/issues/184))
+* migrate to cdn state fetch, publish logs using client secret ([#166](https://github.com/spotify/confidence-resolver/issues/166))
+
+### Features
+
+* customizable transport hooks ([#184](https://github.com/spotify/confidence-resolver/issues/184)) ([899b06d](https://github.com/spotify/confidence-resolver/commit/899b06dec64820d3662b1827769dc8779437d81a))
+* migrate to cdn state fetch, publish logs using client secret ([#166](https://github.com/spotify/confidence-resolver/issues/166)) ([6c8d959](https://github.com/spotify/confidence-resolver/commit/6c8d959f124faa419c1ace103d8832457248eb26))
+
+
+### Bug Fixes
+
+* align the providers to do state fetching every 30 sec ([#180](https://github.com/spotify/confidence-resolver/issues/180)) ([6b537db](https://github.com/spotify/confidence-resolver/commit/6b537dbb51a587a7c09c3a285833a236cf5c51f9))
+* update new test provider to include client secret ([#177](https://github.com/spotify/confidence-resolver/issues/177)) ([d281edf](https://github.com/spotify/confidence-resolver/commit/d281edf823235ddc9e2d86b0a25cf08f46d76a00))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * rust-guest bumped from 0.1.10 to 0.1.11
+
 ## [0.2.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/go/v0.1.0...openfeature-provider/go/v0.2.0) (2025-11-24)
 
 

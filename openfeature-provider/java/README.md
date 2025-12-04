@@ -1,4 +1,4 @@
-# Confidence OpenFeature Local Provider
+# Confidence OpenFeature Local Provider for Java
 
 ![Status: Experimental](https://img.shields.io/badge/status-experimental-orange)
 
@@ -20,10 +20,20 @@ Add this dependency to your `pom.xml`:
 <dependency>
     <groupId>com.spotify.confidence</groupId>
     <artifactId>openfeature-provider-local</artifactId>
-    <version>0.8.0</version>
+    <version>0.9.1</version>
 </dependency>
 ```
 <!-- x-release-please-end -->
+
+## Getting Your Credentials
+
+You'll need a **client secret** from Confidence to use this provider.
+
+**📖 See the [Integration Guide: Getting Your Credentials](../INTEGRATION_GUIDE.md#getting-your-credentials)** for step-by-step instructions on:
+- How to navigate the Confidence dashboard
+- Creating a Backend integration
+- Creating a test flag for verification
+- Best practices for credential storage
 
 ## Quick Start
 
@@ -31,15 +41,65 @@ Add this dependency to your `pom.xml`:
 import com.spotify.confidence.OpenFeatureLocalResolveProvider;
 import dev.openfeature.sdk.OpenFeatureAPI;
 import dev.openfeature.sdk.Client;
+import dev.openfeature.sdk.MutableContext;
 
 // Create and register the provider
-OpenFeatureLocalResolveProvider provider = 
-    new OpenFeatureLocalResolveProvider("your-client-secret");
-OpenFeatureAPI.getInstance().setProviderAndWait(provider); // important to use setProviderAndWait()
+OpenFeatureLocalResolveProvider provider =
+    new OpenFeatureLocalResolveProvider("your-client-secret"); // Get from Confidence dashboard
+OpenFeatureAPI.getInstance().setProviderAndWait(provider); // Important: use setProviderAndWait()
 
-// Use OpenFeature client
+// Get a client
 Client client = OpenFeatureAPI.getInstance().getClient();
-String value = client.getStringValue("my-flag", "default-value");
+
+// Create evaluation context with user attributes for targeting
+MutableContext ctx = new MutableContext("user-123");
+ctx.add("country", "US");
+ctx.add("plan", "premium");
+
+// Evaluate a flag
+Boolean enabled = client.getBooleanValue("test-flag.enabled", false, ctx);
+System.out.println("Flag value: " + enabled);
+
+// Don't forget to shutdown when your application exits (see Shutdown section)
+```
+
+## Evaluation Context
+
+The evaluation context contains information about the user/session being evaluated for targeting and A/B testing.
+
+### Java-Specific Examples
+
+```java
+// Simple attributes
+MutableContext ctx = new MutableContext("user-123");
+ctx.add("country", "US");
+ctx.add("plan", "premium");
+ctx.add("age", 25);
+```
+
+## Error Handling
+
+The provider uses a **default value fallback** pattern - when evaluation fails, it returns your specified default value instead of throwing an error.
+
+**📖 See the [Integration Guide: Error Handling](../INTEGRATION_GUIDE.md#error-handling)** for:
+- Common failure scenarios
+- Error codes and meanings
+- Production best practices
+- Monitoring recommendations
+
+### Java-Specific Examples
+
+```java
+// The provider returns the default value on errors
+Boolean enabled = client.getBooleanValue("my-flag.enabled", false, ctx);
+// enabled will be 'false' if evaluation failed
+
+// For detailed error information, use getBooleanDetails()
+FlagEvaluationDetails<Boolean> details = client.getBooleanDetails("my-flag.enabled", false, ctx);
+if (details.getErrorCode() != null) {
+    System.err.println("Flag evaluation error: " + details.getErrorMessage());
+    System.err.println("Reason: " + details.getReason());
+}
 ```
 
 ## Shutdown
@@ -92,50 +152,38 @@ This is particularly useful for:
 - **Production customization**: Custom TLS settings, proxies, or connection pooling
 - **Debugging**: Add custom logging or tracing interceptors
 
-## Credentials
+## Materializations
 
-You need a **Client Secret** for flag resolution and authentication with Confidence. This can be obtained from your Confidence dashboard. The local resolve providers only work with credentials specifically scoped for `BACKEND` integrations.
+The provider supports **materializations** for two key use cases:
 
-## Sticky Resolve
+1. **Sticky Assignments**: Maintain consistent variant assignments across evaluations even when targeting attributes change. This enables pausing intake (stopping new users from entering an experiment) while keeping existing users in their assigned variants.
+**📖 See the [Integration Guide: Sticky Assignments](../INTEGRATION_GUIDE.md#sticky-assignments)** for how sticky assignments work and their benefits.
 
-The provider supports **Sticky Resolve** for consistent variant assignments across flag evaluations. This ensures users receive the same variant even when their targeting attributes change, and enables pausing experiment intake.
+1. **Custom Targeting via Materialized Segments**: Efficiently target precomputed sets of identifiers from datasets. Instead of evaluating complex targeting rules at runtime, materializations allow for fast lookups of whether a unit (user, session, etc.) is included in a target segment.
 
-**By default, sticky assignments are managed by Confidence servers.** When sticky assignment data is needed, the provider makes a network call to Confidence, which maintains the sticky repository server-side with automatic 90-day TTL management. This is a fully supported production approach that requires no additional setup.
+**By default, materializations are managed by Confidence servers.** When sticky assignment data is needed, the provider makes a network call to Confidence, which maintains the sticky repository server-side with automatic 90-day TTL management. This requires no additional setup.
 
+### Custom Materialization Storage
 
-Optionally, you can implement a custom `MaterializationRepository` to manage sticky assignments in your own storage (Redis, database, etc.) to eliminate network calls and improve latency:
+Optionally, you can implement a custom `MaterializationStore` to manage materialization data in your own storage (Redis, database, etc.) to eliminate network calls and improve latency:
 
 ```java
-// Optional: Custom storage for sticky assignments
-MaterializationRepository repository = new RedisMaterializationRepository(jedisPool, "myapp");
+// Optional: Custom storage for materialization data
+MaterializationStore store = new RedisMaterializationStore(jedisPool);
 OpenFeatureLocalResolveProvider provider = new OpenFeatureLocalResolveProvider(
-    apiSecret,
     clientSecret,
-    repository
+    store
 );
 ```
 
-For detailed information on how sticky resolve works and how to implement custom storage backends, see [STICKY_RESOLVE.md](STICKY_RESOLVE.md).
+For detailed information on how to implement custom storage backends, see [STICKY_RESOLVE.md](STICKY_RESOLVE.md).
+See the `InMemoryMaterializationStoreExample` class in the test sources for a reference implementation, or review the `MaterializationStore` javadoc for detailed API documentation.
 
 ## Requirements
 
 - Java 17+
 - OpenFeature SDK 1.6.1+
 
-## Development
+## Contributing
 
-### Code Formatting
-
-This project uses the [Spotify fmt-maven-plugin](https://github.com/spotify/fmt-maven-plugin) for consistent code formatting.
-
-**Check formatting:**
-```bash
-mvn fmt:check
-```
-
-**Auto-format code:**
-```bash
-mvn fmt:format
-```
-
-The `fmt:check` goal runs automatically during the build to ensure all code is properly formatted.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.

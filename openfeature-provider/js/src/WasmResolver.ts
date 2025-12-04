@@ -1,7 +1,7 @@
 import { BinaryWriter } from '@bufbuild/protobuf/wire';
-import { Request, Response, Void } from './proto/messages';
+import { Request, Response, Void, SetResolverStateRequest } from './proto/messages';
 import { Timestamp } from './proto/google/protobuf/timestamp';
-import { ResolveWithStickyRequest, ResolveWithStickyResponse, SetResolverStateRequest } from './proto/api';
+import { ResolveWithStickyRequest, ResolveWithStickyResponse } from './proto/resolver/api';
 import { LocalResolver } from './LocalResolver';
 import { getLogger } from './logger';
 

@@ -1,6 +1,6 @@
 {
   "name": "@spotify-confidence/openfeature-server-provider-local",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Spotify Confidence Open Feature provider",
   "type": "module",
   "files": [
@@ -35,7 +35,7 @@
     "format": "prettier --config prettier.config.cjs -w .",
     "format:check": "prettier --config prettier.config.cjs -c .",
     "test": "vitest",
-    "proto:gen": "rm -rf src/proto && mkdir -p src/proto && protoc --plugin=node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt useOptionals=messages --ts_proto_opt esModuleInterop=true --ts_proto_out src/proto -Iproto api.proto messages.proto test-only.proto"
+    "proto:gen": "rm -rf src/proto && mkdir -p src/proto && protoc --plugin=node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt useOptionals=messages --ts_proto_opt esModuleInterop=true --ts_proto_out src/proto -Iproto -I../../wasm/proto -I../../confidence-resolver/protos test-only.proto ../../wasm/proto/messages.proto ../../wasm/proto/resolver/api.proto ../../wasm/proto/types.proto ../../confidence-resolver/protos/confidence/flags/resolver/v1/types.proto"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.9.0"

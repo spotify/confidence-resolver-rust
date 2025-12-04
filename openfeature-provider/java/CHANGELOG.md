@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.9.1](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.9.0...openfeature-provider-java-v0.9.1) (2025-12-03)
+
+
+### Bug Fixes
+
+* formatting ([#189](https://github.com/spotify/confidence-resolver/issues/189)) ([b88849a](https://github.com/spotify/confidence-resolver/commit/b88849aa804f80ab014e6b94ef84569556efa7a3))
+
+## [0.9.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.8.0...openfeature-provider-java-v0.9.0) (2025-12-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* java materialization interface rework ([#170](https://github.com/spotify/confidence-resolver/issues/170))
+* migrate to cdn state fetch, publish logs using client secret ([#166](https://github.com/spotify/confidence-resolver/issues/166))
+
+### Features
+
+* migrate to cdn state fetch, publish logs using client secret ([#166](https://github.com/spotify/confidence-resolver/issues/166)) ([6c8d959](https://github.com/spotify/confidence-resolver/commit/6c8d959f124faa419c1ace103d8832457248eb26))
+* set the nr of wasm instances with an env var ([#158](https://github.com/spotify/confidence-resolver/issues/158)) ([8ba8900](https://github.com/spotify/confidence-resolver/commit/8ba8900e5717931a3132a2f916889ef6a74a80a7))
+
+
+### Bug Fixes
+
+* align the providers to do state fetching every 30 sec ([#180](https://github.com/spotify/confidence-resolver/issues/180)) ([6b537db](https://github.com/spotify/confidence-resolver/commit/6b537dbb51a587a7c09c3a285833a236cf5c51f9))
+
+
+### Code Refactoring
+
+* java materialization interface rework ([#170](https://github.com/spotify/confidence-resolver/issues/170)) ([fa6955a](https://github.com/spotify/confidence-resolver/commit/fa6955a94b41be8fc0292c9c8bbf76aac6bcd852))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * rust-guest bumped from 0.1.10 to 0.1.11
+
 ## [0.8.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-java-v0.7.4...openfeature-provider-java-v0.8.0) (2025-11-24)
 
 
