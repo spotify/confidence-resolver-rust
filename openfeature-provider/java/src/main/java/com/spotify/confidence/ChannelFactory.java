@@ -21,8 +21,10 @@ import java.util.List;
  *   <li>Production customization: custom TLS settings, proxies, connection pooling
  *   <li>Debugging: add custom logging or tracing interceptors
  * </ul>
+ *
+ * <p><strong>Channel Lifecycle:</strong> Channels created by this factory must be shut down by the
+ * caller when they are no longer needed. The factory does not manage channel lifecycles.
  */
-@FunctionalInterface
 public interface ChannelFactory {
   /**
    * Creates a gRPC channel with the given target and interceptors.

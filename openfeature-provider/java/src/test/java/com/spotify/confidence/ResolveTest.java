@@ -38,6 +38,9 @@ class ResolveTest {
               public void write(WriteFlagLogsRequest request) {}
 
               @Override
+              public void writeSync(WriteFlagLogsRequest request) {}
+
+              @Override
               public void shutdown() {}
             },
             new byte[0],

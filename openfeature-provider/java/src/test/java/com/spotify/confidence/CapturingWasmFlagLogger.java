@@ -41,6 +41,11 @@ public class CapturingWasmFlagLogger implements WasmFlagLogger {
   }
 
   @Override
+  public void writeSync(WriteFlagLogsRequest request) {
+    capturedRequests.add(request);
+  }
+
+  @Override
   public void shutdown() {
     shutdownCalled = true;
   }

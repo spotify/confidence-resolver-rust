@@ -50,8 +50,8 @@ class SwapWasmResolverApi implements ResolverApi {
   }
 
   /**
-   * Closes the current WasmResolveApi instance, flushing any pending logs. This ensures logs are
-   * not lost on shutdown.
+   * Closes the current WasmResolveApi instance, flushing any pending logs. This ensures all
+   * buffered log data is sent before shutdown completes.
    */
   @Override
   public void close() {

@@ -21,7 +21,6 @@ import java.util.Optional;
  * </ul>
  */
 public class DefaultChannelFactory implements ChannelFactory {
-
   @Override
   public ManagedChannel create(String target, List<ClientInterceptor> defaultInterceptors) {
     final boolean useGrpcPlaintext =

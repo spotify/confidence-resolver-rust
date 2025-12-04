@@ -63,7 +63,8 @@ class OpenFeatureLocalResolveProviderFlagLogsTest {
     capturingLogger = new CapturingWasmFlagLogger();
 
     // Create a state provider that fetches from the real Confidence service
-    final var stateProvider = new FlagsAdminStateFetcher(FLAG_CLIENT_SECRET);
+    final var stateProvider =
+        new FlagsAdminStateFetcher(FLAG_CLIENT_SECRET, new DefaultHttpClientFactory());
     stateProvider.reload();
 
     // Create provider with capturing logger

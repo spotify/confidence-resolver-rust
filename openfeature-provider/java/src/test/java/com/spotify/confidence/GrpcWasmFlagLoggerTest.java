@@ -17,8 +17,14 @@ import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsRequest;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsResponse;
 import com.spotify.confidence.flags.resolver.v1.events.ClientInfo;
 import com.spotify.confidence.flags.resolver.v1.events.FlagAssigned;
+import io.grpc.ClientInterceptor;
+import io.grpc.ManagedChannel;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -201,6 +207,146 @@ class GrpcWasmFlagLoggerTest {
     assertEquals(1, sentRequest.getClientResolveInfoCount());
 
     logger.shutdown();
+  }
+
+  @Test
+  void testShutdownWaitsForPendingWrites() throws InterruptedException {
+    // Given
+    final var mockStub =
+        mock(InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub.class);
+    final CountDownLatch writeLatch = new CountDownLatch(1);
+    final AtomicInteger writeCount = new AtomicInteger(0);
+
+    when(mockStub.clientWriteFlagLogs(any()))
+        .thenAnswer(
+            invocation -> {
+              try {
+                Thread.sleep(500);
+                writeCount.incrementAndGet();
+                return WriteFlagLogsResponse.getDefaultInstance();
+              } finally {
+                writeLatch.countDown();
+              }
+            });
+
+    // Use a real GrpcWasmFlagLogger that creates async tasks
+    final GrpcWasmFlagLogger logger =
+        new GrpcWasmFlagLogger(
+            "clientSecret", mockStub::clientWriteFlagLogs, Duration.ofSeconds(2)); // 2s timeout
+
+    final var request =
+        WriteFlagLogsRequest.newBuilder().addAllFlagAssigned(createFlagAssignedList(10)).build();
+
+    // When
+    logger.write(request);
+    logger.shutdown();
+
+    // Then
+    assertTrue(writeLatch.await(100, TimeUnit.MILLISECONDS), "Write should have completed");
+    assertEquals(1, writeCount.get(), "Write should have been called exactly once");
+    verify(mockStub, times(1)).clientWriteFlagLogs(any());
+  }
+
+  @Test
+  void testShutdownTimeoutWhenWriteTakesTooLong() throws InterruptedException {
+    // Given
+    final var mockStub =
+        mock(InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub.class);
+    final AtomicInteger writeCount = new AtomicInteger(0);
+
+    when(mockStub.clientWriteFlagLogs(any()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(5000); // 5 seconds, longer than timeout
+              writeCount.incrementAndGet();
+              return WriteFlagLogsResponse.getDefaultInstance();
+            });
+
+    final GrpcWasmFlagLogger logger =
+        new GrpcWasmFlagLogger(
+            "client-secret",
+            mockStub::clientWriteFlagLogs,
+            Duration.ofMillis(500)); // 500ms timeout
+
+    final var request =
+        WriteFlagLogsRequest.newBuilder().addAllFlagAssigned(createFlagAssignedList(10)).build();
+
+    // When
+    new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                logger.write(request);
+              }
+            })
+        .start();
+
+    // Shutdown should complete within timeout + small buffer, not wait for full 5s write
+    final long startTime = System.currentTimeMillis();
+    logger.shutdown();
+    final long duration = System.currentTimeMillis() - startTime;
+
+    // Then
+    assertTrue(
+        duration < 2000, "Shutdown should timeout quickly (< 2s), but took " + duration + "ms");
+    assertEquals(0, writeCount.get(), "Write should not have completed successfully");
+  }
+
+  @Test
+  void testMultiplePendingWritesAllComplete() throws InterruptedException {
+    // Given
+    final var mockStub =
+        mock(InternalFlagLoggerServiceGrpc.InternalFlagLoggerServiceBlockingStub.class);
+    final AtomicInteger completedWrites = new AtomicInteger(0);
+    final CountDownLatch allWritesComplete = new CountDownLatch(5);
+
+    // Each write takes 100ms
+    when(mockStub.clientWriteFlagLogs(any()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(100);
+              completedWrites.incrementAndGet();
+              allWritesComplete.countDown();
+              return WriteFlagLogsResponse.getDefaultInstance();
+            });
+
+    final GrpcWasmFlagLogger logger =
+        new GrpcWasmFlagLogger(
+            "clientSecret", mockStub::clientWriteFlagLogs, Duration.ofSeconds(3)); // 3s timeout
+
+    final var request =
+        WriteFlagLogsRequest.newBuilder().addAllFlagAssigned(createFlagAssignedList(10)).build();
+
+    // When - submit 5 async writes
+    for (int i = 0; i < 5; i++) {
+      logger.write(request);
+    }
+
+    // Shutdown should wait for all writes to complete
+    logger.shutdown();
+
+    // Then
+    assertTrue(
+        allWritesComplete.await(100, TimeUnit.MILLISECONDS),
+        "All writes should have completed before shutdown returned");
+    assertEquals(5, completedWrites.get(), "All 5 writes should have completed");
+    verify(mockStub, times(5)).clientWriteFlagLogs(any());
+  }
+
+  @Test
+  void testShutdownClosesChannel() throws Exception {
+    final ManagedChannel mockChannel = mock(ManagedChannel.class);
+    final ChannelFactory channelFactory =
+        new ChannelFactory() {
+          @Override
+          public ManagedChannel create(String target, List<ClientInterceptor> defaultInterceptors) {
+            return mockChannel;
+          }
+        };
+
+    final GrpcWasmFlagLogger logger = new GrpcWasmFlagLogger("test-client-secret", channelFactory);
+    logger.shutdown();
+    verify(mockChannel, times(1)).shutdown();
   }
 
   // Helper methods
