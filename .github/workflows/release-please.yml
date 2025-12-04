@@ -15,8 +15,11 @@ jobs:
     outputs:
       cloudflare_resolver_release_created: ${{ steps.releasemanifest.outputs['confidence-cloudflare-resolver--release_created'] }}
       java_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/java--release_created'] }}
+      java_provider_tag_name: ${{ steps.releasemanifest.outputs['openfeature-provider/java--tag_name'] }}
       js_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/js--release_created'] }}
+      js_provider_tag_name: ${{ steps.releasemanifest.outputs['openfeature-provider/js--tag_name'] }}
       go_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/go--release_created'] }}
+      go_provider_tag_name: ${{ steps.releasemanifest.outputs['openfeature-provider/go--tag_name'] }}
       ruby_provider_release_created: ${{ steps.releasemanifest.outputs['openfeature-provider/ruby--release_created'] }}
     steps:
       - name: Checkout
@@ -80,16 +83,13 @@ jobs:
         run: |
           TAGS=""
           if [ "${{ needs.release.outputs.java_provider_release_created }}" == "true" ]; then
-            VERSION=$(jq -r '."openfeature-provider/java"' .release-please-manifest.json)
-            TAGS="$TAGS openfeature-provider/java-v$VERSION"
+            TAGS="$TAGS ${{ needs.release.outputs.java_provider_tag_name }}"
           fi
           if [ "${{ needs.release.outputs.js_provider_release_created }}" == "true" ]; then
-            VERSION=$(jq -r '."openfeature-provider/js"' .release-please-manifest.json)
-            TAGS="$TAGS openfeature-provider/js-v$VERSION"
+            TAGS="$TAGS ${{ needs.release.outputs.js_provider_tag_name }}"
           fi
           if [ "${{ needs.release.outputs.go_provider_release_created }}" == "true" ]; then
-            VERSION=$(jq -r '."openfeature-provider/go"' .release-please-manifest.json)
-            TAGS="$TAGS openfeature-provider/go-v$VERSION"
+            TAGS="$TAGS ${{ needs.release.outputs.go_provider_tag_name }}"
           fi
           echo "First tag: $(echo $TAGS | awk '{print $1}')"
           echo "release_tag=$(echo $TAGS | awk '{print $1}')" >> $GITHUB_OUTPUT
