@@ -189,7 +189,7 @@ func (r *ResolverApi) FlushLogs() error {
 // Close closes the WASM instance
 // Note: This does NOT close the compiled module, as it may be shared across instances
 func (r *ResolverApi) Close(ctx context.Context) {
-	r.logger.Debug("Flushing WASM instance")
+	r.logger.Debug("Flushing logs before closing WASM instance")
 	err := r.FlushLogs()
 	if err != nil {
 		r.logger.Warn("Flushing failed", "error", err)

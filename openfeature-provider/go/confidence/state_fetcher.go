@@ -83,11 +83,7 @@ func (f *FlagsAdminStateFetcher) GetAccountID() string {
 
 // Reload fetches and updates the state if it has changed
 func (f *FlagsAdminStateFetcher) Reload(ctx context.Context) error {
-	if err := f.fetchAndUpdateStateIfChanged(ctx); err != nil {
-		f.logger.Warn("Failed to reload, ignoring reload", "error", err)
-		return err
-	}
-	return nil
+	return f.fetchAndUpdateStateIfChanged(ctx)
 }
 
 // Provide implements the StateProvider interface
@@ -156,7 +152,7 @@ func (f *FlagsAdminStateFetcher) fetchAndUpdateStateIfChanged(ctx context.Contex
 	// Update the raw state (state is already in bytes format)
 	f.rawResolverState.Store(stateRequest.State)
 
-	f.logger.Info("Loaded resolver state", "etag", etag, "account", stateRequest.AccountId)
+	f.logger.Debug("Loaded resolver state", "etag", etag, "account", stateRequest.AccountId)
 
 	return nil
 }

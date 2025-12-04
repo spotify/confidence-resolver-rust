@@ -79,31 +79,33 @@ func (p *LocalResolverProvider) BooleanEvaluation(
 ) openfeature.BoolResolutionDetail {
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
+	var detail openfeature.BoolResolutionDetail
+
 	if result.Value == nil {
-		return openfeature.BoolResolutionDetail{
+		detail = openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
-	}
-
-	boolVal, ok := result.Value.(bool)
-	if !ok {
-		return openfeature.BoolResolutionDetail{
+	} else if boolVal, ok := result.Value.(bool); !ok {
+		detail = openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a boolean"),
 			},
 		}
+	} else {
+		detail = openfeature.BoolResolutionDetail{
+			Value:                    boolVal,
+			ProviderResolutionDetail: result.ProviderResolutionDetail,
+		}
 	}
 
-	return openfeature.BoolResolutionDetail{
-		Value:                    boolVal,
-		ProviderResolutionDetail: result.ProviderResolutionDetail,
-	}
+	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+	return detail
 }
 
 // StringEvaluation evaluates a string flag
@@ -115,31 +117,33 @@ func (p *LocalResolverProvider) StringEvaluation(
 ) openfeature.StringResolutionDetail {
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
+	var detail openfeature.StringResolutionDetail
+
 	if result.Value == nil {
-		return openfeature.StringResolutionDetail{
+		detail = openfeature.StringResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
-	}
-
-	strVal, ok := result.Value.(string)
-	if !ok {
-		return openfeature.StringResolutionDetail{
+	} else if strVal, ok := result.Value.(string); !ok {
+		detail = openfeature.StringResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a string"),
 			},
 		}
+	} else {
+		detail = openfeature.StringResolutionDetail{
+			Value:                    strVal,
+			ProviderResolutionDetail: result.ProviderResolutionDetail,
+		}
 	}
 
-	return openfeature.StringResolutionDetail{
-		Value:                    strVal,
-		ProviderResolutionDetail: result.ProviderResolutionDetail,
-	}
+	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+	return detail
 }
 
 // FloatEvaluation evaluates a float flag
@@ -151,31 +155,33 @@ func (p *LocalResolverProvider) FloatEvaluation(
 ) openfeature.FloatResolutionDetail {
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
+	var detail openfeature.FloatResolutionDetail
+
 	if result.Value == nil {
-		return openfeature.FloatResolutionDetail{
+		detail = openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
-	}
-
-	floatVal, ok := result.Value.(float64)
-	if !ok {
-		return openfeature.FloatResolutionDetail{
+	} else if floatVal, ok := result.Value.(float64); !ok {
+		detail = openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          openfeature.ErrorReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not a float"),
 			},
 		}
+	} else {
+		detail = openfeature.FloatResolutionDetail{
+			Value:                    floatVal,
+			ProviderResolutionDetail: result.ProviderResolutionDetail,
+		}
 	}
 
-	return openfeature.FloatResolutionDetail{
-		Value:                    floatVal,
-		ProviderResolutionDetail: result.ProviderResolutionDetail,
-	}
+	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+	return detail
 }
 
 // IntEvaluation evaluates an int flag
@@ -187,37 +193,42 @@ func (p *LocalResolverProvider) IntEvaluation(
 ) openfeature.IntResolutionDetail {
 	result := p.ObjectEvaluation(ctx, flag, defaultValue, evalCtx)
 
+	var detail openfeature.IntResolutionDetail
+
 	if result.Value == nil {
-		return openfeature.IntResolutionDetail{
+		detail = openfeature.IntResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 				Reason:          result.Reason,
 				ResolutionError: result.ResolutionError,
 			},
 		}
+	} else {
+		// Handle both int64 and float64 (JSON numbers are float64)
+		switch v := result.Value.(type) {
+		case int64:
+			detail = openfeature.IntResolutionDetail{
+				Value:                    v,
+				ProviderResolutionDetail: result.ProviderResolutionDetail,
+			}
+		case float64:
+			detail = openfeature.IntResolutionDetail{
+				Value:                    int64(v),
+				ProviderResolutionDetail: result.ProviderResolutionDetail,
+			}
+		default:
+			detail = openfeature.IntResolutionDetail{
+				Value: defaultValue,
+				ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+					Reason:          openfeature.ErrorReason,
+					ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not an integer"),
+				},
+			}
+		}
 	}
 
-	// Handle both int64 and float64 (JSON numbers are float64)
-	switch v := result.Value.(type) {
-	case int64:
-		return openfeature.IntResolutionDetail{
-			Value:                    v,
-			ProviderResolutionDetail: result.ProviderResolutionDetail,
-		}
-	case float64:
-		return openfeature.IntResolutionDetail{
-			Value:                    int64(v),
-			ProviderResolutionDetail: result.ProviderResolutionDetail,
-		}
-	default:
-		return openfeature.IntResolutionDetail{
-			Value: defaultValue,
-			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Reason:          openfeature.ErrorReason,
-				ResolutionError: openfeature.NewTypeMismatchResolutionError("value is not an integer"),
-			},
-		}
-	}
+	p.logResolutionErrorIfPresent(flag, detail.ProviderResolutionDetail)
+	return detail
 }
 
 // ObjectEvaluation evaluates an object flag (core implementation)
@@ -309,7 +320,6 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 
 	// Check if flag was found
 	if len(response.ResolvedFlags) == 0 {
-		p.logger.Info("No active flag was found", "flag", flagPath)
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
@@ -349,10 +359,21 @@ func (p *LocalResolverProvider) ObjectEvaluation(
 
 	// If a path was specified, extract the nested value
 	if path != "" {
-		value = getValueForPath(path, value)
+		var found bool
+		value, found = getValueForPath(path, value)
+		// If path was specified but not found, return FLAG_NOT_FOUND error
+		if !found {
+			return openfeature.InterfaceResolutionDetail{
+				Value: defaultValue,
+				ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+					Reason:          openfeature.ErrorReason,
+					ResolutionError: openfeature.NewFlagNotFoundResolutionError(fmt.Sprintf("path '%s' not found in flag '%s'", path, flagPath)),
+				},
+			}
+		}
 	}
 
-	// If value is nil, use default
+	// If value is nil (flag has no value), use default
 	if value == nil {
 		value = defaultValue
 	}
@@ -425,7 +446,7 @@ func (p *LocalResolverProvider) Shutdown() {
 		p.cancelFunc()
 		p.cancelFunc = nil
 		if p.logger != nil {
-			p.logger.Info("Cancelled scheduled tasks")
+			p.logger.Debug("Cancelled scheduled tasks")
 		}
 	}
 
@@ -438,7 +459,7 @@ func (p *LocalResolverProvider) Shutdown() {
 	if p.resolverAPI != nil {
 		p.resolverAPI.Close(ctx)
 		if p.logger != nil {
-			p.logger.Info("Closed resolver API")
+			p.logger.Debug("Closed resolver API")
 		}
 	}
 
@@ -446,12 +467,12 @@ func (p *LocalResolverProvider) Shutdown() {
 	if p.flagLogger != nil {
 		p.flagLogger.Shutdown()
 		if p.logger != nil {
-			p.logger.Info("Shut down flag logger")
+			p.logger.Debug("Shut down flag logger")
 		}
 	}
 
 	if p.logger != nil {
-		p.logger.Info("Provider shut down")
+		p.logger.Info("Provider has been shut down")
 	}
 }
 
@@ -480,7 +501,7 @@ func (p *LocalResolverProvider) startScheduledTasks(parentCtx context.Context) {
 				}
 
 				if accountId == "" {
-					p.logger.Warn("AccountID is empty, skipping state update")
+					p.logger.Error("AccountID inside fetched state is empty, skipping this state update attempt")
 					continue
 				}
 
@@ -632,9 +653,10 @@ func protoValueToGo(value *structpb.Value) interface{} {
 
 // getValueForPath extracts a nested value from a map using dot notation
 // e.g., "nested.value" from map{"nested": map{"value": 42}} returns 42
-func getValueForPath(path string, value interface{}) interface{} {
+// Returns (value, found) where found indicates if the path was fully traversed
+func getValueForPath(path string, value interface{}) (interface{}, bool) {
 	if path == "" {
-		return value
+		return value, true
 	}
 
 	parts := strings.Split(path, ".")
@@ -643,13 +665,27 @@ func getValueForPath(path string, value interface{}) interface{} {
 	for _, part := range parts {
 		switch v := current.(type) {
 		case map[string]interface{}:
-			current = v[part]
+			var exists bool
+			current, exists = v[part]
+			if !exists {
+				return nil, false
+			}
 		default:
-			return nil
+			// Can't traverse further - path not found
+			return nil, false
 		}
 	}
 
-	return current
+	return current, true
+}
+
+// logResolutionErrorIfPresent logs a warning if the resolution detail contains an error
+func (p *LocalResolverProvider) logResolutionErrorIfPresent(flag string, detail openfeature.ProviderResolutionDetail) {
+	errStr := detail.ResolutionError.Error()
+	// Empty ResolutionError returns ": ", so check for meaningful error
+	if errStr != "" && errStr != ": " {
+		p.logger.Warn("Flag evaluation error", "flag", flag, "error_code", errStr)
+	}
 }
 
 // mapResolveReasonToOpenFeature converts Confidence ResolveReason to OpenFeature Reason

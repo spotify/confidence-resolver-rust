@@ -58,12 +58,12 @@ func (g *GrpcFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFla
 			sdkID = request.TelemetryData.Sdk.GetId().String()
 			sdkVersion = request.TelemetryData.Sdk.Version
 		}
-		g.logger.Info("Telemetry Data",
+		g.logger.Debug("Telemetry Data",
 			"sdk_id", sdkID,
 			"sdk_version", sdkVersion)
 	}
 
-	g.logger.Debug("Writing flag logs",
+	g.logger.Debug("Sending flag logs",
 		"flag_assigned", flagAssignedCount,
 		"client_resolve_info", clientResolveCount,
 		"flag_resolve_info", flagResolveCount)
@@ -134,7 +134,7 @@ func (g *GrpcFlagLogger) sendAsync(ctx context.Context, request *resolverv1.Writ
 		if _, err := g.stub.ClientWriteFlagLogs(rpcCtx, request); err != nil {
 			g.logger.Error("Failed to write flag logs", "error", err)
 		} else {
-			g.logger.Info("Successfully sent flag log", "entries", len(request.FlagAssigned))
+			g.logger.Debug("Successfully sent flag log", "entries", len(request.FlagAssigned))
 		}
 	}()
 	return nil
