@@ -162,22 +162,22 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 
 func TestLocalResolverProvider_PathNotFound(t *testing.T) {
 	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
+	testState := tu.LoadTestResolverState(t)
+	testAcctID := tu.LoadTestAccountID(t)
 
-	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	if err != nil {
-		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
-	}
+	swap := runtime.New()
 	defer swap.Close(ctx)
 
 	// Initialize with test state
-	if err := swap.UpdateStateAndFlushLogs(testState, testAcctID); err != nil {
+	setStateRequest := &messages.SetResolverStateRequest{
+		State:     testState,
+		AccountId: testAcctID,
+	}
+	if err := swap.SetResolverState(setStateRequest); err != nil {
 		t.Fatalf("Failed to initialize swap with state: %v", err)
 	}
 
