@@ -294,7 +294,7 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
     void testProviderInitialization() throws Exception {
       OpenFeatureAPI.getInstance().setProviderAndWait(provider);
       assertEquals(
-          ProviderState.READY, OpenFeatureAPI.getInstance().getProvider().getState());
+          ProviderState.READY, OpenFeatureAPI.getInstance().getClient().getProviderState());
     }
 
     @Test
@@ -346,7 +346,7 @@ class OpenFeatureLocalResolveProviderIntegrationTest {
       OpenFeatureAPI.getInstance().shutdown();
 
       assertEquals(
-          ProviderState.NOT_READY, OpenFeatureAPI.getInstance().getProvider().getState());
+          ProviderState.NOT_READY, OpenFeatureAPI.getInstance().getClient().getProviderState());
 
       // Verify that log requests were made during shutdown
       // Note: The exact number depends on batching, but there should be at least some logs
