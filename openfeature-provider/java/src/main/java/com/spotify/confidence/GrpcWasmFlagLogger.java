@@ -176,9 +176,6 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
    */
   @Override
   public void shutdown() {
-    if (channel != null) {
-      channel.shutdown();
-    }
     executorService.shutdown();
     try {
       if (!executorService.awaitTermination(shutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -193,6 +190,24 @@ public class GrpcWasmFlagLogger implements WasmFlagLogger {
       logger.warn("Interrupted while waiting for flag logger shutdown", e);
       executorService.shutdownNow();
       Thread.currentThread().interrupt();
+    }
+
+    if (channel != null) {
+      channel.shutdown();
+      try {
+        if (!channel.awaitTermination(shutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+          logger.warn(
+              "Channel did not terminate within {} seconds, forcing shutdown",
+              shutdownTimeout.getSeconds());
+          channel.shutdownNow();
+        } else {
+          logger.debug("Channel terminated gracefully");
+        }
+      } catch (InterruptedException e) {
+        logger.warn("Interrupted while waiting for channel shutdown", e);
+        channel.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
     }
   }
 

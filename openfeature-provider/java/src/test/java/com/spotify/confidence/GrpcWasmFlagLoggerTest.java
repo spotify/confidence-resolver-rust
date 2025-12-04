@@ -17,6 +17,8 @@ import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsRequest;
 import com.spotify.confidence.flags.resolver.v1.WriteFlagLogsResponse;
 import com.spotify.confidence.flags.resolver.v1.events.ClientInfo;
 import com.spotify.confidence.flags.resolver.v1.events.FlagAssigned;
+import io.grpc.ClientInterceptor;
+import io.grpc.ManagedChannel;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -329,6 +331,22 @@ class GrpcWasmFlagLoggerTest {
         "All writes should have completed before shutdown returned");
     assertEquals(5, completedWrites.get(), "All 5 writes should have completed");
     verify(mockStub, times(5)).clientWriteFlagLogs(any());
+  }
+
+  @Test
+  void testShutdownClosesChannel() throws Exception {
+    final ManagedChannel mockChannel = mock(ManagedChannel.class);
+    final ChannelFactory channelFactory =
+        new ChannelFactory() {
+          @Override
+          public ManagedChannel create(String target, List<ClientInterceptor> defaultInterceptors) {
+            return mockChannel;
+          }
+        };
+
+    final GrpcWasmFlagLogger logger = new GrpcWasmFlagLogger("test-client-secret", channelFactory);
+    logger.shutdown();
+    verify(mockChannel, times(1)).shutdown();
   }
 
   // Helper methods
