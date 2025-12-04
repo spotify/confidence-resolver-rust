@@ -9,7 +9,6 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
 	tu "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/testutil"
-	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
 	"google.golang.org/protobuf/proto"
@@ -17,8 +16,6 @@ import (
 
 func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
 
 	// Create minimal state with wrong client secret
 	state := &adminv1.ResolverState{
@@ -35,19 +32,13 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	}
 	stateBytes, _ := proto.Marshal(state)
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
-
-	// Initialize with test state
-	if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+	stateProvider := &tu.StateProviderMock{
 		State:     stateBytes,
-		AccountId: "test-account",
-	}); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		AccountID: "test-account",
 	}
 
 	// Use different client secret that won't match
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -78,27 +69,18 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 
 func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	ctx := context.Background()
-	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-	defer runtime.Close(ctx)
 
 	// Load real test state
 	testState := tu.LoadTestResolverState(t)
 	testAcctID := tu.LoadTestAccountID(t)
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
-
-	// Initialize with test state
-	setStateRequest := &messages.SetResolverStateRequest{
+	stateProvider := &tu.StateProviderMock{
 		State:     testState,
-		AccountId: testAcctID,
-	}
-	if err := swap.SetResolverState(setStateRequest); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		AccountID: testAcctID,
 	}
 
 	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -169,20 +151,13 @@ func TestLocalResolverProvider_PathNotFound(t *testing.T) {
 	testState := tu.LoadTestResolverState(t)
 	testAcctID := tu.LoadTestAccountID(t)
 
-	swap := runtime.New()
-	defer swap.Close(ctx)
-
-	// Initialize with test state
-	setStateRequest := &messages.SetResolverStateRequest{
+	stateProvider := &tu.StateProviderMock{
 		State:     testState,
-		AccountId: testAcctID,
-	}
-	if err := swap.SetResolverState(setStateRequest); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
+		AccountID: testAcctID,
 	}
 
 	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -234,26 +209,17 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Provider returns resolved value for flag without sticky rules", func(t *testing.T) {
-		// Create runtime for this subtest
-		runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-		defer runtime.Close(ctx)
 
 		// Load real test state
 		testState := tu.LoadTestResolverState(t)
 		testAcctID := tu.LoadTestAccountID(t)
 
-		swap := runtime.New()
-		defer swap.Close(ctx)
-
-		// Initialize with test state
-		if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+		stateProvider := &tu.StateProviderMock{
 			State:     testState,
-			AccountId: testAcctID,
-		}); err != nil {
-			t.Fatalf("Failed to initialize swap with state: %v", err)
+			AccountID: testAcctID,
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -278,26 +244,17 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	})
 
 	t.Run("Provider returns missing materializations error message", func(t *testing.T) {
-		// Create runtime for this subtest
-		runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
-		defer runtime.Close(ctx)
 
 		// Create state with a flag that requires materializations
 		stickyState := tu.CreateStateWithStickyFlag()
 		accountId := "test-account"
 
-		swap := runtime.New()
-		defer swap.Close(ctx)
-
-		// Initialize with sticky state
-		if err := swap.SetResolverState(&messages.SetResolverStateRequest{
+		stateProvider := &tu.StateProviderMock{
 			State:     stickyState,
-			AccountId: accountId,
-		}); err != nil {
-			t.Fatalf("Failed to initialize swap with state: %v", err)
+			AccountID: accountId,
 		}
 
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{

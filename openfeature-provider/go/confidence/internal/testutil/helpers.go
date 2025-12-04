@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,6 +26,16 @@ func init() {
 	} else {
 		panic("failed to resolve test repo root via runtime.Caller")
 	}
+}
+
+type StateProviderMock struct {
+	AccountID string
+	State     []byte
+	Err       error
+}
+
+func (m *StateProviderMock) Provide(_ context.Context) ([]byte, string, error) {
+	return m.State, m.AccountID, m.Err
 }
 
 func LoadTestResolverState(t *testing.T) []byte {

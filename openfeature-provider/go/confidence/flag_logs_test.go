@@ -45,14 +45,8 @@ func setupFlagLogsUnitTest(t *testing.T) (*fl.CapturingFlagLogger, openfeature.I
 		t.Fatalf("Failed to reload state: %v", err)
 	}
 
-	// Create wazero runtime
-	runtime := lr.DefaultResolverFactory(capturingLogger.Write)
-
-	// Create SwapWasmResolverApi
-	resolverAPI := runtime.New()
-
 	// Create provider
-	provider := NewLocalResolverProvider(resolverAPI, stateProvider, capturingLogger, unitTestClientSecret, logger)
+	provider := NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, capturingLogger, unitTestClientSecret, logger)
 
 	// Set provider and wait for ready
 	err := openfeature.SetProviderAndWait(provider)

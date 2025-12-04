@@ -13,24 +13,20 @@ import (
 // RecoveringResolverFactory composes an inner LocalResolverFactory and returns
 // LocalResolver instances that auto-recover (recreate) on low-level panics.
 type RecoveringResolverFactory struct {
-	inner LocalResolverFactory
+	LocalResolverFactory
 }
 
-func NewRecoveringResolverFactory(inner LocalResolverFactory) LocalResolverFactory {
-	return &RecoveringResolverFactory{inner: inner}
+func NewRecoveringResolverFactory(inner LocalResolverFactory) *RecoveringResolverFactory {
+	return &RecoveringResolverFactory{inner}
 }
 
 func (f *RecoveringResolverFactory) New() LocalResolver {
 	rr := &RecoveringResolver{
-		factory: f.inner,
+		factory: f,
 	}
-	lr := f.inner.New()
+	lr := f.LocalResolverFactory.New()
 	rr.current.Store(lr)
 	return rr
-}
-
-func (f *RecoveringResolverFactory) Close(ctx context.Context) error {
-	return f.inner.Close(ctx)
 }
 
 // RecoveringResolver wraps a LocalResolver and recreates it on panic.

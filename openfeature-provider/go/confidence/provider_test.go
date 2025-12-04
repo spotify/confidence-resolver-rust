@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
 	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -460,6 +461,10 @@ type mockResolverAPIForInit struct {
 	resolveWithSticky func(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
 }
 
+func mockResolverSupplier(_ context.Context, _ lr.LogSink) lr.LocalResolver {
+	return &mockResolverAPIForInit{}
+}
+
 func (m *mockResolverAPIForInit) SetResolverState(request *messages.SetResolverStateRequest) error {
 	if m.updateStateFunc != nil {
 		return m.updateStateFunc(request.State, request.AccountId)
@@ -492,7 +497,7 @@ func (m *mockResolverAPIForInit) FlushAssignLogs() error {
 // TestLocalResolverProvider_Init_NilStateProvider verifies Init fails when stateProvider is nil
 func TestLocalResolverProvider_Init_NilStateProvider(t *testing.T) {
 	provider := NewLocalResolverProvider(
-		&mockResolverAPIForInit{},
+		mockResolverSupplier,
 		nil, // nil state provider
 		nil,
 		"secret",
@@ -522,7 +527,7 @@ func TestLocalResolverProvider_Init_NilResolverAPI(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error when resolverAPI is nil")
 	}
-	if err.Error() != "resolver API is nil, cannot initialize" {
+	if err.Error() != "resolverSupplier is nil, cannot initialize" {
 		t.Errorf("Expected specific error message, got: %v", err)
 	}
 }
@@ -537,7 +542,7 @@ func TestLocalResolverProvider_Init_StateProviderError(t *testing.T) {
 	}
 
 	provider := NewLocalResolverProvider(
-		&mockResolverAPIForInit{},
+		mockResolverSupplier,
 		mockStateProvider,
 		nil,
 		"secret",
@@ -565,7 +570,7 @@ func TestLocalResolverProvider_Init_EmptyAccountID(t *testing.T) {
 	mockResolverAPI := &mockResolverAPIForInit{}
 
 	provider := NewLocalResolverProvider(
-		mockResolverAPI,
+		func(ctx context.Context, ls lr.LogSink) lr.LocalResolver { return mockResolverAPI },
 		mockStateProvider,
 		nil,
 		"secret",
@@ -589,14 +594,18 @@ func TestLocalResolverProvider_Init_UpdateStateError(t *testing.T) {
 		},
 	}
 
-	mockResolverAPI := &mockResolverAPIForInit{
+	mockResolver := &mockResolverAPIForInit{
 		updateStateFunc: func(state []byte, accountID string) error {
 			return context.DeadlineExceeded
 		},
 	}
 
+	mockResolverSupplier := func(_ context.Context, _ lr.LogSink) lr.LocalResolver {
+		return mockResolver
+	}
+
 	provider := NewLocalResolverProvider(
-		mockResolverAPI,
+		mockResolverSupplier,
 		mockStateProvider,
 		nil,
 		"secret",
@@ -624,7 +633,7 @@ func TestLocalResolverProvider_Init_Success(t *testing.T) {
 		},
 	}
 
-	mockResolverAPI := &mockResolverAPIForInit{
+	mockResolver := &mockResolverAPIForInit{
 		updateStateFunc: func(state []byte, accountID string) error {
 			updateStateCalled = true
 			receivedState = state
@@ -633,8 +642,12 @@ func TestLocalResolverProvider_Init_Success(t *testing.T) {
 		},
 	}
 
+	mockResolverSupplier := func(_ context.Context, _ lr.LogSink) lr.LocalResolver {
+		return mockResolver
+	}
+
 	provider := NewLocalResolverProvider(
-		mockResolverAPI,
+		mockResolverSupplier,
 		mockStateProvider,
 		nil,
 		"secret",

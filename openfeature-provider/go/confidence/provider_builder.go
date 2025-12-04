@@ -65,11 +65,7 @@ func NewProvider(ctx context.Context, config ProviderConfig) (*LocalResolverProv
 	stateProvider := NewFlagsAdminStateFetcherWithTransport(config.ClientSecret, logger, transport)
 	flagLogger := fl.NewGrpcWasmFlagLogger(flagLoggerService, config.ClientSecret, logger)
 
-	// TODO the following two calls are unsafe and can panic, we should move them to provider init
-	localResolverFactory := lr.DefaultResolverFactory(flagLogger.Write)
-	resolverAPI := localResolverFactory.New()
-
-	provider := NewLocalResolverProvider(resolverAPI, stateProvider, flagLogger, config.ClientSecret, logger)
+	provider := NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, flagLogger, config.ClientSecret, logger)
 
 	return provider, nil
 }
@@ -90,11 +86,7 @@ func NewProviderForTest(ctx context.Context, config ProviderTestConfig) (*LocalR
 		}))
 	}
 
-	localResolverFactory := lr.DefaultResolverFactory(config.FlagLogger.Write)
-
-	resolverAPI := localResolverFactory.New()
-
-	provider := NewLocalResolverProvider(resolverAPI, config.StateProvider, config.FlagLogger, config.ClientSecret, logger)
+	provider := NewLocalResolverProvider(lr.NewLocalResolver, config.StateProvider, config.FlagLogger, config.ClientSecret, logger)
 
 	return provider, nil
 }

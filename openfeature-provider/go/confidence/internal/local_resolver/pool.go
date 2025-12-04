@@ -40,7 +40,7 @@ type PooledResolver struct {
 	supplier LocalResolverSupplier
 	slots    []slot
 	rr       atomic.Uint64
-	mmu      *sync.Mutex
+	mmu      sync.Mutex
 }
 
 var _ LocalResolver = (*PooledResolver)(nil)
@@ -56,7 +56,6 @@ func NewPooledResolver(size int, supplier LocalResolverSupplier) *PooledResolver
 	return &PooledResolver{
 		supplier: supplier,
 		slots:    slots,
-		mmu:      &sync.Mutex{},
 	}
 }
 
