@@ -52,7 +52,7 @@ impl
     }
 }
 
-const LOG_TARGET_BYTES: usize = 3_900_000; // 3.9 mb
+const LOG_TARGET_BYTES: usize = 4 * 1024 * 1024; // 4 mb
 const VOID: Void = Void {};
 const ENCRYPTION_KEY: Bytes = Bytes::from_static(&[0; 16]);
 
@@ -209,17 +209,12 @@ wasm_msg_guest! {
         Ok(req)
     }
 
-    // Flush resolve and assignment logs with a byte-size limit.
-    // Returns a `WriteFlagLogsRequest` capped to `LOG_TARGET_BYTES`.
     fn bounded_flush_logs(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
         let mut req = RESOLVE_LOGGER.checkpoint();
         ASSIGN_LOGGER.checkpoint_fill_with_limit(&mut req, LOG_TARGET_BYTES, false);
         Ok(req)
     }
 
-    // Flush only assignment logs IF at least `LOG_TARGET_BYTES` is currently buffered.
-    // Returns a `WriteFlagLogsRequest` capped to `LOG_TARGET_BYTES` and empty if
-    // there is not enough buffered data to reach the limit.
     fn bounded_flush_assign(_request:Void) -> WasmResult<WriteFlagLogsRequest> {
         Ok(ASSIGN_LOGGER.checkpoint_with_limit(LOG_TARGET_BYTES, true))
     }
