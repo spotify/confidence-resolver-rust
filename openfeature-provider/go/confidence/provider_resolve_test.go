@@ -7,16 +7,15 @@ import (
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
+	tu "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/testutil"
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
-	"github.com/tetratelabs/wazero"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
-	defer runtime.Close(ctx)
 
 	// Create minimal state with wrong client secret
 	state := &adminv1.ResolverState{
@@ -33,20 +32,14 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 	}
 	stateBytes, _ := proto.Marshal(state)
 
-	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	if err != nil {
-		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+	stateProvider := &tu.StateProviderMock{
+		State:     stateBytes,
+		AccountID: "test-account",
 	}
-	defer swap.Close(ctx)
-
-	// Initialize with test state
-	if err := swap.UpdateStateAndFlushLogs(stateBytes, "test-account"); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
-	}
+	mockFlagLogger := &tu.MockFlagLogger{}
 
 	// Use different client secret that won't match
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, mockFlagLogger, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -77,27 +70,19 @@ func TestLocalResolverProvider_ReturnsDefaultOnError(t *testing.T) {
 
 func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
-	defer runtime.Close(ctx)
 
 	// Load real test state
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
+	testState := tu.LoadTestResolverState(t)
+	testAcctID := tu.LoadTestAccountID(t)
 
-	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	if err != nil {
-		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+	stateProvider := &tu.StateProviderMock{
+		State:     testState,
+		AccountID: testAcctID,
 	}
-	defer swap.Close(ctx)
-
-	// Initialize with test state
-	if err := swap.UpdateStateAndFlushLogs(testState, testAcctID); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
-	}
+	mockFlagLogger := &tu.MockFlagLogger{}
 
 	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, mockFlagLogger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -161,27 +146,22 @@ func TestLocalResolverProvider_ReturnsCorrectValue(t *testing.T) {
 
 func TestLocalResolverProvider_PathNotFound(t *testing.T) {
 	ctx := context.Background()
-	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
+	runtime := lr.DefaultResolverFactory(lr.NoOpLogSink)
 	defer runtime.Close(ctx)
 
 	// Load real test state
-	testState := loadTestResolverState(t)
-	testAcctID := loadTestAccountID(t)
+	testState := tu.LoadTestResolverState(t)
+	testAcctID := tu.LoadTestAccountID(t)
 
-	flagLogger := NewNoOpWasmFlagLogger()
-	swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	if err != nil {
-		t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+	stateProvider := &tu.StateProviderMock{
+		State:     testState,
+		AccountID: testAcctID,
 	}
-	defer swap.Close(ctx)
 
-	// Initialize with test state
-	if err := swap.UpdateStateAndFlushLogs(testState, testAcctID); err != nil {
-		t.Fatalf("Failed to initialize swap with state: %v", err)
-	}
+	mockFlagLogger := &tu.MockFlagLogger{}
 
 	// Use the correct client secret from test data
-	openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+	openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, mockFlagLogger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 	client := openfeature.NewClient("test-client")
 
 	evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -233,27 +213,18 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Provider returns resolved value for flag without sticky rules", func(t *testing.T) {
-		// Create runtime for this subtest
-		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
-		defer runtime.Close(ctx)
 
 		// Load real test state
-		testState := loadTestResolverState(t)
-		testAcctID := loadTestAccountID(t)
+		testState := tu.LoadTestResolverState(t)
+		testAcctID := tu.LoadTestAccountID(t)
 
-		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-		if err != nil {
-			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+		stateProvider := &tu.StateProviderMock{
+			State:     testState,
+			AccountID: testAcctID,
 		}
-		defer swap.Close(ctx)
+		mockFlagLogger := &tu.MockFlagLogger{}
 
-		// Initialize with test state
-		if err := swap.UpdateStateAndFlushLogs(testState, testAcctID); err != nil {
-			t.Fatalf("Failed to initialize swap with state: %v", err)
-		}
-
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, mockFlagLogger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{
@@ -278,27 +249,18 @@ func TestLocalResolverProvider_MissingMaterializations(t *testing.T) {
 	})
 
 	t.Run("Provider returns missing materializations error message", func(t *testing.T) {
-		// Create runtime for this subtest
-		runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig())
-		defer runtime.Close(ctx)
 
 		// Create state with a flag that requires materializations
-		stickyState := createStateWithStickyFlag()
+		stickyState := tu.CreateStateWithStickyFlag()
 		accountId := "test-account"
 
-		flagLogger := NewNoOpWasmFlagLogger()
-		swap, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, flagLogger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-		if err != nil {
-			t.Fatalf("Failed to create SwapWasmResolverApi: %v", err)
+		stateProvider := &tu.StateProviderMock{
+			State:     stickyState,
+			AccountID: accountId,
 		}
-		defer swap.Close(ctx)
+		mockFlagLogger := &tu.MockFlagLogger{}
 
-		// Initialize with sticky state
-		if err := swap.UpdateStateAndFlushLogs(stickyState, accountId); err != nil {
-			t.Fatalf("Failed to initialize swap with state: %v", err)
-		}
-
-		openfeature.SetProviderAndWait(NewLocalResolverProvider(swap, nil, nil, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
+		openfeature.SetProviderAndWait(NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, mockFlagLogger, "test-secret", slog.New(slog.NewTextHandler(os.Stderr, nil))))
 		client := openfeature.NewClient("test-client")
 
 		evalCtx := openfeature.NewTargetlessEvaluationContext(map[string]interface{}{

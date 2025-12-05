@@ -381,17 +381,11 @@ COPY openfeature-provider/go/go.mod openfeature-provider/go/go.sum ./
 # Download Go dependencies (this layer will be cached)
 RUN go mod download
 
-# Copy pre-generated protobuf files
-COPY openfeature-provider/go/confidence/proto ./confidence/proto/
-
-# Copy WASM module to embedded location
-COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm ./confidence/wasm/confidence_resolver.wasm
+# Copy source code
+COPY openfeature-provider/go/confidence/ ./confidence/
 
 # Set environment variable
 ENV IN_DOCKER_BUILD=1
-
-# Copy source code
-COPY openfeature-provider/go/confidence/*.go ./confidence/
 
 # ==============================================================================
 # Validate WASM sync for Go Provider
@@ -405,7 +399,7 @@ RUN apk add --no-cache diffutils
 COPY --from=wasm-rust-guest.artifact /confidence_resolver.wasm /built/confidence_resolver.wasm
 
 # Copy committed WASM from source
-COPY openfeature-provider/go/confidence/wasm/confidence_resolver.wasm /committed/confidence_resolver.wasm
+COPY openfeature-provider/go/confidence/internal/local_resolver/assets/confidence_resolver.wasm /committed/confidence_resolver.wasm
 
 # Compare files
 RUN set -e; \

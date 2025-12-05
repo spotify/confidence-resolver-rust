@@ -2,6 +2,7 @@
 # Local development commands - delegates to component Makefiles
 
 TARGET_WASM := target/wasm32-unknown-unknown/wasm/rust_guest.wasm
+GO_WASM := openfeature-provider/go/confidence/internal/local_resolver/assets
 
 .PHONY: $(TARGET_WASM) test integration-test lint build all clean
 
@@ -17,15 +18,11 @@ wasm/confidence_resolver.wasm: $(TARGET_WASM)
 .PHONY: sync-wasm-go
 sync-wasm-go:
 	@echo "Building WASM with Docker to ensure correct dependencies..."
-	@docker build --platform linux/arm64 --target wasm-rust-guest.artifact --output type=local,dest=. .
-	@echo "Copying to Go provider embedded location..."
-	@mkdir -p openfeature-provider/go/confidence/wasm
-	@cp confidence_resolver.wasm openfeature-provider/go/confidence/wasm/
-	@rm confidence_resolver.wasm
-	@echo "✅ WASM synced to openfeature-provider/go/confidence/wasm/"
+	@docker build --platform linux/arm64 --target wasm-rust-guest.artifact --output type=local,dest=$(GO_WASM) .
+	@echo "✅ WASM synced to $(GO_WASM)/"
 	@echo ""
 	@echo "Don't forget to commit the change:"
-	@echo "  git add openfeature-provider/go/confidence/wasm/confidence_resolver.wasm"
+	@echo "  git add $(GO_WASM)/confidence_resolver.wasm"
 	@echo "  git commit -m 'chore: sync WASM module for Go provider'"
 
 # Build Cloudflare deployer image using main Dockerfile

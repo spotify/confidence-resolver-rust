@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	fl "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/flag_logger"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
+	tu "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/testutil"
 	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
-	"github.com/tetratelabs/wazero"
 	"google.golang.org/grpc"
 )
 
@@ -39,9 +41,9 @@ type trackingFlagLogger struct {
 	lastWriteCompleted chan struct{}
 }
 
-func (t *trackingFlagLogger) Write(ctx context.Context, request *resolverv1.WriteFlagLogsRequest) error {
+func (t *trackingFlagLogger) Write(request *resolverv1.WriteFlagLogsRequest) {
 	atomic.AddInt32(&t.logsSentCount, int32(len(request.FlagAssigned)))
-	return t.actualLogger.Write(ctx, request)
+	t.actualLogger.Write(request)
 }
 
 func (t *trackingFlagLogger) Shutdown() {
@@ -94,8 +96,8 @@ func (m *mockGrpcStubForIntegration) GetCallsReceived() int32 {
 // async goroutines complete before Shutdown() returns, ensuring no data loss.
 func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
 	// Load test state
-	testState := loadTestResolverState(t)
-	accountID := loadTestAccountID(t)
+	testState := tu.LoadTestResolverState(t)
+	accountID := tu.LoadTestAccountID(t)
 
 	ctx := context.Background()
 
@@ -108,7 +110,7 @@ func TestIntegration_OpenFeatureShutdownFlushesLogs(t *testing.T) {
 	mockStub := &mockGrpcStubForIntegration{
 		onCallReceived: make(chan struct{}, 100), // Buffer to prevent blocking
 	}
-	actualGrpcLogger := NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	actualGrpcLogger := fl.NewGrpcWasmFlagLogger(mockStub, "test-client-secret", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 
 	trackingLogger := &trackingFlagLogger{
 		actualLogger:       actualGrpcLogger,
@@ -187,17 +189,9 @@ func createProviderWithTestState(
 	logger FlagLogger,
 ) (*LocalResolverProvider, error) {
 	// Create wazero runtime
-	runtimeConfig := wazero.NewRuntimeConfig()
-	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
-
-	// Create SwapWasmResolverApi without initial state (lazy initialization)
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, logger, slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	if err != nil {
-		return nil, err
-	}
 
 	// Create provider with the client secret from test state
 	// The test state includes client secret: mkjJruAATQWjeY7foFIWfVAcBWnci2YF
-	provider := NewLocalResolverProvider(resolverAPI, stateProvider, logger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	provider := NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, logger, "mkjJruAATQWjeY7foFIWfVAcBWnci2YF", slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	return provider, nil
 }

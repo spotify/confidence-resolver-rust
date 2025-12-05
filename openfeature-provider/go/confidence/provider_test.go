@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/open-feature/go-sdk/openfeature"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
+	tu "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/testutil"
+	messages "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -442,34 +445,28 @@ func TestLocalResolverProvider_ShutdownWithCancelFunc(t *testing.T) {
 
 // Mock implementations for Init() testing
 
-type mockStateProviderForInit struct {
-	provideFunc func(ctx context.Context) ([]byte, string, error)
-}
-
-func (m *mockStateProviderForInit) Provide(ctx context.Context) ([]byte, string, error) {
-	if m.provideFunc != nil {
-		return m.provideFunc(ctx)
-	}
-	return []byte("test-state"), "test-account", nil
-}
-
 type mockResolverAPIForInit struct {
 	updateStateFunc   func(state []byte, accountID string) error
 	closeFunc         func(ctx context.Context)
 	resolveWithSticky func(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error)
 }
 
-func (m *mockResolverAPIForInit) UpdateStateAndFlushLogs(state []byte, accountID string) error {
+func mockResolverSupplier(_ context.Context, _ lr.LogSink) lr.LocalResolver {
+	return &mockResolverAPIForInit{}
+}
+
+func (m *mockResolverAPIForInit) SetResolverState(request *messages.SetResolverStateRequest) error {
 	if m.updateStateFunc != nil {
-		return m.updateStateFunc(state, accountID)
+		return m.updateStateFunc(request.State, request.AccountId)
 	}
 	return nil
 }
 
-func (m *mockResolverAPIForInit) Close(ctx context.Context) {
+func (m *mockResolverAPIForInit) Close(ctx context.Context) error {
 	if m.closeFunc != nil {
 		m.closeFunc(ctx)
 	}
+	return nil
 }
 
 func (m *mockResolverAPIForInit) ResolveWithSticky(request *resolver.ResolveWithStickyRequest) (*resolver.ResolveWithStickyResponse, error) {
@@ -479,12 +476,20 @@ func (m *mockResolverAPIForInit) ResolveWithSticky(request *resolver.ResolveWith
 	return nil, nil
 }
 
+func (m *mockResolverAPIForInit) FlushAllLogs() error {
+	return nil
+}
+
+func (m *mockResolverAPIForInit) FlushAssignLogs() error {
+	return nil
+}
+
 // TestLocalResolverProvider_Init_NilStateProvider verifies Init fails when stateProvider is nil
 func TestLocalResolverProvider_Init_NilStateProvider(t *testing.T) {
 	provider := NewLocalResolverProvider(
-		&mockResolverAPIForInit{},
+		mockResolverSupplier,
 		nil, // nil state provider
-		nil,
+		&tu.MockFlagLogger{},
 		"secret",
 		nil,
 	)
@@ -502,8 +507,8 @@ func TestLocalResolverProvider_Init_NilStateProvider(t *testing.T) {
 func TestLocalResolverProvider_Init_NilResolverAPI(t *testing.T) {
 	provider := NewLocalResolverProvider(
 		nil, // nil resolver API
-		&mockStateProviderForInit{},
-		nil,
+		&tu.StateProviderMock{},
+		&tu.MockFlagLogger{},
 		"secret",
 		nil,
 	)
@@ -512,24 +517,44 @@ func TestLocalResolverProvider_Init_NilResolverAPI(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error when resolverAPI is nil")
 	}
-	if err.Error() != "resolver API is nil, cannot initialize" {
+	if err.Error() != "resolverSupplier is nil, cannot initialize" {
+		t.Errorf("Expected specific error message, got: %v", err)
+	}
+}
+
+// TestLocalResolverProvider_Init_NilFlagLogger verifies Init fails when FlagLogger is nil
+func TestLocalResolverProvider_Init_NilFlagLogger(t *testing.T) {
+	provider := NewLocalResolverProvider(
+		mockResolverSupplier,
+		&tu.StateProviderMock{},
+		nil, // nil flag logger
+		"secret",
+		nil,
+	)
+
+	err := provider.Init(openfeature.EvaluationContext{})
+	if err == nil {
+		t.Fatal("Expected error when flagLogger is nil")
+	}
+	if err.Error() != "Flag logger is nil,  cannot initialize" {
 		t.Errorf("Expected specific error message, got: %v", err)
 	}
 }
 
 // TestLocalResolverProvider_Init_StateProviderError verifies Init fails when stateProvider.Provide returns error
 func TestLocalResolverProvider_Init_StateProviderError(t *testing.T) {
-	mockStateProvider := &mockStateProviderForInit{
-		provideFunc: func(ctx context.Context) ([]byte, string, error) {
-			// Return error with cached state
-			return []byte("cached-state"), "cached-account", context.DeadlineExceeded
-		},
+	mockStateProvider := &tu.StateProviderMock{
+		State:     []byte("cached-state"),
+		AccountID: "cached-account",
+		Err:       context.DeadlineExceeded,
 	}
 
+	mockFlagLogger := &tu.MockFlagLogger{}
+
 	provider := NewLocalResolverProvider(
-		&mockResolverAPIForInit{},
+		mockResolverSupplier,
 		mockStateProvider,
-		nil,
+		mockFlagLogger,
 		"secret",
 		nil,
 	)
@@ -546,18 +571,20 @@ func TestLocalResolverProvider_Init_StateProviderError(t *testing.T) {
 
 // TestLocalResolverProvider_Init_EmptyAccountID verifies Init fails when accountID is empty
 func TestLocalResolverProvider_Init_EmptyAccountID(t *testing.T) {
-	mockStateProvider := &mockStateProviderForInit{
-		provideFunc: func(ctx context.Context) ([]byte, string, error) {
-			return []byte("test-state"), "", nil // Empty accountID
-		},
+	mockStateProvider := &tu.StateProviderMock{
+		State:     []byte("test-state"),
+		AccountID: "",
+		Err:       nil,
 	}
+
+	mockFlagLogger := &tu.MockFlagLogger{}
 
 	mockResolverAPI := &mockResolverAPIForInit{}
 
 	provider := NewLocalResolverProvider(
-		mockResolverAPI,
+		func(ctx context.Context, ls lr.LogSink) lr.LocalResolver { return mockResolverAPI },
 		mockStateProvider,
-		nil,
+		mockFlagLogger,
 		"secret",
 		nil,
 	)
@@ -573,22 +600,28 @@ func TestLocalResolverProvider_Init_EmptyAccountID(t *testing.T) {
 
 // TestLocalResolverProvider_Init_UpdateStateError verifies Init fails when UpdateStateAndFlushLogs fails
 func TestLocalResolverProvider_Init_UpdateStateError(t *testing.T) {
-	mockStateProvider := &mockStateProviderForInit{
-		provideFunc: func(ctx context.Context) ([]byte, string, error) {
-			return []byte("test-state"), "test-account", nil
-		},
+	mockStateProvider := &tu.StateProviderMock{
+		State:     []byte("test-state"),
+		AccountID: "test-account",
+		Err:       nil,
 	}
 
-	mockResolverAPI := &mockResolverAPIForInit{
+	mockFlagLogger := &tu.MockFlagLogger{}
+
+	mockResolver := &mockResolverAPIForInit{
 		updateStateFunc: func(state []byte, accountID string) error {
 			return context.DeadlineExceeded
 		},
 	}
 
+	mockResolverSupplier := func(_ context.Context, _ lr.LogSink) lr.LocalResolver {
+		return mockResolver
+	}
+
 	provider := NewLocalResolverProvider(
-		mockResolverAPI,
+		mockResolverSupplier,
 		mockStateProvider,
-		nil,
+		mockFlagLogger,
 		"secret",
 		nil,
 	)
@@ -608,13 +641,13 @@ func TestLocalResolverProvider_Init_Success(t *testing.T) {
 	var receivedState []byte
 	var receivedAccountID string
 
-	mockStateProvider := &mockStateProviderForInit{
-		provideFunc: func(ctx context.Context) ([]byte, string, error) {
-			return []byte("test-state-data"), "test-account-123", nil
-		},
+	mockStateProvider := &tu.StateProviderMock{
+		State:     []byte("test-state-data"),
+		AccountID: "test-account-123",
+		Err:       nil,
 	}
 
-	mockResolverAPI := &mockResolverAPIForInit{
+	mockResolver := &mockResolverAPIForInit{
 		updateStateFunc: func(state []byte, accountID string) error {
 			updateStateCalled = true
 			receivedState = state
@@ -623,10 +656,16 @@ func TestLocalResolverProvider_Init_Success(t *testing.T) {
 		},
 	}
 
+	mockFlagLogger := &tu.MockFlagLogger{}
+
+	mockResolverSupplier := func(_ context.Context, _ lr.LogSink) lr.LocalResolver {
+		return mockResolver
+	}
+
 	provider := NewLocalResolverProvider(
-		mockResolverAPI,
+		mockResolverSupplier,
 		mockStateProvider,
-		nil,
+		mockFlagLogger,
 		"secret",
 		nil,
 	)

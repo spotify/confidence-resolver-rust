@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	fl "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/flag_logger"
+	lr "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/internal/local_resolver"
+
 	"github.com/open-feature/go-sdk/openfeature"
-	"github.com/tetratelabs/wazero"
 )
 
 // Unit tests that verify WriteFlagLogs contains correct flag assignment data.
@@ -28,11 +30,11 @@ const (
 // setupFlagLogsUnitTest creates a provider with a capturing logger for testing.
 // Returns the capturing logger, provider, and client.
 // The caller is responsible for calling openfeature.Shutdown() when done.
-func setupFlagLogsUnitTest(t *testing.T) (*CapturingFlagLogger, openfeature.IClient) {
+func setupFlagLogsUnitTest(t *testing.T) (*fl.CapturingFlagLogger, openfeature.IClient) {
 	ctx := context.Background()
 
 	// Create capturing logger
-	capturingLogger := NewCapturingFlagLogger()
+	capturingLogger := fl.NewCapturingFlagLogger()
 
 	// Create state provider that fetches from real Confidence service
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -43,21 +45,11 @@ func setupFlagLogsUnitTest(t *testing.T) (*CapturingFlagLogger, openfeature.ICli
 		t.Fatalf("Failed to reload state: %v", err)
 	}
 
-	// Create wazero runtime
-	runtimeConfig := wazero.NewRuntimeConfig()
-	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
-
-	// Create SwapWasmResolverApi
-	resolverAPI, err := NewSwapWasmResolverApi(ctx, runtime, defaultWasmBytes, capturingLogger, logger)
-	if err != nil {
-		t.Fatalf("Failed to create resolver API: %v", err)
-	}
-
 	// Create provider
-	provider := NewLocalResolverProvider(resolverAPI, stateProvider, capturingLogger, unitTestClientSecret, logger)
+	provider := NewLocalResolverProvider(lr.NewLocalResolver, stateProvider, capturingLogger, unitTestClientSecret, logger)
 
 	// Set provider and wait for ready
-	err = openfeature.SetProviderAndWait(provider)
+	err := openfeature.SetProviderAndWait(provider)
 	if err != nil {
 		t.Fatalf("Failed to set provider: %v", err)
 	}
