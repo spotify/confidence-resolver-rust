@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	adminv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/admin/v1"
+	resolverv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/flags/resolverinternal"
 	iamv1 "github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/confidence/iam/v1"
 	"github.com/spotify/confidence-resolver/openfeature-provider/go/confidence/proto/resolver"
 	"google.golang.org/protobuf/proto"
@@ -26,6 +27,21 @@ func init() {
 	} else {
 		panic("failed to resolve test repo root via runtime.Caller")
 	}
+}
+
+type MockFlagLogger struct {
+	writeFunc    func(request *resolverv1.WriteFlagLogsRequest)
+	shutdownFunc func()
+}
+
+func (m *MockFlagLogger) Shutdown() {
+	if m.shutdownFunc != nil {
+		m.shutdownFunc()
+	}
+}
+
+func (m *MockFlagLogger) Write(request *resolverv1.WriteFlagLogsRequest) {
+	m.writeFunc(request)
 }
 
 type StateProviderMock struct {

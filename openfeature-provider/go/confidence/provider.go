@@ -431,10 +431,11 @@ func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationCon
 	}
 
 	// TODO no flag logger should be an error
-	logSink := lr.NoOpLogSink
-	if p.flagLogger != nil {
-		logSink = p.flagLogger.Write
+	if p.flagLogger == nil {
+		return fmt.Errorf("Flag logger is nil,  cannot initialize")
 	}
+	logSink := p.flagLogger.Write
+
 	p.resolver = p.resolverSupplier(ctx, logSink)
 
 	// Fetch initial state and accountID from StateProvider

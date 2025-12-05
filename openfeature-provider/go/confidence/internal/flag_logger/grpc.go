@@ -11,12 +11,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-const (
-	// MaxFlagAssignedPerChunk is the max number of flag_assigned entries per chunk
-	// to avoid exceeding gRPC max message size
-	MaxFlagAssignedPerChunk = 1000
-)
-
 type GrpcFlagLogger struct {
 	stub         resolverv1.InternalFlagLoggerServiceClient
 	clientSecret string
