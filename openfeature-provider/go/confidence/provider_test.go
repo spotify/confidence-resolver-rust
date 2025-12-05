@@ -489,7 +489,7 @@ func TestLocalResolverProvider_Init_NilStateProvider(t *testing.T) {
 	provider := NewLocalResolverProvider(
 		mockResolverSupplier,
 		nil, // nil state provider
-		nil,
+		&tu.MockFlagLogger{},
 		"secret",
 		nil,
 	)
@@ -508,7 +508,7 @@ func TestLocalResolverProvider_Init_NilResolverAPI(t *testing.T) {
 	provider := NewLocalResolverProvider(
 		nil, // nil resolver API
 		&tu.StateProviderMock{},
-		nil,
+		&tu.MockFlagLogger{},
 		"secret",
 		nil,
 	)
@@ -518,6 +518,25 @@ func TestLocalResolverProvider_Init_NilResolverAPI(t *testing.T) {
 		t.Fatal("Expected error when resolverAPI is nil")
 	}
 	if err.Error() != "resolverSupplier is nil, cannot initialize" {
+		t.Errorf("Expected specific error message, got: %v", err)
+	}
+}
+
+// TestLocalResolverProvider_Init_NilFlagLogger verifies Init fails when FlagLogger is nil
+func TestLocalResolverProvider_Init_NilFlagLogger(t *testing.T) {
+	provider := NewLocalResolverProvider(
+		mockResolverSupplier,
+		&tu.StateProviderMock{},
+		nil, // nil flag logger
+		"secret",
+		nil,
+	)
+
+	err := provider.Init(openfeature.EvaluationContext{})
+	if err == nil {
+		t.Fatal("Expected error when flagLogger is nil")
+	}
+	if err.Error() != "Flag logger is nil,  cannot initialize" {
 		t.Errorf("Expected specific error message, got: %v", err)
 	}
 }
