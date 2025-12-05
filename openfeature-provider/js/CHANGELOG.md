@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-js-v0.3.0...openfeature-provider-js-v0.4.0) (2025-12-05)
+
+
+### Features
+
+* WARN logs for errors in evaluations ([#192](https://github.com/spotify/confidence-resolver/issues/192)) ([7a9f157](https://github.com/spotify/confidence-resolver/commit/7a9f1571639e24ea366e643b5b966b1de6fe06bf))
+
 ## [0.3.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider-js-v0.2.0...openfeature-provider-js-v0.3.0) (2025-12-02)
 
 

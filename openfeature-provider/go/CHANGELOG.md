@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/go/v0.3.0...openfeature-provider/go/v0.3.1) (2025-12-05)
+
+
+### Bug Fixes
+
+* **go:** Fail hard on empty AccoundId ([#194](https://github.com/spotify/confidence-resolver/issues/194)) ([b5c90f7](https://github.com/spotify/confidence-resolver/commit/b5c90f7c0033f9e238331de725f5ce6dca77271f))
+* **go:** Improve logs slightly ([#188](https://github.com/spotify/confidence-resolver/issues/188)) ([c013feb](https://github.com/spotify/confidence-resolver/commit/c013feb6086274b1c06d59cda85a8c5acf533609))
+
 ## [0.3.0](https://github.com/spotify/confidence-resolver/compare/openfeature-provider/go/v0.2.0...openfeature-provider/go/v0.3.0) (2025-12-02)
 
 
