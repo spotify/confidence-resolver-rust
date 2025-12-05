@@ -430,7 +430,6 @@ func (p *LocalResolverProvider) Init(evaluationContext openfeature.EvaluationCon
 		return fmt.Errorf("resolverSupplier is nil, cannot initialize")
 	}
 
-	// TODO no flag logger should be an error
 	if p.flagLogger == nil {
 		return fmt.Errorf("Flag logger is nil,  cannot initialize")
 	}
